@@ -14,11 +14,11 @@ type Proc struct {
 }
 
 func (p *Proc) String() string {
-	return fmt.Sprintf("{sla %v compDone %v}", p.sla, p.compDone, p.memUsed)
+	return fmt.Sprintf("{sla %v compDone %v memUsed %d}", p.sla, p.compDone, p.memUsed)
 }
 
 func newProc(sla Tftick) *Proc {
-	slaWithoutBuffer := float64(sla) - 0.2*float64(sla)
+	slaWithoutBuffer := float64(sla) - PROC_SLA_EXPECTED_BUFFER*float64(sla)
 	actualComp := Tftick(sampleNormal(slaWithoutBuffer, PROC_DEVIATION_FROM_SLA_VARIANCE))
 	return &Proc{0, sla, 0, 0, actualComp}
 }
@@ -35,6 +35,10 @@ func (p *Proc) runTillOutOrDone(ticksToRun Tftick) (Tftick, bool) {
 		p.compDone += ticksToRun
 		return ticksToRun, false
 	}
+}
+
+func (p *Proc) timeLeftOnSLA() Tftick {
+	return p.sla - p.compDone
 }
 
 func (p *Proc) isDone() bool {

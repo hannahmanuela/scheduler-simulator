@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+// notes:
+// - only starts counting time passed once proc is placed on machine
+// - a machine runs one proc at a time and progress is only measured by
+//   how long a proc runs, ie:
+//    - does not support any sort of paralelization
+//    - does not know about waiting for i/o
+
 const (
 	MAX_SERVICE_TIME                 = 10 // in ticks
 	MAX_MEM                          = 10
@@ -63,18 +70,20 @@ func (w *World) genLoad() {
 }
 
 func (w *World) getProc(n Tmem) *Proc {
-	return w.procq.deq(n)
+	// TODO: make this more differentiated
+	return w.procq.deq()
 }
 
+// TODO: make this take into account not only mem, but also buffers to SLA
 func (w *World) placeProcs() {
 	capacityAvailable := true
 	i := 0
 	for capacityAvailable {
 		c := false
 		for _, m := range w.machines {
-			mem := m.schedd.memUsed()
-			if mem < m.schedd.totMem {
-				if p := w.getProc(m.schedd.totMem - mem); p != nil {
+			memUsed := m.schedd.memUsed()
+			if memUsed < m.schedd.totMem {
+				if p := w.getProc(m.schedd.totMem - memUsed); p != nil {
 					c = true
 					m.schedd.q.enq(p)
 				}
@@ -93,53 +102,7 @@ func (w *World) placeProcs() {
 
 func (w *World) compute() {
 	for _, m := range w.machines {
-		m.schedd.run()
-	}
-}
-
-func (w *World) zap(mid Tmid) {
-	fmt.Printf("zap a proc from machine %v at %v\n", mid, w.ntick)
-	for _, m := range w.machines {
-		if m.schedd.zap() {
-			return
-		}
-	}
-}
-
-func (w *World) utilPerMachine() Ttickmap {
-	mutil := make(Ttickmap)
-	for mid, m := range w.machines {
-		mutil[mid] = Tftick(m.schedd.util)
-	}
-	return mutil
-}
-
-func (w *World) hasWork(mid Tmid) bool {
-	if w.machines[mid].schedd.q.qlen() > 0 {
-		return true
-	}
-	return false
-}
-
-// func (w *World) zapper() {
-// 	mutil := w.utilPerMachine()
-// 	// fmt.Printf("rutil %v avg %v h %v hr %v l %v lr %v\n", rutil, avg, h, hr, l, lr)
-// 	// TODO: what's this doing? if the lowest used has work, zap the highest used?
-// 	// ig comes down to what is zapping
-// 	if w.hasWork(lr) {
-// 		w.zap(hr)
-// 	}
-// }
-
-func (w *World) qstat() {
-	qlen := 0
-	for _, m := range w.machines {
-		qlen += m.schedd.q.qlen()
-	}
-	// TODO: why are we just adding to the avg q??
-	w.avgq += float64(qlen)
-	if qlen > w.maxq {
-		w.maxq = qlen
+		m.schedd.tick()
 	}
 }
 
@@ -151,8 +114,7 @@ func (w *World) Tick() {
 	// dequeues things from procq to machines based on their util
 	w.placeProcs()
 	fmt.Printf("after getprocs %v\n", w)
+	// runs each machine for a tick
 	w.compute()
-	// w.zapper()
-	w.qstat()
 	fmt.Printf("after compute %v\n", w)
 }

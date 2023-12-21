@@ -17,8 +17,3 @@ func (f Tftick) String() string {
 type Website interface {
 	genLoad(rand *rand.Rand) []*Proc
 }
-
-func zipf(r *rand.Rand) uint64 {
-	z := rand.NewZipf(r, 2.0, 1.0, MAX_SERVICE_TIME-1)
-	return z.Uint64() + 1
-}
