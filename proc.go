@@ -38,7 +38,7 @@ func (p *Proc) runTillOutOrDone(ticksToRun Tftick) (Tftick, bool) {
 }
 
 func (p *Proc) timeLeftOnSLA() Tftick {
-	return p.sla - p.compDone
+	return p.sla - p.ticksPassed
 }
 
 func (p *Proc) isDone() bool {
