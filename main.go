@@ -18,7 +18,7 @@ const (
 	MAX_MEM                                  = 10
 	PROC_DEVIATION_FROM_SLA_VARIANCE         = 0.5
 	PROC_SLA_EXPECTED_BUFFER                 = 0.2 // as a fraction of sla
-	AVG_ARRIVAL_RATE_SMALL           float64 = 4   // per tick (with 1 tick per proc)
+	AVG_ARRIVAL_RATE_SMALL           float64 = 2   // per tick (with 1 tick per proc)
 )
 
 type World struct {

@@ -54,7 +54,13 @@ func (sd *Schedd) runProcs() {
 		ticksPerProc := sd.allocTicksToProc(ticksLeftToGive)
 		newProcQ := make([]*Proc, 0)
 		for _, currProc := range sd.q.q {
-			ticksUsed, done := currProc.runTillOutOrDone(ticksPerProc[currProc])
+			allocatedTicks := ticksPerProc[currProc]
+			if allocatedTicks < 0 {
+				fmt.Println("allocated less than 0 ticks")
+				return
+			}
+			ticksUsed, done := currProc.runTillOutOrDone(allocatedTicks)
+			fmt.Printf("used %v ticks\n", ticksUsed)
 			if !done {
 				newProcQ = append(newProcQ, currProc)
 			}
@@ -74,7 +80,7 @@ func (sd *Schedd) runProcs() {
 	}
 }
 
-// TODO: this is one of the big ones
+// optimistic
 func (sd *Schedd) allocTicksToProc(ticksLeftToGive Tftick) map[*Proc]Tftick {
 
 	procToTicks := make(map[*Proc]Tftick, 0)
@@ -84,11 +90,16 @@ func (sd *Schedd) allocTicksToProc(ticksLeftToGive Tftick) map[*Proc]Tftick {
 		return procToTicks
 	}
 
-	// TODO: change this
+	ticksGiven := Tftick(0)
 	for _, currProc := range sd.q.q {
-		allocatedTick := math.Min(float64(currProc.timeLeftOnSLA()), float64(ticksLeftToGive)/float64(sd.q.qlen()))
-		fmt.Printf("giving %v ticks\n", allocatedTick)
-		procToTicks[currProc] = Tftick(allocatedTick)
+		allocatedTicks := Tftick(math.Min(float64(currProc.timeLeftOnSLA()), float64(ticksLeftToGive-ticksGiven)))
+		if currProc.timeLeftOnSLA() < 0 {
+			allocatedTicks = Tftick(ticksLeftToGive - ticksGiven)
+		}
+
+		fmt.Printf("giving %v ticks\n", allocatedTicks)
+		procToTicks[currProc] = allocatedTicks
+		ticksGiven += allocatedTicks
 	}
 
 	return procToTicks
