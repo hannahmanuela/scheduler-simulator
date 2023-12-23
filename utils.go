@@ -1,4 +1,4 @@
-package main
+package slasched
 
 import (
 	"fmt"
@@ -15,5 +15,5 @@ func (f Tftick) String() string {
 }
 
 type Website interface {
-	genLoad(rand *rand.Rand) []*Proc
+	genLoad(rand *rand.Rand, currTick Ttick) []*Proc
 }

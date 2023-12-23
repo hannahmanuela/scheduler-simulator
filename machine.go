@@ -1,4 +1,4 @@
-package main
+package slasched
 
 import "fmt"
 
@@ -23,9 +23,4 @@ func newMachine(mid Tmid) *Machine {
 func (m Machine) String() string {
 	str := fmt.Sprintf("mid: %d, schedd: %s", m.mid, m.schedd.String())
 	return str
-}
-
-// TODO: this
-func (m Machine) util() float64 {
-	return 0
 }

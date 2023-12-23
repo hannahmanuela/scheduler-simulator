@@ -1,4 +1,4 @@
-package main
+package slasched
 
 import (
 	"fmt"
@@ -14,10 +14,11 @@ import (
 //    - does not know about waiting for i/o
 
 const (
-	MAX_SERVICE_TIME                 = 10 // in ticks
-	MAX_MEM                          = 10
-	PROC_DEVIATION_FROM_SLA_VARIANCE = 5
-	PROC_SLA_EXPECTED_BUFFER         = 0.2 // as a fraction of sla
+	MAX_SERVICE_TIME                         = 10 // in ticks
+	MAX_MEM                                  = 10
+	PROC_DEVIATION_FROM_SLA_VARIANCE         = 0.5
+	PROC_SLA_EXPECTED_BUFFER                 = 0.2 // as a fraction of sla
+	AVG_ARRIVAL_RATE_SMALL           float64 = 4   // per tick (with 1 tick per proc)
 )
 
 type World struct {
@@ -26,16 +27,13 @@ type World struct {
 	procq    *Queue
 	rand     *rand.Rand
 	app      Website
-	nproc    int
-	maxq     int
-	avgq     float64
 }
 
 func newWorld(nMachines int) *World {
 	w := &World{}
 	w.machines = make(map[Tmid]*Machine, nMachines)
 	w.procq = &Queue{q: make([]*Proc, 0)}
-	for i := 0; i < len(w.machines); i++ {
+	for i := 0; i < nMachines; i++ {
 		mid := Tmid(i)
 		w.machines[mid] = newMachine(mid)
 	}
@@ -44,27 +42,18 @@ func newWorld(nMachines int) *World {
 }
 
 func (w *World) String() string {
-	str := fmt.Sprintf("%d nproc %v maxq %d avgq %.1f util %.1f%%\n", w.ntick, w.nproc, w.maxq, w.avgq/float64(w.ntick), w.util())
-	str += "machines: [\n"
+	str := "machines: \n"
 	for _, m := range w.machines {
-		str += "  " + m.String() + ",\n"
+		str += "   " + m.String()
 	}
-	str += "  ]\n procQ:" + w.procq.String()
 	return str
 }
 
-func (w *World) util() float64 {
-	u := float64(0)
-	for _, m := range w.machines {
-		u += m.util()
-	}
-	return (u / float64(w.ntick)) * float64(100)
-}
-
 func (w *World) genLoad() {
-	procs := w.app.genLoad(w.rand)
+	procs := w.app.genLoad(w.rand, w.ntick)
+	fmt.Printf("generated %d procs\n", len(procs))
 	for _, p := range procs {
-		w.nproc += 1
+		fmt.Printf("enqing proc \n")
 		w.procq.enq(p)
 	}
 }
@@ -92,12 +81,6 @@ func (w *World) placeProcs() {
 		capacityAvailable = c
 		i += 1
 	}
-	for _, m := range w.machines {
-		mem := m.schedd.memUsed()
-		if mem < m.schedd.totMem {
-			fmt.Printf("WARNING CAPACITY %v\n", m.schedd)
-		}
-	}
 }
 
 func (w *World) compute() {
@@ -110,11 +93,10 @@ func (w *World) Tick() {
 	w.ntick += 1
 	// enqueues things into the procq
 	w.genLoad()
-	fmt.Printf("after gen %v\n", w)
 	// dequeues things from procq to machines based on their util
 	w.placeProcs()
-	fmt.Printf("after getprocs %v\n", w)
+	fmt.Printf("after getprocs: %v\n", w)
 	// runs each machine for a tick
 	w.compute()
-	fmt.Printf("after compute %v\n", w)
+	fmt.Printf("after compute: %v\n", w)
 }
