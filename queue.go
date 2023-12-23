@@ -44,10 +44,6 @@ func (q *Queue) deq() *Proc {
 	return procSelected
 }
 
-func (q *Queue) finishProc(index int) {
-	q.q = append(q.q[:index], q.q[index+1:]...)
-}
-
 func (q *Queue) qlen() int {
 	return len(q.q)
 }
