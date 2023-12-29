@@ -22,20 +22,20 @@ const (
 )
 
 type World struct {
-	ntick    Ttick
+	currTick Ttick
 	machines map[Tmid]*Machine
 	procq    *Queue
 	rand     *rand.Rand
 	app      Website
 }
 
-func newWorld(nMachines int) *World {
+func newWorld(numMachines int, numCoresPerMachine int) *World {
 	w := &World{}
-	w.machines = make(map[Tmid]*Machine, nMachines)
-	w.procq = &Queue{q: make([]*Proc, 0)}
-	for i := 0; i < nMachines; i++ {
+	w.machines = make(map[Tmid]*Machine, numMachines)
+	w.procq = &Queue{q: make([]*ProvProc, 0)}
+	for i := 0; i < numMachines; i++ {
 		mid := Tmid(i)
-		w.machines[mid] = newMachine(mid)
+		w.machines[mid] = newMachine(mid, numCoresPerMachine)
 	}
 	w.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	return w
@@ -50,15 +50,16 @@ func (w *World) String() string {
 }
 
 func (w *World) genLoad() {
-	procs := w.app.genLoad(w.rand, w.ntick)
-	fmt.Printf("generated %d procs\n", len(procs))
-	for _, p := range procs {
+	userProcs := w.app.genLoad(w.rand)
+	fmt.Printf("generated %d procs\n", len(userProcs))
+	for _, up := range userProcs {
+		provProc := newProvProc(w.currTick, up)
 		fmt.Printf("enqing proc \n")
-		w.procq.enq(p)
+		w.procq.enq(provProc)
 	}
 }
 
-func (w *World) getProc(n Tmem) *Proc {
+func (w *World) getProc(n Tmem) *ProvProc {
 	// TODO: make this more differentiated
 	return w.procq.deq()
 }
@@ -90,7 +91,7 @@ func (w *World) compute() {
 }
 
 func (w *World) Tick() {
-	w.ntick += 1
+	w.currTick += 1
 	// enqueues things into the procq
 	w.genLoad()
 	// dequeues things from procq to machines based on their util

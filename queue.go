@@ -2,11 +2,11 @@ package slasched
 
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {
-	q []*Proc
+	q []*ProvProc
 }
 
 func newQueue() *Queue {
-	q := &Queue{q: make([]*Proc, 0)}
+	q := &Queue{q: make([]*ProvProc, 0)}
 	return q
 }
 
@@ -18,7 +18,7 @@ func (q *Queue) String() string {
 	return str
 }
 
-func (q *Queue) enq(p *Proc) {
+func (q *Queue) enq(p *ProvProc) {
 
 	if len(q.q) == 0 {
 		q.q = append(q.q, p)
@@ -36,7 +36,7 @@ func (q *Queue) enq(p *Proc) {
 	q.q = append(q.q, p)
 }
 
-func (q *Queue) deq() *Proc {
+func (q *Queue) deq() *ProvProc {
 	if len(q.q) == 0 {
 		return nil
 	}

@@ -8,7 +8,8 @@ const (
 
 func TestSanityCheck(t *testing.T) {
 	numMachines := 1
-	w := newWorld(numMachines)
+	numCores := 2
+	w := newWorld(numMachines, numCores)
 	w.app = newSimpleWebsite(numMachines)
 	for i := 0; i < NTICK; i++ {
 		w.Tick()
