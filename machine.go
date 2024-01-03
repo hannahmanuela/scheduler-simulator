@@ -9,20 +9,20 @@ type Tprocmap map[Tmid]int
 
 type Machine struct {
 	mid      Tmid
-	schedd   *Schedd
+	sched    *MachineSched
 	numCores int
 }
 
 func newMachine(mid Tmid, numCores int) *Machine {
 	sd := &Machine{
 		mid:      mid,
-		schedd:   newSchedd(numCores),
+		sched:    NewMachineSched(numCores),
 		numCores: numCores,
 	}
 	return sd
 }
 
 func (m Machine) String() string {
-	str := fmt.Sprintf("mid: %d, schedd: %s, numCores: %d", m.mid, m.schedd.String(), m.numCores)
+	str := fmt.Sprintf("mid: %d, sched: %s, numCores: %d", m.mid, m.sched.String(), m.numCores)
 	return str
 }

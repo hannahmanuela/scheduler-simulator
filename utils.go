@@ -14,13 +14,8 @@ func (f Tftick) String() string {
 	return fmt.Sprintf("%.3fT", f)
 }
 
-type computeTime struct {
-	time  Tftick
-	cores int
-}
-
 type Website interface {
-	genLoad(rand *rand.Rand) []*PrivProc
+	genLoad(rand *rand.Rand) []*ProcInternals
 }
 
 func sampleNormal(mu, sigma float64) float64 {

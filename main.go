@@ -14,11 +14,12 @@ import (
 //    - does not know about waiting for i/o
 
 const (
-	MAX_SERVICE_TIME                         = 10 // in ticks
-	MAX_MEM                                  = 10
-	PROC_DEVIATION_FROM_SLA_VARIANCE         = 0.5
-	PROC_SLA_EXPECTED_BUFFER                 = 0.2 // as a fraction of sla
-	AVG_ARRIVAL_RATE_SMALL           float64 = 2   // per tick (with 1 tick per proc)
+	MAX_SERVICE_TIME                 = 10 // in ticks
+	MAX_MEM                          = 10
+	PROC_DEVIATION_FROM_SLA_VARIANCE = 0.5
+	PROC_SLA_EXPECTED_BUFFER         = 0.2 // as a fraction of sla
+	AVG_ARRIVAL_RATE                 = 2.5 // per tick (with 1 tick per proc)
+	CURR_MACHINE                     = 0
 )
 
 type World struct {
@@ -27,12 +28,13 @@ type World struct {
 	procq    *Queue
 	rand     *rand.Rand
 	app      Website
+	currMid  Tmid
 }
 
 func newWorld(numMachines int, numCoresPerMachine int) *World {
 	w := &World{}
 	w.machines = make(map[Tmid]*Machine, numMachines)
-	w.procq = &Queue{q: make([]*ProvProc, 0)}
+	w.procq = &Queue{q: make([]*Proc, 0)}
 	for i := 0; i < numMachines; i++ {
 		mid := Tmid(i)
 		w.machines[mid] = newMachine(mid, numCoresPerMachine)
@@ -59,34 +61,24 @@ func (w *World) genLoad() {
 	}
 }
 
-func (w *World) getProc(n Tmem) *ProvProc {
-	// TODO: make this more differentiated
+func (w *World) getProc() *Proc {
 	return w.procq.deq()
 }
 
-// TODO: make this take into account not only mem, but also buffers to SLA
+// this is currently just round robin
 func (w *World) placeProcs() {
-	capacityAvailable := true
-	i := 0
-	for capacityAvailable {
-		c := false
-		for _, m := range w.machines {
-			memUsed := m.schedd.memUsed()
-			if memUsed < m.schedd.totMem {
-				if p := w.getProc(m.schedd.totMem - memUsed); p != nil {
-					c = true
-					m.schedd.q.enq(p)
-				}
-			}
-		}
-		capacityAvailable = c
-		i += 1
+	p := w.getProc()
+	for p != nil {
+		w.machines[w.currMid].sched.takeProc(p)
+		w.currMid += 1
+		w.currMid = Tmid(int(w.currMid) % len(w.machines))
+		p = w.getProc()
 	}
 }
 
 func (w *World) compute() {
 	for _, m := range w.machines {
-		m.schedd.tick()
+		m.sched.tick()
 	}
 }
 
