@@ -2,6 +2,7 @@ package slasched
 
 import (
 	"fmt"
+	"sort"
 )
 
 const (
@@ -24,13 +25,25 @@ func newSched() *Sched {
 }
 
 func (sd *Sched) String() string {
-	str := fmt.Sprintf("{pressure: %v, ", sd.pressure)
+	str := fmt.Sprintf("{pressure: %v, mem usage: %v, ", sd.pressure, sd.memUsage())
 	str += "q: \n"
 	for _, p := range sd.q.q {
 		str += "    " + p.String() + "\n"
 	}
 	str += "}"
 	return str
+}
+
+func (sd *Sched) memUsage() float64 {
+	return float64(sd.memUsed()) / float64(sd.totMem)
+}
+
+func (sd *Sched) memUsed() Tmem {
+	sum := Tmem(0)
+	for _, p := range sd.q.q {
+		sum += p.memUsed()
+	}
+	return sum
 }
 
 func (sd *Sched) tick() {
@@ -48,12 +61,13 @@ func (sd *Sched) tick() {
 func (sd *Sched) runProcs() {
 	ticksLeftToGive := Tftick(1)
 
+OUTERLOOP:
 	for ticksLeftToGive > 0.001 && sd.q.qlen() > 0 {
 
 		ticksPerProc := sd.allocTicksToProcs(ticksLeftToGive)
 		newProcQ := make([]*Proc, 0)
 	PROCLOOP:
-		for _, currProc := range sd.q.q {
+		for idx, currProc := range sd.q.q {
 			allocatedComp := ticksPerProc[currProc]
 			if allocatedComp == 0 {
 				fmt.Println("idle proc, skipping")
@@ -61,12 +75,16 @@ func (sd *Sched) runProcs() {
 				continue PROCLOOP
 			}
 			ticksUsed, done := currProc.runTillOutOrDone(allocatedComp)
+			ticksLeftToGive -= ticksUsed
 			fmt.Printf("used %v ticks\n", ticksUsed)
 			if !done {
 				newProcQ = append(newProcQ, currProc)
-			}
-			ticksLeftToGive -= ticksUsed
-			if done {
+				if sd.memUsed() >= sd.totMem {
+					fmt.Println("----- KILLING -----")
+					sd.kill(idx, newProcQ)
+					continue OUTERLOOP
+				}
+			} else {
 				// do this not just when proc is done but every iter? slightly changes the point of the proc
 				diffToSLA := currProc.timeLeftOnSLA() - (1 - ticksLeftToGive)
 				sd.updatePressure(diffToSLA)
@@ -105,7 +123,7 @@ func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 
 	ticksGiven := Tftick(0)
 	for _, currProc := range sd.q.q {
-		allocatedTicks := (totalTimeLeft / currProc.timeLeftOnSLA()) / relativeNeedsSum
+		allocatedTicks := ((totalTimeLeft / currProc.timeLeftOnSLA()) / relativeNeedsSum) * ticksLeftToGive
 		if numberOverSLA > 0 {
 			// ~ p a n i c ~
 			// go into emergency mode where the tick is only split (for now, evenly) among the procs that are over
@@ -127,4 +145,27 @@ func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 func (sd *Sched) updatePressure(diffToSLA Tftick) {
 	fmt.Printf("updating pressure given diff: %v \n", diffToSLA)
 	sd.pressure = EWMA_ALPHA*float64(diffToSLA) + (1-EWMA_ALPHA)*sd.pressure
+}
+
+func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
+
+	currQueue := append(newProcQ, sd.q.q[:currProcIdx]...)
+
+	// sort by killable score :D
+	sort.Slice(currQueue, func(i, j int) bool {
+		return currQueue[i].killableScore() < currQueue[j].killableScore()
+	})
+
+	memCut := 0
+
+	// this threshold is kinda arbitrary
+	// TODO: tell main scheduler that this proc has been killed
+	for memCut < 2 {
+		killed := currQueue[0]
+		currQueue = currQueue[1:]
+		memCut += int(killed.memUsed())
+		fmt.Printf("killing proc %s gave us back %d memory\n", killed.String(), memCut)
+	}
+
+	sd.q.q = currQueue
 }

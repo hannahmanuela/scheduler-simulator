@@ -2,6 +2,8 @@ package slasched
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -16,7 +18,8 @@ type Proc struct {
 }
 
 func (p *Proc) String() string {
-	return fmt.Sprintf("{sla %v actualComp %v compDone %v memUsed %d}", p.procInternals.sla, p.procInternals.actualComp, p.procInternals.compDone, p.procInternals.memUsed)
+	return fmt.Sprintf("{sla %v actualComp %v compDone %v memUsed %d}", p.procInternals.sla,
+		p.procInternals.actualComp, p.procInternals.compDone, p.procInternals.memUsed)
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
@@ -36,6 +39,14 @@ func (p *Proc) timeLeftOnSLA() Tftick {
 
 func (p *Proc) memUsed() Tmem {
 	return p.procInternals.memUsed
+}
+
+// returns a measure of how killable a proc is
+// (based on how much memory its using, how long it has already been running, and what its sla is)
+func (p *Proc) killableScore() float64 {
+	// higher score: memUsed, sla
+	// lower score: compDone
+	return (float64(p.memUsed()) + float64(p.procInternals.sla)) - float64(p.procInternals.compDone)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -62,16 +73,19 @@ func newPrivProc(sla Tftick) *ProcInternals {
 	return &ProcInternals{sla, 0, 0, actualComp}
 }
 
-// TODO: have this also increase mem usage
 func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 
 	workLeft := p.actualComp - p.compDone
 
 	if workLeft <= toRun {
 		p.compDone = p.actualComp
-		return p.actualComp, true
+		return workLeft, true
 	} else {
 		p.compDone += toRun
+		memUsage := rand.Int()%10 - 3 // between -3 and +8
+		p.memUsed += Tmem(memUsage)
+		p.memUsed = Tmem(math.Max(float64(p.memUsed), 0))
+		fmt.Printf("adding %v memory, for a total of %v\n", memUsage, p.memUsed)
 		return toRun, false
 	}
 }
