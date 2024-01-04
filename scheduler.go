@@ -46,6 +46,14 @@ func (sd *Sched) memUsed() Tmem {
 	return sum
 }
 
+func (sd *Sched) compTodo() Tftick {
+	sum := Tftick(0)
+	for _, p := range sd.q.q {
+		sum += p.timeLeftOnSLA()
+	}
+	return sum
+}
+
 func (sd *Sched) tick() {
 	if len(sd.q.q) == 0 {
 		return

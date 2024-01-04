@@ -15,11 +15,11 @@ func newSimpleWebsite(numMachines int) *SimpleWebsite {
 	return &SimpleWebsite{poisson: &distuv.Poisson{Lambda: lambda}}
 }
 
-func (website *SimpleWebsite) genLoad(rand *rand.Rand) []*ProcInternals {
+func (website *SimpleWebsite) genLoad() []*ProcInternals {
 	nproc := int(website.poisson.Rand())
 	procs := make([]*ProcInternals, nproc)
 	for i := 0; i < nproc; i++ {
-		procSLA := Tftick(0.95) // Ttick(uniform(rand))
+		procSLA := Tftick(rand.Float64() * 5)
 		procs[i] = newPrivProc(procSLA)
 	}
 	return procs

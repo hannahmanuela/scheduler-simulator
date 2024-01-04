@@ -2,8 +2,6 @@ package slasched
 
 import (
 	"fmt"
-	"math/rand"
-	"time"
 )
 
 // notes:
@@ -16,17 +14,15 @@ import (
 const (
 	MAX_SERVICE_TIME                 = 10 // in ticks
 	MAX_MEM                          = 10
-	PROC_DEVIATION_FROM_SLA_VARIANCE = 0.5
+	PROC_DEVIATION_FROM_SLA_VARIANCE = 0.5 // variance of procs actual runtime to "expected" runtime (sla - sla * expected buffer)
 	PROC_SLA_EXPECTED_BUFFER         = 0.2 // as a fraction of sla
-	AVG_ARRIVAL_RATE                 = 2.5 // per tick (with 1 tick per proc)
-	CURR_MACHINE                     = 0
+	AVG_ARRIVAL_RATE                 = 1.5 // per tick per machine (with 1 tick per proc)
 )
 
 type World struct {
 	currTick Ttick
 	machines map[Tmid]*Machine
 	procq    *Queue
-	rand     *rand.Rand
 	app      Website
 	currMid  Tmid
 }
@@ -39,7 +35,6 @@ func newWorld(numMachines int) *World {
 		mid := Tmid(i)
 		w.machines[mid] = newMachine(mid)
 	}
-	w.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	return w
 }
 
@@ -52,7 +47,7 @@ func (w *World) String() string {
 }
 
 func (w *World) genLoad() {
-	userProcs := w.app.genLoad(w.rand)
+	userProcs := w.app.genLoad()
 	fmt.Printf("generated %d procs\n", len(userProcs))
 	for _, up := range userProcs {
 		provProc := newProvProc(w.currTick, up)

@@ -79,6 +79,7 @@ func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 
 	if workLeft <= toRun {
 		p.compDone = p.actualComp
+		fmt.Printf("proc done: had %v work left\n", workLeft)
 		return workLeft, true
 	} else {
 		p.compDone += toRun

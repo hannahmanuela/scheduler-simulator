@@ -27,9 +27,8 @@ func (q *Queue) enq(p *Proc) {
 
 	for index, currProc := range q.q {
 		if currProc.timeShouldBeDone > p.timeShouldBeDone {
-			headQ := append(q.q[:index], p)
-			tailQ := q.q[index:]
-			q.q = append(headQ, tailQ...)
+			q.q = append(q.q[:index+1], q.q[index:]...)
+			q.q[index] = p
 			return
 		}
 	}
