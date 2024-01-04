@@ -8,21 +8,19 @@ type Ttickmap map[Tmid]Tftick
 type Tprocmap map[Tmid]int
 
 type Machine struct {
-	mid      Tmid
-	sched    *MachineSched
-	numCores int
+	mid   Tmid
+	sched *Sched
 }
 
-func newMachine(mid Tmid, numCores int) *Machine {
+func newMachine(mid Tmid) *Machine {
 	sd := &Machine{
-		mid:      mid,
-		sched:    NewMachineSched(numCores),
-		numCores: numCores,
+		mid:   mid,
+		sched: newSched(),
 	}
 	return sd
 }
 
 func (m Machine) String() string {
-	str := fmt.Sprintf("mid: %d, sched: %s, numCores: %d", m.mid, m.sched.String(), m.numCores)
+	str := fmt.Sprintf("mid: %d, sched: %s\n", m.mid, m.sched.String())
 	return str
 }

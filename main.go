@@ -31,13 +31,13 @@ type World struct {
 	currMid  Tmid
 }
 
-func newWorld(numMachines int, numCoresPerMachine int) *World {
+func newWorld(numMachines int) *World {
 	w := &World{}
 	w.machines = make(map[Tmid]*Machine, numMachines)
 	w.procq = &Queue{q: make([]*Proc, 0)}
 	for i := 0; i < numMachines; i++ {
 		mid := Tmid(i)
-		w.machines[mid] = newMachine(mid, numCoresPerMachine)
+		w.machines[mid] = newMachine(mid)
 	}
 	w.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	return w
@@ -69,7 +69,7 @@ func (w *World) getProc() *Proc {
 func (w *World) placeProcs() {
 	p := w.getProc()
 	for p != nil {
-		w.machines[w.currMid].sched.takeProc(p)
+		w.machines[w.currMid].sched.q.enq(p)
 		w.currMid += 1
 		w.currMid = Tmid(int(w.currMid) % len(w.machines))
 		p = w.getProc()

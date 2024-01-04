@@ -8,55 +8,14 @@ const (
 	EWMA_ALPHA = 0.2
 )
 
-// ------------------------------------------------------------------------------------------------
-// MACHINE-LEVEL SCHEDULER
-// ------------------------------------------------------------------------------------------------
-
-type MachineSched struct {
-	coreScheds []*CoreSched
-}
-
-func NewMachineSched(numCores int) *MachineSched {
-	sds := make([]*CoreSched, 0)
-	for i := 0; i < numCores; i++ {
-		sds = append(sds, newCoreSched())
-	}
-	return &MachineSched{coreScheds: sds}
-}
-
-func (msd *MachineSched) String() string {
-	str := "{machine sched: \n"
-	for _, csd := range msd.coreScheds {
-		str += "   " + csd.String() + "\n"
-	}
-	str += "}"
-	return str
-}
-
-func (msd *MachineSched) takeProc(p *Proc) {
-	coreToUse := msd.coreScheds[0]
-	coreToUse.q.enq(p)
-	msd.coreScheds = append(msd.coreScheds[1:], coreToUse)
-}
-
-func (msd *MachineSched) tick() {
-	for _, csd := range msd.coreScheds {
-		csd.tick()
-	}
-}
-
-// ------------------------------------------------------------------------------------------------
-// CORE-LEVEL SCHEDULER
-// ------------------------------------------------------------------------------------------------
-
-type CoreSched struct {
+type Sched struct {
 	totMem   Tmem
 	q        *Queue
 	pressure float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
 }
 
-func newCoreSched() *CoreSched {
-	sd := &CoreSched{
+func newSched() *Sched {
+	sd := &Sched{
 		totMem:   MAX_MEM,
 		q:        newQueue(),
 		pressure: 0,
@@ -64,7 +23,7 @@ func newCoreSched() *CoreSched {
 	return sd
 }
 
-func (sd *CoreSched) String() string {
+func (sd *Sched) String() string {
 	str := fmt.Sprintf("{pressure: %v, ", sd.pressure)
 	str += "q: \n"
 	for _, p := range sd.q.q {
@@ -74,7 +33,7 @@ func (sd *CoreSched) String() string {
 	return str
 }
 
-func (sd *CoreSched) tick() {
+func (sd *Sched) tick() {
 	if len(sd.q.q) == 0 {
 		return
 	}
@@ -86,7 +45,7 @@ func (sd *CoreSched) tick() {
 
 // do 1 tick of computation, spread across procs in q, and across different cores
 // TODO: use enq and deq here? otherwise structure in q is not actually maintained
-func (sd *CoreSched) runProcs() {
+func (sd *Sched) runProcs() {
 	ticksLeftToGive := Tftick(1)
 
 	for ticksLeftToGive > 0.001 && sd.q.qlen() > 0 {
@@ -121,7 +80,7 @@ func (sd *CoreSched) runProcs() {
 // allocates ticks
 // inversely proportional to how much time the proc has left on its sla
 // if there are procs that are over, will (for now, equally) spread all ticks between them
-func (sd *CoreSched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
+func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 
 	procToTicks := make(map[*Proc]Tftick, 0)
 
@@ -165,7 +124,7 @@ func (sd *CoreSched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick 
 }
 
 // currently just using EWMA, in both cases (went over SLA and was still under)
-func (sd *CoreSched) updatePressure(diffToSLA Tftick) {
+func (sd *Sched) updatePressure(diffToSLA Tftick) {
 	fmt.Printf("updating pressure given diff: %v \n", diffToSLA)
 	sd.pressure = EWMA_ALPHA*float64(diffToSLA) + (1-EWMA_ALPHA)*sd.pressure
 }
