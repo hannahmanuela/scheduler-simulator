@@ -2,6 +2,7 @@ package slasched
 
 import (
 	"fmt"
+	"math"
 )
 
 // notes:
@@ -16,7 +17,9 @@ const (
 	MAX_MEM                          = 10
 	PROC_DEVIATION_FROM_SLA_VARIANCE = 0.5 // variance of procs actual runtime to "expected" runtime (sla - sla * expected buffer)
 	PROC_SLA_EXPECTED_BUFFER         = 0.2 // as a fraction of sla
-	AVG_ARRIVAL_RATE                 = 1.5 // per tick per machine (with 1 tick per proc)
+	PROC_SLA_RANGE_MAX               = 5   // the max value that a sla can have - slas will have uniform random value in this range
+	SCHEDULER_SLA_INCREMENT_SIZE     = 2   // the increment size that we group slas together when creating histogram of procs on machines
+	AVG_ARRIVAL_RATE                 = 5   // per tick per machine (with 1 tick per proc)
 )
 
 type World struct {
@@ -24,7 +27,6 @@ type World struct {
 	machines map[Tmid]*Machine
 	procq    *Queue
 	app      Website
-	currMid  Tmid
 }
 
 func newWorld(numMachines int) *World {
@@ -60,13 +62,21 @@ func (w *World) getProc() *Proc {
 	return w.procq.deq()
 }
 
-// this is currently just round robin
 func (w *World) placeProcs() {
 	p := w.getProc()
 	for p != nil {
-		w.machines[w.currMid].sched.q.enq(p)
-		w.currMid += 1
-		w.currMid = Tmid(int(w.currMid) % len(w.machines))
+		var machineToUse *Machine
+		minScore := math.Inf(1)
+		// place given proc
+		for _, m := range w.machines {
+			score := m.sched.pressureScore()
+			if score < minScore {
+				machineToUse = m
+				minScore = score
+			}
+		}
+		fmt.Printf("machine %d has score %v, and is thus being used\n", machineToUse.mid, minScore)
+		machineToUse.sched.q.enq(p)
 		p = w.getProc()
 	}
 }
@@ -84,6 +94,7 @@ func (w *World) Tick() {
 	// dequeues things from procq to machines based on their util
 	w.placeProcs()
 	fmt.Printf("after getprocs: %v\n", w)
+	fmt.Printf("map for machine 0: %v\n", w.machines[0].sched.makeHistogram())
 	// runs each machine for a tick
 	w.compute()
 	fmt.Printf("after compute: %v\n", w)

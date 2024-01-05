@@ -19,7 +19,7 @@ func (website *SimpleWebsite) genLoad() []*ProcInternals {
 	nproc := int(website.poisson.Rand())
 	procs := make([]*ProcInternals, nproc)
 	for i := 0; i < nproc; i++ {
-		procSLA := Tftick(rand.Float64() * 5)
+		procSLA := Tftick(rand.Float64() * PROC_SLA_RANGE_MAX)
 		procs[i] = newPrivProc(procSLA)
 	}
 	return procs

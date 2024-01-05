@@ -33,6 +33,7 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 	return ticksUsed, done
 }
 
+// difference between the time that has passed since the proc started and its SLA
 func (p *Proc) timeLeftOnSLA() Tftick {
 	return p.procInternals.sla - p.ticksPassed
 }
