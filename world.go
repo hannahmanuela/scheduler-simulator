@@ -2,15 +2,14 @@ package slasched
 
 import (
 	"fmt"
-	"math"
 )
 
 // notes:
-// - only starts counting time passed once proc is placed on machine
-// - a machine runs one proc at a time and progress is only measured by
-//   how long a proc runs, ie:
-//    - does not support any sort of paralelization
-//    - does not know about waiting for i/o
+// - no sense of waiting for i/o
+// - memory usage of procs is random
+// - machines can only run one proc at a time
+// - scheduler pre-schedules everything (rather than making decisions on the fly)
+// - don't have a sense of different kinds of procs
 
 const (
 	MAX_SERVICE_TIME                 = 10 // in ticks
@@ -23,20 +22,20 @@ const (
 )
 
 type World struct {
-	currTick Ttick
-	machines map[Tmid]*Machine
-	procq    *Queue
-	app      Website
+	currTick     Ttick
+	machines     map[Tmid]*Machine
+	loadBalancer *LoadBalancer
+	app          Website
 }
 
 func newWorld(numMachines int) *World {
 	w := &World{}
 	w.machines = make(map[Tmid]*Machine, numMachines)
-	w.procq = &Queue{q: make([]*Proc, 0)}
 	for i := 0; i < numMachines; i++ {
 		mid := Tmid(i)
 		w.machines[mid] = newMachine(mid)
 	}
+	w.loadBalancer = newLoadBalancer(w.machines)
 	return w
 }
 
@@ -53,31 +52,7 @@ func (w *World) genLoad() {
 	fmt.Printf("generated %d procs\n", len(userProcs))
 	for _, up := range userProcs {
 		provProc := newProvProc(w.currTick, up)
-		fmt.Printf("enqing proc \n")
-		w.procq.enq(provProc)
-	}
-}
-
-func (w *World) getProc() *Proc {
-	return w.procq.deq()
-}
-
-func (w *World) placeProcs() {
-	p := w.getProc()
-	for p != nil {
-		var machineToUse *Machine
-		minScore := math.Inf(1)
-		// place given proc
-		for _, m := range w.machines {
-			score := m.sched.pressureScore()
-			if score < minScore {
-				machineToUse = m
-				minScore = score
-			}
-		}
-		fmt.Printf("machine %d has score %v, and is thus being used\n", machineToUse.mid, minScore)
-		machineToUse.sched.q.enq(p)
-		p = w.getProc()
+		w.loadBalancer.putProc(provProc)
 	}
 }
 
@@ -92,9 +67,8 @@ func (w *World) Tick() {
 	// enqueues things into the procq
 	w.genLoad()
 	// dequeues things from procq to machines based on their util
-	w.placeProcs()
+	w.loadBalancer.placeProcs()
 	fmt.Printf("after getprocs: %v\n", w)
-	fmt.Printf("map for machine 0: %v\n", w.machines[0].sched.makeHistogram())
 	// runs each machine for a tick
 	w.compute()
 	fmt.Printf("after compute: %v\n", w)

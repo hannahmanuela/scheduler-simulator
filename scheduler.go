@@ -47,27 +47,17 @@ func (sd *Sched) memUsed() Tmem {
 	return sum
 }
 
-func (sd *Sched) compTodo() Tftick {
-	sum := Tftick(0)
-	for _, p := range sd.q.q {
-		sum += p.timeLeftOnSLA()
-	}
-	return sum
-}
-
 // the lower the score, the less pressure the machine is experiencing (ie the more space it has for new procs)
 // could try to balance the number of procs that machines have in different sections of time left?
-func (sd *Sched) pressureScore() float64 {
-	// higher score: mem usage, few procs, high sla (/comp left)
-	// lower score: many procs, low sla (/comp left)
 
-	// look at distribution of procs across time left? (ie cdf of when procs need to be done) - note this could have negative numbers
-	// some kind of combo of time we've had the proc, how much comp it's had, and time we have left on the sla
-	// TODO: do something with the hisotgram?
+// higher score: mem usage, few procs, high sla (/comp left)
+// lower score: many procs, low sla (/comp left)
 
-	// mem usage will have a much lower impact than memused
-	return float64(sd.memUsed()) + float64(sd.compTodo()) - float64(sd.q.qlen())
-}
+// look at distribution of procs across time left? (ie cdf of when procs need to be done) - note this could have negative numbers
+// some kind of combo of time we've had the proc, how much comp it's had, and time we have left on the sla
+// TODO: do something with the hisotgram?
+
+// mem usage will have a much lower impact than memused
 
 // returns a map from the lower value of the SCHEDULER_SLA_INCREMENT_SIZEd range to the number of procs in that range
 // (where a proc being in the range means that the proc has that much time keft before it needs to be done, according to its SLA)
@@ -80,7 +70,7 @@ func (sd *Sched) makeHistogram() map[int]int {
 	}
 
 	for _, p := range sd.q.q {
-		rangeBottom := math.Floor(float64(p.timeLeftOnSLA())/float64(SCHEDULER_SLA_INCREMENT_SIZE)) * SCHEDULER_SLA_INCREMENT_SIZE
+		rangeBottom := sd.getRangeBottomFromSLA(p.timeLeftOnSLA())
 		if _, ok := procMap[int(rangeBottom)]; ok {
 			procMap[int(rangeBottom)] += 1
 		} else {
@@ -89,6 +79,10 @@ func (sd *Sched) makeHistogram() map[int]int {
 	}
 
 	return procMap
+}
+
+func (sd *Sched) getRangeBottomFromSLA(sla Tftick) int {
+	return int(math.Floor(float64(sla)/float64(SCHEDULER_SLA_INCREMENT_SIZE)) * SCHEDULER_SLA_INCREMENT_SIZE)
 }
 
 func (sd *Sched) tick() {
