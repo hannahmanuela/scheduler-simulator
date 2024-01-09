@@ -1,13 +1,13 @@
 package slasched
 
-import "math"
+import "fmt"
 
 type LoadBalancer struct {
-	machines map[Tmid]*Machine
+	machines []*Machine
 	procq    *Queue
 }
 
-func newLoadBalancer(machines map[Tmid]*Machine) *LoadBalancer {
+func newLoadBalancer(machines []*Machine) *LoadBalancer {
 	lb := &LoadBalancer{machines: machines}
 	lb.procq = &Queue{q: make([]*Proc, 0)}
 	return lb
@@ -23,24 +23,46 @@ func newLoadBalancer(machines map[Tmid]*Machine) *LoadBalancer {
 // goal 2: don't place proc on machine where mem is tight
 // - the higher a machine's mem pressure is, the less procs we should place there
 
-// do we put this in the scheduler? we might want to diff between the schedulers (load balancer vs scheduler or something)
 // rather than using directly via values, could also sample with probability
 func (lb *LoadBalancer) placeProcs() {
 	p := lb.getProc()
 	for p != nil {
 		// place given proc
-		var machineToUse *Machine
-		minRangeVal := math.Inf(1)
-		// TODO: have this balance number of procs with memory pressure
+		fmt.Printf("placing proc %v\n", p)
+
+		// get number of procs in that range on every machine, as well as the max
+		rangeVals := make(map[*Machine]int, 0)
+		maxVal := 0
 		for _, m := range lb.machines {
 			// I could also do this by just being able to get the number of procs on a machine within a certain range
 			histogram := m.sched.makeHistogram()
-			rangeVal := float64(histogram[m.sched.getRangeBottomFromSLA(p.procInternals.sla)])
-			if rangeVal < minRangeVal {
-				machineToUse = m
-				minRangeVal = rangeVal
+			numProcsInRange := histogram[m.sched.getRangeBottomFromSLA(p.procInternals.sla)]
+			rangeVals[m] = numProcsInRange
+			if numProcsInRange > maxVal {
+				maxVal = numProcsInRange
 			}
 		}
+
+		// calcluate weights
+		var machineWeights []float64
+		for _, m := range lb.machines {
+			memFree := float64(MAX_MEM - m.sched.memUsed())
+			weight := memFree
+			if maxVal > 0 {
+				numProcsInRange := rangeVals[m]
+				diffToMaxNumProcs := maxVal - numProcsInRange
+				// MAX_MEM is going to be the maximal value possible (so that its equally weighted with mem - FOR NOW - )
+				normedDiffToMaxNumProcs := float64(diffToMaxNumProcs) * (float64(MAX_MEM) / float64(maxVal))
+				weight += normedDiffToMaxNumProcs
+				fmt.Printf("given that the max num procs in this range is %v, and this machine has %v procs (diff: %v, normed: %v), and %v mem free, gave it weight %v\n", maxVal, numProcsInRange, diffToMaxNumProcs, normedDiffToMaxNumProcs, memFree, weight)
+			} else {
+				fmt.Printf("no procs in this range yet\n")
+			}
+			machineWeights = append(machineWeights, weight)
+		}
+
+		// place proc on machine, chosen by weighted random drawing? (could also just pick max)
+		machineToUse := lb.machines[sampleFromWeightList(machineWeights)]
 		machineToUse.sched.q.enq(p)
 		p = lb.getProc()
 	}

@@ -47,18 +47,6 @@ func (sd *Sched) memUsed() Tmem {
 	return sum
 }
 
-// the lower the score, the less pressure the machine is experiencing (ie the more space it has for new procs)
-// could try to balance the number of procs that machines have in different sections of time left?
-
-// higher score: mem usage, few procs, high sla (/comp left)
-// lower score: many procs, low sla (/comp left)
-
-// look at distribution of procs across time left? (ie cdf of when procs need to be done) - note this could have negative numbers
-// some kind of combo of time we've had the proc, how much comp it's had, and time we have left on the sla
-// TODO: do something with the hisotgram?
-
-// mem usage will have a much lower impact than memused
-
 // returns a map from the lower value of the SCHEDULER_SLA_INCREMENT_SIZEd range to the number of procs in that range
 // (where a proc being in the range means that the proc has that much time keft before it needs to be done, according to its SLA)
 func (sd *Sched) makeHistogram() map[int]int {
@@ -119,7 +107,7 @@ OUTERLOOP:
 			if !done {
 				newProcQ = append(newProcQ, currProc)
 				if sd.memUsed() >= sd.totMem {
-					fmt.Println("----- KILLING -----")
+					fmt.Println("--> KILLING")
 					sd.kill(idx, newProcQ)
 					continue OUTERLOOP
 				}
@@ -188,17 +176,19 @@ func (sd *Sched) updatePressure(diffToSLA Tftick) {
 
 func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
 
-	currQueue := append(newProcQ, sd.q.q[:currProcIdx]...)
+	currQueue := append(newProcQ, sd.q.q[currProcIdx+1:]...)
+
+	fmt.Printf("currQ: %v, we are at q index %v\n", currQueue, currProcIdx)
 
 	// sort by killable score :D
 	sort.Slice(currQueue, func(i, j int) bool {
-		return currQueue[i].killableScore() < currQueue[j].killableScore()
+		return currQueue[i].killableScore() > currQueue[j].killableScore()
 	})
 
 	memCut := 0
 
 	// this threshold is kinda arbitrary
-	// TODO: tell main scheduler that this proc has been killed
+	// TODO: rather than killing, checkpoint and requeue this proc with load balancer?
 	for memCut < 2 {
 		killed := currQueue[0]
 		currQueue = currQueue[1:]

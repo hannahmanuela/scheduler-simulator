@@ -47,7 +47,7 @@ func (p *Proc) memUsed() Tmem {
 func (p *Proc) killableScore() float64 {
 	// higher score: memUsed, sla
 	// lower score: compDone
-	return (float64(p.memUsed()) + float64(p.procInternals.sla)) - float64(p.procInternals.compDone)
+	return float64(p.memUsed())*(float64(p.procInternals.sla)) - float64(p.procInternals.compDone)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -86,7 +86,8 @@ func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 		p.compDone += toRun
 		memUsage := rand.Int()%10 - 3 // between -3 and +8
 		p.memUsed += Tmem(memUsage)
-		p.memUsed = Tmem(math.Max(float64(p.memUsed), 0))
+		// enforcing 0 <= memUsed <= MAX_MEM
+		p.memUsed = Tmem(math.Min(math.Max(float64(p.memUsed), 0), MAX_MEM))
 		fmt.Printf("adding %v memory, for a total of %v\n", memUsage, p.memUsed)
 		return toRun, false
 	}

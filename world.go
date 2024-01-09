@@ -23,17 +23,17 @@ const (
 
 type World struct {
 	currTick     Ttick
-	machines     map[Tmid]*Machine
+	machines     []*Machine
 	loadBalancer *LoadBalancer
 	app          Website
 }
 
 func newWorld(numMachines int) *World {
 	w := &World{}
-	w.machines = make(map[Tmid]*Machine, numMachines)
+	w.machines = make([]*Machine, numMachines)
 	for i := 0; i < numMachines; i++ {
 		mid := Tmid(i)
-		w.machines[mid] = newMachine(mid)
+		w.machines[i] = newMachine(mid)
 	}
 	w.loadBalancer = newLoadBalancer(w.machines)
 	return w
@@ -58,6 +58,7 @@ func (w *World) genLoad() {
 
 func (w *World) compute() {
 	for _, m := range w.machines {
+		fmt.Printf(" ----- TICKING MACHINE %v ----- \n ", m.mid)
 		m.sched.tick()
 	}
 }
