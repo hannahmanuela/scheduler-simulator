@@ -45,21 +45,3 @@ func sampleFromWeightList(weights []float64) int {
 
 	return selectedIndex
 }
-
-func normalizeList(values []float64, maxValue float64) []float64 {
-	maxOriginal := values[0]
-	for _, value := range values {
-		if value > maxOriginal {
-			maxOriginal = value
-		}
-	}
-
-	normalizationFactor := maxValue / maxOriginal
-
-	normalizedValues := make([]float64, len(values))
-	for i, value := range values {
-		normalizedValues[i] = value * normalizationFactor
-	}
-
-	return normalizedValues
-}
