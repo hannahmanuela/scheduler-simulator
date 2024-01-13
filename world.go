@@ -28,11 +28,12 @@ type World struct {
 func newWorld(numMachines int) *World {
 	w := &World{}
 	w.machines = make([]*Machine, numMachines)
+	lbMachineConn := make(chan *Proc)
 	for i := 0; i < numMachines; i++ {
 		mid := Tmid(i)
-		w.machines[i] = newMachine(mid)
+		w.machines[i] = newMachine(mid, lbMachineConn)
 	}
-	w.loadBalancer = newLoadBalancer(w.machines)
+	w.loadBalancer = newLoadBalancer(w.machines, lbMachineConn)
 	return w
 }
 

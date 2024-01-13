@@ -14,13 +14,15 @@ type Sched struct {
 	totMem   Tmem
 	q        *Queue
 	pressure float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
+	lbConn   chan *Proc
 }
 
-func newSched() *Sched {
+func newSched(lbConn chan *Proc) *Sched {
 	sd := &Sched{
 		totMem:   MAX_MEM,
 		q:        newQueue(),
 		pressure: 0,
+		lbConn:   lbConn,
 	}
 	return sd
 }
@@ -194,6 +196,7 @@ func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
 		currQueue = currQueue[1:]
 		memCut += int(killed.memUsed())
 		fmt.Printf("killing proc %s gave us back %d memory\n", killed.String(), memCut)
+		sd.lbConn <- killed
 	}
 
 	sd.q.q = currQueue

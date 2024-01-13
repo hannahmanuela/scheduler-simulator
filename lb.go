@@ -1,14 +1,27 @@
 package slasched
 
+import "fmt"
+
 type LoadBalancer struct {
-	machines []*Machine
-	procq    *Queue
+	machines    []*Machine
+	procq       *Queue
+	machineConn chan *Proc
 }
 
-func newLoadBalancer(machines []*Machine) *LoadBalancer {
+func newLoadBalancer(machines []*Machine, machineConn chan *Proc) *LoadBalancer {
 	lb := &LoadBalancer{machines: machines}
 	lb.procq = &Queue{q: make([]*Proc, 0)}
+	lb.machineConn = machineConn
+	go lb.listenForMachineMessages()
 	return lb
+}
+
+func (lb *LoadBalancer) listenForMachineMessages() {
+	for {
+		killedProc := <-lb.machineConn
+		fmt.Printf("lb received killed proc, requeuing\n")
+		lb.procq.enq(killedProc)
+	}
 }
 
 // DIFFERENT SCHEDULING GOALS IN REL TO SIGNALS WE HAVE
