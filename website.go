@@ -27,6 +27,12 @@ func (pt ProcType) getExpectedProcDeviationVariance(slaWithoutBuffer float64) fl
 	return []float64{0.1, 0.1, 0.2, 0.5}[pt] * slaWithoutBuffer
 }
 
+// exected buffer between declared sla and average compute necessary, as a fraction of the sla
+func (pt ProcType) getExpectedSlaBuffer() float64 {
+	// page static, page dynamic, data process fg, data process bg
+	return []float64{0.05, 0.05, 0.1, 0.3}[pt]
+}
+
 // constants characterizing the wesbite traffic
 const (
 	// fraction of procs generated that are in each category
@@ -44,9 +50,6 @@ const (
 	DATA_PROCESS_FG_SLA_RANGE_MAX = 5
 	DATA_PROCESS_BG_SLA_RANGE_MIN = 2
 	DATA_PROCESS_BG_SLA_RANGE_MAX = 10
-
-	// exected buffer between declared sla and average compute necessary, as a fraction of the sla
-	PROC_SLA_EXPECTED_BUFFER = 0.2
 )
 
 // the website struct itself

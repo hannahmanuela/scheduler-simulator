@@ -13,9 +13,9 @@ import (
 
 const (
 	MAX_SERVICE_TIME             = 10 // in ticks
-	MAX_MEM                      = 10
-	SCHEDULER_SLA_INCREMENT_SIZE = 2 // the increment size that we group slas together when creating histogram of procs on machines
-	AVG_ARRIVAL_RATE             = 5 // per tick per machine (with 1 tick per proc)
+	MAX_MEM                      = 20
+	SCHEDULER_SLA_INCREMENT_SIZE = 0.5 // the increment size that we group slas together when creating histogram of procs on machines
+	AVG_ARRIVAL_RATE             = 5   // per tick per machine (with 1 tick per proc)
 )
 
 type World struct {

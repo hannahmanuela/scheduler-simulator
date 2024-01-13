@@ -60,8 +60,9 @@ func (lb *LoadBalancer) placeProcs() {
 			machineWeights = append(machineWeights, weight)
 		}
 
-		// place proc on machine, chosen by weighted random drawing? (could also just pick max)
-		machineToUse := lb.machines[sampleFromWeightList(machineWeights)]
+		// place proc on machine, chosen by weighted random drawing? (could also just pick max -- trying for now)
+		// machineToUse := lb.machines[sampleFromWeightList(machineWeights)]
+		machineToUse := lb.machines[findMaxIndex(machineWeights)]
 		machineToUse.sched.q.enq(p)
 		p = lb.getProc()
 	}

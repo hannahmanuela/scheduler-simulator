@@ -22,26 +22,45 @@ func sampleNormal(mu, sigma float64) float64 {
 	return rand.NormFloat64()*float64(sigma) + float64(mu)
 }
 
-func sampleFromWeightList(weights []float64) int {
-	if len(weights) == 0 {
+// func sampleFromWeightList(weights []float64) int {
+// 	if len(weights) == 0 {
+// 		return -1
+// 	}
+
+// 	totalWeight := 0.0
+// 	cdf := make([]float64, 0)
+// 	for _, weight := range weights {
+// 		totalWeight += weight
+// 		cdf = append(cdf, totalWeight)
+// 	}
+
+// 	// Generate a random number between 0 and totalWeight
+// 	randomNumber := rand.Float64() * totalWeight
+
+// 	// Find the index of the selected item
+// 	selectedIndex := 0
+// 	for randomNumber > cdf[selectedIndex] {
+// 		selectedIndex++
+// 	}
+
+// 	return selectedIndex
+// }
+
+func findMaxIndex(numbers []float64) int {
+	if len(numbers) == 0 {
+		// Handle empty list case
 		return -1
 	}
 
-	totalWeight := 0.0
-	cdf := make([]float64, 0)
-	for _, weight := range weights {
-		totalWeight += weight
-		cdf = append(cdf, totalWeight)
+	maxIndex := 0
+	maxValue := numbers[0]
+
+	for i, value := range numbers {
+		if value > maxValue {
+			maxIndex = i
+			maxValue = value
+		}
 	}
 
-	// Generate a random number between 0 and totalWeight
-	randomNumber := rand.Float64() * totalWeight
-
-	// Find the index of the selected item
-	selectedIndex := 0
-	for randomNumber > cdf[selectedIndex] {
-		selectedIndex++
-	}
-
-	return selectedIndex
+	return maxIndex
 }

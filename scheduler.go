@@ -96,7 +96,7 @@ OUTERLOOP:
 	PROCLOOP:
 		for idx, currProc := range sd.q.q {
 			allocatedComp := ticksPerProc[currProc]
-			if allocatedComp == 0 {
+			if allocatedComp < 0.001 {
 				fmt.Println("idle proc, skipping")
 				newProcQ = append(newProcQ, currProc)
 				continue PROCLOOP
