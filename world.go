@@ -5,20 +5,17 @@ import (
 )
 
 // notes:
-// - no sense of waiting for i/o
-// - memory usage of procs is random
-// - machines can only run one proc at a time
-// - scheduler pre-schedules everything (rather than making decisions on the fly)
-// - don't have a sense of different kinds of procs
+// - no sense of waiting for i/o (this is pretty simple: just when scheduling, look only at procs that could run right now)
+// - memory usage of procs is random (also simple: otherwise procs need a map from ticksFromStart to the memory usage)
+// - machines can only run one proc at a time (simple-ish, scheduler now becomes per-core, and we add a middle layer scheduler that's on the machine but only distributes procs)
+// - scheduler pre-schedules everything (rather than making decisions on the fly) (does this need to change? only really if a proc comes in during that time, right?)
+// - don't have a sense of different kinds of procs (working on this next)
 
 const (
-	MAX_SERVICE_TIME                 = 10 // in ticks
-	MAX_MEM                          = 10
-	PROC_DEVIATION_FROM_SLA_VARIANCE = 0.5 // variance of procs actual runtime to "expected" runtime (sla - sla * expected buffer)
-	PROC_SLA_EXPECTED_BUFFER         = 0.2 // as a fraction of sla
-	PROC_SLA_RANGE_MAX               = 5   // the max value that a sla can have - slas will have uniform random value in this range
-	SCHEDULER_SLA_INCREMENT_SIZE     = 2   // the increment size that we group slas together when creating histogram of procs on machines
-	AVG_ARRIVAL_RATE                 = 5   // per tick per machine (with 1 tick per proc)
+	MAX_SERVICE_TIME             = 10 // in ticks
+	MAX_MEM                      = 10
+	SCHEDULER_SLA_INCREMENT_SIZE = 2 // the increment size that we group slas together when creating histogram of procs on machines
+	AVG_ARRIVAL_RATE             = 5 // per tick per machine (with 1 tick per proc)
 )
 
 type World struct {

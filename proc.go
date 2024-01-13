@@ -18,8 +18,7 @@ type Proc struct {
 }
 
 func (p *Proc) String() string {
-	return fmt.Sprintf("{sla %v actualComp %v compDone %v memUsed %d}", p.procInternals.sla,
-		p.procInternals.actualComp, p.procInternals.compDone, p.procInternals.memUsed)
+	return p.procInternals.String()
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
@@ -60,18 +59,24 @@ type ProcInternals struct {
 	compDone   Tftick
 	memUsed    Tmem
 	actualComp Tftick
+	procType   ProcType
 }
 
-func newPrivProc(sla Tftick) *ProcInternals {
+func (p *ProcInternals) String() string {
+	return fmt.Sprintf("{type %v, sla %v actualComp %v compDone %v memUsed %d}", p.procType, p.sla,
+		p.actualComp, p.compDone, p.memUsed)
+}
+
+func newPrivProc(sla Tftick, procType ProcType) *ProcInternals {
 
 	// get actual comp from a normal distribution, assuming the sla left a buffer
 	slaWithoutBuffer := float64(sla) - PROC_SLA_EXPECTED_BUFFER*float64(sla)
-	actualComp := Tftick(sampleNormal(slaWithoutBuffer, PROC_DEVIATION_FROM_SLA_VARIANCE))
+	actualComp := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance(slaWithoutBuffer)))
 	if actualComp < 0 {
 		actualComp = Tftick(0.3)
 	}
 
-	return &ProcInternals{sla, 0, 0, actualComp}
+	return &ProcInternals{sla, 0, 0, actualComp, procType}
 }
 
 func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {

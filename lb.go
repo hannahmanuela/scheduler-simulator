@@ -1,7 +1,5 @@
 package slasched
 
-import "fmt"
-
 type LoadBalancer struct {
 	machines []*Machine
 	procq    *Queue
@@ -28,7 +26,7 @@ func (lb *LoadBalancer) placeProcs() {
 	p := lb.getProc()
 	for p != nil {
 		// place given proc
-		fmt.Printf("placing proc %v\n", p)
+		// fmt.Printf("placing proc %v\n", p)
 
 		// get number of procs in that range on every machine, as well as the max
 		rangeVals := make(map[*Machine]int, 0)
@@ -54,10 +52,11 @@ func (lb *LoadBalancer) placeProcs() {
 				// MAX_MEM is going to be the maximal value possible (so that its equally weighted with mem - FOR NOW - )
 				normedDiffToMaxNumProcs := float64(diffToMaxNumProcs) * (float64(MAX_MEM) / float64(maxVal))
 				weight += normedDiffToMaxNumProcs
-				fmt.Printf("given that the max num procs in this range is %v, and this machine has %v procs (diff: %v, normed: %v), and %v mem free, gave it weight %v\n", maxVal, numProcsInRange, diffToMaxNumProcs, normedDiffToMaxNumProcs, memFree, weight)
-			} else {
-				fmt.Printf("no procs in this range yet\n")
+				// fmt.Printf("given that the max num procs in this range is %v, and this machine has %v procs (diff: %v, normed: %v), and %v mem free, gave it weight %v\n", maxVal, numProcsInRange, diffToMaxNumProcs, normedDiffToMaxNumProcs, memFree, weight)
 			}
+			// else {
+			// 	fmt.Printf("no procs in this range yet\n")
+			// }
 			machineWeights = append(machineWeights, weight)
 		}
 
