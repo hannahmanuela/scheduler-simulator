@@ -9,13 +9,13 @@ import (
 // - memory usage of procs is random (also simple: otherwise procs need a map from ticksFromStart to the memory usage)
 // - machines can only run one proc at a time (simple-ish, scheduler now becomes per-core, and we add a middle layer scheduler that's on the machine but only distributes procs)
 // - scheduler pre-schedules everything (rather than making decisions on the fly) (does this need to change? only really if a proc comes in during that time, right?)
-// - don't have a sense of different kinds of procs (working on this next)
 
 const (
-	MAX_SERVICE_TIME             = 10 // in ticks
 	MAX_MEM                      = 20
+	PROC_MEM_CHANGE_MAX          = 5   // the maximal increase in memory usage a proc can experience when it runs
+	PROC_MEM_CHANGE_MIN          = -2  // the actual value is chosen uniform random between min and max
 	SCHEDULER_SLA_INCREMENT_SIZE = 0.5 // the increment size that we group slas together when creating histogram of procs on machines
-	AVG_ARRIVAL_RATE             = 5   // per tick per machine (with 1 tick per proc)
+	AVG_ARRIVAL_RATE             = 3   // per tick per machine
 )
 
 type World struct {

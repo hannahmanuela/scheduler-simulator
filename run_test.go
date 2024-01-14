@@ -3,7 +3,7 @@ package slasched
 import "testing"
 
 const (
-	NTICK = 2
+	NTICK = 5
 )
 
 func TestSanityCheck(t *testing.T) {
