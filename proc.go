@@ -89,7 +89,7 @@ func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 		return workLeft, true
 	} else {
 		p.compDone += toRun
-		memUsage := rand.Int()%10 - 3 // between -3 and +8
+		memUsage := rand.Int()%(PROC_MEM_CHANGE_MAX-PROC_MEM_CHANGE_MIN) + PROC_MEM_CHANGE_MIN
 		p.memUsed += Tmem(memUsage)
 		// enforcing 0 <= memUsed <= MAX_MEM
 		p.memUsed = Tmem(math.Min(math.Max(float64(p.memUsed), 0), MAX_MEM))
