@@ -11,24 +11,26 @@ const (
 )
 
 type Sched struct {
-	totMem   Tmem
-	q        *Queue
-	pressure float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
-	lbConn   chan *Proc
+	totMem       Tmem
+	q            *Queue
+	avgDiffToSla float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
+	minSliceSize float64 // how little time did the least scheduled proc get
+	lbConn       chan *Proc
 }
 
 func newSched(lbConn chan *Proc) *Sched {
 	sd := &Sched{
-		totMem:   MAX_MEM,
-		q:        newQueue(),
-		pressure: 0,
-		lbConn:   lbConn,
+		totMem:       MAX_MEM,
+		q:            newQueue(),
+		avgDiffToSla: 0,
+		minSliceSize: 1,
+		lbConn:       lbConn,
 	}
 	return sd
 }
 
 func (sd *Sched) String() string {
-	str := fmt.Sprintf("{pressure: %v, mem usage: %v, ", sd.pressure, sd.memUsage())
+	str := fmt.Sprintf("{compute pressure: %v, mem usage: %v, ", sd.getComputePressure(), sd.memUsage())
 	str += "q: \n"
 	for _, p := range sd.q.q {
 		str += "    " + p.String() + "\n"
@@ -51,9 +53,9 @@ func (sd *Sched) memUsed() Tmem {
 
 // returns a map from the lower value of the SCHEDULER_SLA_INCREMENT_SIZEd range to the number of procs in that range
 // (where a proc being in the range means that the proc has that much time keft before it needs to be done, according to its SLA)
-func (sd *Sched) makeHistogram() map[int]int {
+func (sd *Sched) makeHistogram() map[float64]int {
 
-	procMap := make(map[int]int, 0)
+	procMap := make(map[float64]int, 0)
 
 	if sd.q.qlen() == 0 {
 		return procMap
@@ -61,18 +63,18 @@ func (sd *Sched) makeHistogram() map[int]int {
 
 	for _, p := range sd.q.q {
 		rangeBottom := sd.getRangeBottomFromSLA(p.timeLeftOnSLA())
-		if _, ok := procMap[int(rangeBottom)]; ok {
-			procMap[int(rangeBottom)] += 1
-		} else {
-			procMap[int(rangeBottom)] = 1
-		}
+		procMap[rangeBottom] += 1
 	}
 
 	return procMap
 }
 
-func (sd *Sched) getRangeBottomFromSLA(sla Tftick) int {
-	return int(math.Floor(float64(sla)/float64(SCHEDULER_SLA_INCREMENT_SIZE)) * SCHEDULER_SLA_INCREMENT_SIZE)
+// returns the bottom value of the SLA range in which the passed SLA is
+// this is helpful for creating the histogram mapping number of procs in the scheduler to SLA slices
+// eg if we are looking at SLAs in an increment size of 2 and this is given 1.5, it will return 0 (since 1.5 would be in the 0-2 range)
+func (sd *Sched) getRangeBottomFromSLA(sla Tftick) float64 {
+	val := math.Floor(float64(sla)/float64(SCHEDULER_SLA_INCREMENT_SIZE)) * SCHEDULER_SLA_INCREMENT_SIZE
+	return val
 }
 
 func (sd *Sched) tick() {
@@ -85,10 +87,24 @@ func (sd *Sched) tick() {
 	}
 }
 
+// this combines the avgDiffToSla of procs completed with the minSliceSize to get a sense of pressure
+// one measures how quickly we are able to get smaller procs done, and the other measures how much we are starving longer procs
+// this is a slightly weird mixing of different timescales of feedback
+func (sd *Sched) getComputePressure() float64 {
+	// the smaller the min slice the higher the pressure; slices are fractions of the one tick passed out
+	propSliceTakenByOtherProcs := 1.0 - sd.minSliceSize
+	// the smaller the avgDiffToSla the higher the pressure (though note it could be negative, which would mean extra high pressure)
+	// probably we don't want this to be linear?
+	avgTimeWentOverSla := -sd.avgDiffToSla
+	// fmt.Printf("getting pressure: propSliceTakenByOtherProcs: %v, avgTimeWentOverSla: %v\n", propSliceTakenByOtherProcs, avgTimeWentOverSla)
+	return propSliceTakenByOtherProcs + avgTimeWentOverSla
+}
+
 // do 1 tick of computation, spread across procs in q, and across different cores
-// TODO: use enq and deq here? otherwise structure in q is not actually maintained
+// TODO: use enq and deq here? otherwise structure in q is not actually maintained -- I'm not sure the structure is actually helpful to us tbh
 func (sd *Sched) runProcs() {
 	ticksLeftToGive := Tftick(1)
+	procToTicksMap := make(map[*Proc]Tftick, 0)
 
 OUTERLOOP:
 	for ticksLeftToGive > 0.001 && sd.q.qlen() > 0 {
@@ -97,16 +113,21 @@ OUTERLOOP:
 		newProcQ := make([]*Proc, 0)
 	PROCLOOP:
 		for idx, currProc := range sd.q.q {
+			// get compute allocated to this proc
 			allocatedComp := ticksPerProc[currProc]
 			if allocatedComp < 0.001 {
 				fmt.Println("idle proc, skipping")
 				newProcQ = append(newProcQ, currProc)
 				continue PROCLOOP
 			}
+			// run the proc
 			ticksUsed, done := currProc.runTillOutOrDone(allocatedComp)
 			ticksLeftToGive -= ticksUsed
 			fmt.Printf("used %v ticks\n", ticksUsed)
 			if !done {
+				// add ticks used to the tick map - only if the proc isn't done (don't want to take into account small procs that just finished)
+				procToTicksMap[currProc] += ticksUsed
+				// add proc back into queue, check if the memroy used by the proc sent us over the edge (and if yes, kill then restart)
 				newProcQ = append(newProcQ, currProc)
 				if sd.memUsed() >= sd.totMem {
 					fmt.Println("--> KILLING")
@@ -114,14 +135,25 @@ OUTERLOOP:
 					continue OUTERLOOP
 				}
 			} else {
-				// do this not just when proc is done but every iter? slightly changes the point of the proc
+				// if the proc is done, look at the difference to its SLA and how far we are into the current tick to get the difference to the SLA
+				// then update the pressure metric with that value
 				diffToSLA := currProc.timeLeftOnSLA() - (1 - ticksLeftToGive)
-				sd.updatePressure(diffToSLA)
+				sd.updateAvgDiffToSLA(diffToSLA)
 			}
 		}
 
 		sd.q.q = newProcQ
 	}
+
+	// update min slice size
+	minVal := 1.0
+	for _, ticks := range procToTicksMap {
+		if ticks < Tftick(minVal) {
+			minVal = float64(ticks)
+		}
+	}
+	sd.minSliceSize = minVal
+
 }
 
 // allocates ticks
@@ -171,9 +203,9 @@ func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 }
 
 // currently just using EWMA, in both cases (went over SLA and was still under)
-func (sd *Sched) updatePressure(diffToSLA Tftick) {
+func (sd *Sched) updateAvgDiffToSLA(diffToSLA Tftick) {
 	fmt.Printf("updating pressure given diff: %v \n", diffToSLA)
-	sd.pressure = EWMA_ALPHA*float64(diffToSLA) + (1-EWMA_ALPHA)*sd.pressure
+	sd.avgDiffToSla = EWMA_ALPHA*float64(diffToSLA) + (1-EWMA_ALPHA)*sd.avgDiffToSla
 }
 
 func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
