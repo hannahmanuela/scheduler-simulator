@@ -105,10 +105,9 @@ func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA
 	if VERBOSE_WORLD {
 		fmt.Printf("==============>>>>> TICK %v DONE <<<<<==============\n", w.currTick)
 		fmt.Printf("number of procs generated: %v\n", numProcsGen)
-		fmt.Printf("cum. num procs killed %v\n", w.loadBalancer.numProcsKilled-numProcsKilled)
-		fmt.Printf("cum. num procs over sla TN %v\n", w.loadBalancer.numProcsOverSLA_TN-numProcsOverSLA_TN)
-		fmt.Printf("cum. num procs over sla FN %v\n", w.loadBalancer.numProcsOverSLA_FN-numProcsOverSLA_FN)
-
+		fmt.Printf("num procs killed this tick %v\n", w.loadBalancer.numProcsKilled-numProcsKilled)
+		fmt.Printf("num procs over sla TN this tick %v\n", w.loadBalancer.numProcsOverSLA_TN-numProcsOverSLA_TN)
+		fmt.Printf("num procs over sla FN this tick %v\n", w.loadBalancer.numProcsOverSLA_FN-numProcsOverSLA_FN)
 	}
 	return w.loadBalancer.numProcsKilled, w.loadBalancer.numProcsOverSLA_TN, w.loadBalancer.numProcsOverSLA_FN
 	// min, max, avg := w.getComputePressureStats()
