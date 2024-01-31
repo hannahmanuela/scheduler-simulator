@@ -49,9 +49,6 @@ func (w *World) String() string {
 
 func (w *World) genLoad(nProcs int) int {
 	userProcs := w.app.genLoad(nProcs)
-	if VERBOSE_WORLD {
-		fmt.Printf("generated %d procs\n", len(userProcs))
-	}
 	for _, up := range userProcs {
 		provProc := newProvProc(w.currTick, up)
 		w.loadBalancer.putProc(provProc)
