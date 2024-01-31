@@ -15,10 +15,10 @@ type Sched struct {
 	q            *Queue
 	avgDiffToSla float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
 	minSliceSize float64 // how little time did the least scheduled proc get
-	lbConn       chan *Proc
+	lbConn       chan *MachineMessages
 }
 
-func newSched(lbConn chan *Proc) *Sched {
+func newSched(lbConn chan *MachineMessages) *Sched {
 	sd := &Sched{
 		totMem:       MAX_MEM,
 		q:            newQueue(),
@@ -107,38 +107,48 @@ func (sd *Sched) runProcs() {
 	procToTicksMap := make(map[*Proc]Tftick, 0)
 
 OUTERLOOP:
-	for ticksLeftToGive > 0.001 && sd.q.qlen() > 0 {
-
+	for ticksLeftToGive-Tftick(0.001) > 0.0 && sd.q.qlen() > 0 {
+		if VERBOSE_SCHEDULER {
+			fmt.Printf("scheduling round: ticksLeftToGive is %v, so diff to 0.001 is %v\n", ticksLeftToGive, ticksLeftToGive-Tftick(0.001))
+		}
 		ticksPerProc := sd.allocTicksToProcs(ticksLeftToGive)
 		newProcQ := make([]*Proc, 0)
 	PROCLOOP:
 		for idx, currProc := range sd.q.q {
 			// get compute allocated to this proc
 			allocatedComp := ticksPerProc[currProc]
-			if allocatedComp < 0.001 {
-				fmt.Println("idle proc, skipping")
+			// wtf, go
+			if math.Abs(float64(allocatedComp)-0.001) < 0.0000001 {
+				if VERBOSE_SCHEDULER {
+					fmt.Printf("idle proc, skipping: allocated comp is %v, so diff to 0.001 is %v\n", allocatedComp, allocatedComp-Tftick(0.001))
+				}
 				newProcQ = append(newProcQ, currProc)
 				continue PROCLOOP
 			}
 			// run the proc
 			ticksUsed, done := currProc.runTillOutOrDone(allocatedComp)
 			ticksLeftToGive -= ticksUsed
-			fmt.Printf("used %v ticks\n", ticksUsed)
+			if VERBOSE_SCHEDULER {
+				fmt.Printf("used %v ticks\n", ticksUsed)
+			}
 			if !done {
 				// add ticks used to the tick map - only if the proc isn't done (don't want to take into account small procs that just finished)
 				procToTicksMap[currProc] += ticksUsed
 				// add proc back into queue, check if the memroy used by the proc sent us over the edge (and if yes, kill then restart)
 				newProcQ = append(newProcQ, currProc)
 				if sd.memUsed() >= sd.totMem {
-					fmt.Println("--> KILLING")
+					if VERBOSE_SCHEDULER {
+						fmt.Println("--> KILLING")
+					}
 					sd.kill(idx, newProcQ)
 					continue OUTERLOOP
 				}
 			} else {
-				// if the proc is done, look at the difference to its SLA and how far we are into the current tick to get the difference to the SLA
+				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				// then update the pressure metric with that value
-				diffToSLA := currProc.timeLeftOnSLA() - (1 - ticksLeftToGive)
-				sd.updateAvgDiffToSLA(diffToSLA)
+				currProc.ticksPassed = currProc.ticksPassed + (1 - ticksLeftToGive)
+				sd.updateAvgDiffToSLA(currProc.timeLeftOnSLA())
+				sd.lbConn <- &MachineMessages{PROC_DONE, currProc}
 			}
 		}
 
@@ -194,7 +204,9 @@ func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 				allocatedTicks = 0
 			}
 		}
-		fmt.Printf("giving %v ticks \n", allocatedTicks)
+		if VERBOSE_SCHEDULER {
+			fmt.Printf("giving %v ticks \n", allocatedTicks)
+		}
 		procToTicks[currProc] = allocatedTicks
 		ticksGiven += allocatedTicks
 	}
@@ -204,15 +216,18 @@ func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 
 // currently just using EWMA, in both cases (went over SLA and was still under)
 func (sd *Sched) updateAvgDiffToSLA(diffToSLA Tftick) {
-	fmt.Printf("updating pressure given diff: %v \n", diffToSLA)
+	if VERBOSE_SCHEDULER {
+		fmt.Printf("updating pressure given diff: %v \n", diffToSLA)
+	}
 	sd.avgDiffToSla = EWMA_ALPHA*float64(diffToSLA) + (1-EWMA_ALPHA)*sd.avgDiffToSla
 }
 
 func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
 
 	currQueue := append(newProcQ, sd.q.q[currProcIdx+1:]...)
-
-	fmt.Printf("currQ: %v, we are at q index %v\n", currQueue, currProcIdx)
+	if VERBOSE_SCHEDULER {
+		fmt.Printf("currQ: %v, we are at q index %v\n", currQueue, currProcIdx)
+	}
 
 	// sort by killable score :D
 	sort.Slice(currQueue, func(i, j int) bool {
@@ -227,8 +242,10 @@ func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
 		killed := currQueue[0]
 		currQueue = currQueue[1:]
 		memCut += int(killed.memUsed())
-		fmt.Printf("killing proc %s gave us back %d memory\n", killed.String(), memCut)
-		sd.lbConn <- killed
+		if VERBOSE_SCHEDULER {
+			fmt.Printf("killing proc %s gave us back %d memory\n", killed.String(), memCut)
+		}
+		sd.lbConn <- &MachineMessages{PROC_KILLED, killed}
 	}
 
 	sd.q.q = currQueue

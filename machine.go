@@ -12,7 +12,7 @@ type Machine struct {
 	sched *Sched
 }
 
-func newMachine(mid Tmid, lbConn chan *Proc) *Machine {
+func newMachine(mid Tmid, lbConn chan *MachineMessages) *Machine {
 	sd := &Machine{
 		mid:   mid,
 		sched: newSched(lbConn),

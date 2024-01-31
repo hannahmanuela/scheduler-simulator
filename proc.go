@@ -2,8 +2,6 @@ package slasched
 
 import (
 	"fmt"
-	"math"
-	"math/rand"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -18,7 +16,7 @@ type Proc struct {
 }
 
 func (p *Proc) String() string {
-	return p.procInternals.String()
+	return p.procInternals.String() + ", ticks passed: " + p.ticksPassed.String()
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
@@ -85,15 +83,18 @@ func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 
 	if workLeft <= toRun {
 		p.compDone = p.actualComp
-		fmt.Printf("proc done: had %v work left\n", workLeft)
+		if VERBOSE_PROC {
+			fmt.Printf("proc done: had %v work left\n", workLeft)
+		}
 		return workLeft, true
 	} else {
 		p.compDone += toRun
-		memUsage := rand.Int()%(PROC_MEM_CHANGE_MAX-PROC_MEM_CHANGE_MIN) + PROC_MEM_CHANGE_MIN
-		p.memUsed += Tmem(memUsage)
+		// memUsage := rand.Int()%(PROC_MEM_CHANGE_MAX-PROC_MEM_CHANGE_MIN) + PROC_MEM_CHANGE_MIN
+		// p.memUsed += Tmem(memUsage)
 		// enforcing 0 <= memUsed <= MAX_MEM
-		p.memUsed = Tmem(math.Min(math.Max(float64(p.memUsed), 0), MAX_MEM))
-		fmt.Printf("adding %v memory, for a total of %v\n", memUsage, p.memUsed)
+		// p.memUsed = Tmem(math.Min(math.Max(float64(p.memUsed), 0), MAX_MEM))
+		// fmt.Printf("adding %v memory, for a total of %v\n", memUsage, p.memUsed)
+		p.memUsed = p.procType.getMemoryUsage()
 		return toRun, false
 	}
 }
