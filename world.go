@@ -9,7 +9,7 @@ const (
 	PROC_MEM_CHANGE_MAX          = 5     // the maximal increase in memory usage a proc can experience when it runs
 	PROC_MEM_CHANGE_MIN          = -2    // the actual value is chosen uniform random between min and max
 	SCHEDULER_SLA_INCREMENT_SIZE = 0.5   // the increment size that we group slas together when creating histogram of procs on machines
-	AVG_ARRIVAL_RATE             = 1     // number of procs per tick per machine
+	ARRIVAL_RATE                 = 1     // number of procs per tick per machine
 	TARGET_PRESSURE_MIN          = 0     // this is the lower end of the target pressure for machines
 	TARGET_PRESSURE_MAX          = 0.5
 
@@ -47,8 +47,8 @@ func (w *World) String() string {
 	return str
 }
 
-func (w *World) genLoad() int {
-	userProcs := w.app.genLoad()
+func (w *World) genLoad(nProcs int) int {
+	userProcs := w.app.genLoad(nProcs)
 	if VERBOSE_WORLD {
 		fmt.Printf("generated %d procs\n", len(userProcs))
 	}
@@ -91,7 +91,7 @@ func (w *World) compute() {
 func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA_FN int) (int, int, int) {
 	w.currTick += 1
 	// enqueues things into the procq
-	numProcsGen := w.genLoad()
+	w.genLoad(ARRIVAL_RATE * len(w.machines))
 	// dequeues things from procq to machines based on their util
 	w.loadBalancer.placeProcs()
 	if VERBOSE_MACHINES {
@@ -104,7 +104,6 @@ func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA
 	}
 	if VERBOSE_WORLD {
 		fmt.Printf("==============>>>>> TICK %v DONE <<<<<==============\n", w.currTick)
-		fmt.Printf("number of procs generated: %v\n", numProcsGen)
 		fmt.Printf("num procs killed this tick %v\n", w.loadBalancer.numProcsKilled-numProcsKilled)
 		fmt.Printf("num procs over sla TN this tick %v\n", w.loadBalancer.numProcsOverSLA_TN-numProcsOverSLA_TN)
 		fmt.Printf("num procs over sla FN this tick %v\n", w.loadBalancer.numProcsOverSLA_FN-numProcsOverSLA_FN)

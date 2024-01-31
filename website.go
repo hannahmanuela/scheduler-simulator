@@ -2,8 +2,6 @@ package slasched
 
 import (
 	"math/rand"
-
-	"gonum.org/v1/gonum/stat/distuv"
 )
 
 // constants characterizing the wesbite traffic
@@ -67,12 +65,10 @@ func (pt ProcType) getMemoryUsage() Tmem {
 
 // the website struct itself
 type SimpleWebsite struct {
-	poisson *distuv.Poisson
 }
 
-func newSimpleWebsite(numMachines int) *SimpleWebsite {
-	lambda := AVG_ARRIVAL_RATE * (float64(numMachines))
-	return &SimpleWebsite{poisson: &distuv.Poisson{Lambda: lambda}}
+func newSimpleWebsite() *SimpleWebsite {
+	return &SimpleWebsite{}
 }
 
 // website function types:
@@ -81,15 +77,15 @@ func newSimpleWebsite(numMachines int) *SimpleWebsite {
 // - process inputted user data (foreground, eg processes an uploading photo/video)
 // - process user data (background, eg run data warehouse update flows)
 
-func (website *SimpleWebsite) genLoad() []*ProcInternals {
-	nproc := int(website.poisson.Rand())
+func (website *SimpleWebsite) genLoad(nProcs int) []*ProcInternals {
+	// nproc := int(website.poisson.Rand())
 	procs := make([]*ProcInternals, 0)
 
 	// gen all the proc types, for now this is manual
-	procs = append(procs, website.genPageStaticProcs(int(float64(nproc)*FRACTION_PAGE_STATIC))...)
-	procs = append(procs, website.genPageDynamicProcs(int(float64(nproc)*FRACTION_PAGE_DYNAMIC))...)
-	procs = append(procs, website.genDataProcessFgProcs(int(float64(nproc)*FRACTION_DATA_PROCESS_FG))...)
-	procs = append(procs, website.genDataProcessBgProcs(int(float64(nproc)*FRACTION_DATA_PROCESS_BG))...)
+	procs = append(procs, website.genPageStaticProcs(int(float64(nProcs)*FRACTION_PAGE_STATIC))...)
+	procs = append(procs, website.genPageDynamicProcs(int(float64(nProcs)*FRACTION_PAGE_DYNAMIC))...)
+	procs = append(procs, website.genDataProcessFgProcs(int(float64(nProcs)*FRACTION_DATA_PROCESS_FG))...)
+	procs = append(procs, website.genDataProcessBgProcs(int(float64(nProcs)*FRACTION_DATA_PROCESS_BG))...)
 
 	return procs
 }

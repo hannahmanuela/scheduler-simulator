@@ -113,18 +113,9 @@ OUTERLOOP:
 		}
 		ticksPerProc := sd.allocTicksToProcs(ticksLeftToGive)
 		newProcQ := make([]*Proc, 0)
-	PROCLOOP:
 		for idx, currProc := range sd.q.q {
 			// get compute allocated to this proc
 			allocatedComp := ticksPerProc[currProc]
-			// wtf, go
-			if math.Abs(float64(allocatedComp)-0.001) < 0.0000001 {
-				if VERBOSE_SCHEDULER {
-					fmt.Printf("idle proc, skipping: allocated comp is %v, so diff to 0.001 is %v\n", allocatedComp, allocatedComp-Tftick(0.001))
-				}
-				newProcQ = append(newProcQ, currProc)
-				continue PROCLOOP
-			}
 			// run the proc
 			ticksUsed, done := currProc.runTillOutOrDone(allocatedComp)
 			ticksLeftToGive -= ticksUsed

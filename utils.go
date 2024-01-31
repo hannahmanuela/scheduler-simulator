@@ -15,7 +15,7 @@ func (f Tftick) String() string {
 }
 
 type Website interface {
-	genLoad() []*ProcInternals
+	genLoad(nProcs int) []*ProcInternals
 }
 
 func sampleNormal(mu, sigma float64) float64 {
