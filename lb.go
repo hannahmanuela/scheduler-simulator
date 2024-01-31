@@ -46,20 +46,20 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 				// floats are weird just deal with it
 				if math.Abs(float64(msg.proc.ticksPassed-msg.proc.procInternals.actualComp)) > 0.000001 {
 					// yes, even actual compute was less than ticks passed
-					if VERBOSE_WORLD {
+					if VERBOSE_LB {
 						fmt.Printf("lb received done proc, was a true negative: ticksPassed: %v, sla: %v, actual compute: %v\n", msg.proc.ticksPassed, msg.proc.procInternals.sla, msg.proc.procInternals.actualComp)
 					}
 					lb.numProcsOverSLA_TN += 1
 				} else {
 					// no, was in fact impossible to get it done on time (b/c we did the very best we could, ie ticksPassed = actualComp)
-					if VERBOSE_WORLD {
+					if VERBOSE_LB {
 						fmt.Printf("lb received done proc, was a false negative: ticksPassed: %v, sla: %v, actual compute: %v\n", msg.proc.ticksPassed, msg.proc.procInternals.sla, msg.proc.procInternals.actualComp)
 					}
 					lb.numProcsOverSLA_FN += 1
 				}
 			}
 		case PROC_KILLED:
-			if VERBOSE_WORLD {
+			if VERBOSE_LB {
 				fmt.Printf("lb received killed proc, requeuing\n")
 			}
 			lb.numProcsKilled += 1

@@ -6,16 +6,15 @@ import (
 )
 
 const (
-	NTICK = 50
+	NTICK = 200
 )
 
 func TestSanityCheck(t *testing.T) {
 	numMachines := 100
 	w := newWorld(numMachines)
 	w.app = newSimpleWebsite(numMachines)
-	for i := 0; i < NTICK; i++ {
-		w.Tick()
-	}
+	w.Run(NTICK)
+
 	fmt.Println("---------------")
 	fmt.Println("---------------")
 	fmt.Println("run done!")

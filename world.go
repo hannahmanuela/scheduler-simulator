@@ -17,6 +17,7 @@ const (
 	VERBOSE_WORLD     = true
 	VERBOSE_LB        = false
 	VERBOSE_PROC      = false
+	VERBOSE_MACHINES  = false
 )
 
 type World struct {
@@ -46,7 +47,7 @@ func (w *World) String() string {
 	return str
 }
 
-func (w *World) genLoad() {
+func (w *World) genLoad() int {
 	userProcs := w.app.genLoad()
 	if VERBOSE_WORLD {
 		fmt.Printf("generated %d procs\n", len(userProcs))
@@ -55,6 +56,7 @@ func (w *World) genLoad() {
 		provProc := newProvProc(w.currTick, up)
 		w.loadBalancer.putProc(provProc)
 	}
+	return len(userProcs)
 }
 
 func (w *World) compute() {
@@ -86,22 +88,38 @@ func (w *World) compute() {
 // 	return maxVal, minVal, (sum / float64(num))
 // }
 
-func (w *World) Tick() {
+func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA_FN int) (int, int, int) {
 	w.currTick += 1
 	// enqueues things into the procq
-	w.genLoad()
+	numProcsGen := w.genLoad()
 	// dequeues things from procq to machines based on their util
 	w.loadBalancer.placeProcs()
-	if VERBOSE_WORLD {
+	if VERBOSE_MACHINES {
 		fmt.Printf("after getprocs: %v\n", w)
 	}
 	// runs each machine for a tick
 	w.compute()
-	if VERBOSE_WORLD {
+	if VERBOSE_MACHINES {
 		fmt.Printf("after compute: %v\n", w)
-		fmt.Printf("==============>>>>> TICK DONE <<<<<==============\n")
 	}
+	if VERBOSE_WORLD {
+		fmt.Printf("==============>>>>> TICK %v DONE <<<<<==============\n", w.currTick)
+		fmt.Printf("number of procs generated: %v\n", numProcsGen)
+		fmt.Printf("cum. num procs killed %v\n", w.loadBalancer.numProcsKilled-numProcsKilled)
+		fmt.Printf("cum. num procs over sla TN %v\n", w.loadBalancer.numProcsOverSLA_TN-numProcsOverSLA_TN)
+		fmt.Printf("cum. num procs over sla FN %v\n", w.loadBalancer.numProcsOverSLA_FN-numProcsOverSLA_FN)
+
+	}
+	return w.loadBalancer.numProcsKilled, w.loadBalancer.numProcsOverSLA_TN, w.loadBalancer.numProcsOverSLA_FN
 	// min, max, avg := w.getComputePressureStats()
 	// fmt.Printf("compute pressures: min %v, max %v, avg %v\n", min, max, avg)
+}
 
+func (w *World) Run(nTick int) {
+	numProcsKilled := 0
+	numProcsOverSLA_TN := 0
+	numProcsOverSLA_FN := 0
+	for i := 0; i < nTick; i++ {
+		numProcsKilled, numProcsOverSLA_TN, numProcsOverSLA_FN = w.Tick(numProcsKilled, numProcsOverSLA_TN, numProcsOverSLA_FN)
+	}
 }
