@@ -235,9 +235,6 @@ func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
 		killed := currQueue[0]
 		currQueue = currQueue[1:]
 		memCut += int(killed.memUsed())
-		if VERBOSE_STATS {
-			fmt.Printf("killing proc %s\n", killed.String())
-		}
 		var wg sync.WaitGroup
 		wg.Add(1)
 		sd.lbConn <- &MachineMessages{PROC_KILLED, killed, &wg}

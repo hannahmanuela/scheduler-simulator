@@ -73,7 +73,7 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 			}
 		case PROC_KILLED:
 			if VERBOSE_STATS {
-				fmt.Printf("killed: %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, float64(msg.proc.procInternals.sla), float64(msg.proc.procInternals.compDone), float64(msg.proc.procInternals.memUsed))
+				fmt.Printf("killing: %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, float64(msg.proc.procInternals.sla), float64(msg.proc.procInternals.compDone), float64(msg.proc.procInternals.memUsed))
 			}
 			lb.numProcsKilled += 1
 			lb.procq.enq(msg.proc)

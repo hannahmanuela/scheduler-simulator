@@ -40,8 +40,8 @@ while IFS= read -r line; do
         numbers=$(echo "$line" | sed -n -e 's/current: //p')
         echo "$numbers" >> "$output_file3"
     fi
-    if [[ $line == *"killed: "* ]]; then
-        numbers=$(echo "$line" | sed -n -e 's/killed: //p')
+    if [[ $line == *"killing: "* ]]; then
+        numbers=$(echo "$line" | sed -n -e 's/killing: //p')
         echo "$numbers" >> "$output_file4"
     fi
 done < "$input_file"
