@@ -56,9 +56,9 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 		msg := <-lb.machineConn
 		switch msg.msgType {
 		case PROC_DONE:
-			// if VERBOSE_STATS {
-			// 	fmt.Printf("done: %v, %v, %v, %v, %v, %v \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
-			// }
+			if VERBOSE_STATS {
+				fmt.Printf("done: %v, %v, %v, %v, %v, %v \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
+			}
 			//  when a proc is done, the ticksPassed on it is updated to be exact, so we don't have to worry about half ticks here
 			if msg.proc.timeLeftOnSLA() < 0 {
 				// proc went over based on sla, but was it over given actual compute?
@@ -73,12 +73,7 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 			}
 		case PROC_KILLED:
 			if VERBOSE_STATS {
-				if !lb.printedThisTick {
-					fmt.Printf("killed a process on machine %v; state of the world: %v\n", msg.proc.machineId, lb.MachinesString())
-					lb.printedThisTick = true
-				} else {
-					fmt.Printf("killed a process on machine %v\n", msg.proc.machineId)
-				}
+				fmt.Printf("killed: %v %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, float64(msg.proc.procInternals.sla), float64(msg.proc.procInternals.compDone), float64(msg.proc.procInternals.memUsed))
 			}
 			lb.numProcsKilled += 1
 			lb.procq.enq(msg.proc)
