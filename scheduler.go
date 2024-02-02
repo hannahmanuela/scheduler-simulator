@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 )
 
 const (
@@ -73,7 +74,7 @@ func (sd *Sched) makeHistogram() map[float64]int {
 // this is helpful for creating the histogram mapping number of procs in the scheduler to SLA slices
 // eg if we are looking at SLAs in an increment size of 2 and this is given 1.5, it will return 0 (since 1.5 would be in the 0-2 range)
 func (sd *Sched) getRangeBottomFromSLA(sla Tftick) float64 {
-	val := math.Floor(float64(sla)/float64(SCHEDULER_SLA_INCREMENT_SIZE)) * SCHEDULER_SLA_INCREMENT_SIZE
+	val := math.Pow(SCHEDULER_SLA_HISTOGRAM_BASE, math.Floor(math.Log(float64(sla))/math.Log(SCHEDULER_SLA_HISTOGRAM_BASE)))
 	return val
 }
 
@@ -139,7 +140,8 @@ OUTERLOOP:
 				// then update the pressure metric with that value
 				currProc.ticksPassed = currProc.ticksPassed + (1 - ticksLeftToGive)
 				sd.updateAvgDiffToSLA(currProc.timeLeftOnSLA())
-				sd.lbConn <- &MachineMessages{PROC_DONE, currProc}
+				// don't need to wait if we are just telling it a proc is done
+				sd.lbConn <- &MachineMessages{PROC_DONE, currProc, nil}
 			}
 		}
 
@@ -233,10 +235,13 @@ func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
 		killed := currQueue[0]
 		currQueue = currQueue[1:]
 		memCut += int(killed.memUsed())
-		if VERBOSE_SCHEDULER {
-			fmt.Printf("killing proc %s gave us back %d memory\n", killed.String(), memCut)
+		if VERBOSE_STATS {
+			fmt.Printf("killing proc %s\n", killed.String())
 		}
-		sd.lbConn <- &MachineMessages{PROC_KILLED, killed}
+		var wg sync.WaitGroup
+		wg.Add(1)
+		sd.lbConn <- &MachineMessages{PROC_KILLED, killed, &wg}
+		wg.Wait()
 	}
 
 	sd.q.q = currQueue

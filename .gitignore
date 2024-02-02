@@ -1,1 +1,4 @@
-out.txt
+results/out.txt
+results/procs_added.txt
+results/procs_current.txt
+results/procs_done.txt

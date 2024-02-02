@@ -7,10 +7,10 @@ import (
 // constants characterizing the wesbite traffic
 const (
 	// fraction of procs generated that are in each category
-	FRACTION_PAGE_STATIC     = 0.55
-	FRACTION_PAGE_DYNAMIC    = 0.4
-	FRACTION_DATA_PROCESS_FG = 0.04
-	FRACTION_DATA_PROCESS_BG = 0.01
+	FRACTION_PAGE_STATIC     = 0.5
+	FRACTION_PAGE_DYNAMIC    = 0.35
+	FRACTION_DATA_PROCESS_FG = 0.1
+	FRACTION_DATA_PROCESS_BG = 0.05
 
 	// Tick = 100 ms
 	// the max/min value that a sla can have for the diff proc types - slas will have uniform random value in this range

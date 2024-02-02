@@ -3,6 +3,7 @@ package slasched
 import (
 	"fmt"
 	"math"
+	"sync"
 )
 
 type MsgType int
@@ -15,6 +16,7 @@ const (
 type MachineMessages struct {
 	msgType MsgType
 	proc    *Proc
+	wg      *sync.WaitGroup
 }
 
 type LoadBalancer struct {
@@ -24,15 +26,29 @@ type LoadBalancer struct {
 	numProcsKilled     int
 	numProcsOverSLA_TN int // true negatives, ie ones who could have been completed in their sla
 	numProcsOverSLA_FN int // fals enegatives, ie ones whose compute time was longer that the sla
+	currTick           int
+	printedThisTick    bool
+	nextMachine        int
 }
 
 func newLoadBalancer(machines []*Machine, machineConn chan *MachineMessages) *LoadBalancer {
 	lb := &LoadBalancer{machines: machines}
 	lb.procq = &Queue{q: make([]*Proc, 0)}
 	lb.machineConn = machineConn
+	lb.currTick = 0
 	lb.numProcsKilled = 0
+	lb.printedThisTick = false
+	lb.nextMachine = 0
 	go lb.listenForMachineMessages()
 	return lb
+}
+
+func (lb *LoadBalancer) MachinesString() string {
+	str := "machines: \n"
+	for _, m := range lb.machines {
+		str += "   " + m.String()
+	}
+	return str
 }
 
 func (lb *LoadBalancer) listenForMachineMessages() {
@@ -40,30 +56,33 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 		msg := <-lb.machineConn
 		switch msg.msgType {
 		case PROC_DONE:
+			// if VERBOSE_STATS {
+			// 	fmt.Printf("done: %v, %v, %v, %v, %v, %v \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
+			// }
 			//  when a proc is done, the ticksPassed on it is updated to be exact, so we don't have to worry about half ticks here
 			if msg.proc.timeLeftOnSLA() < 0 {
 				// proc went over based on sla, but was it over given actual compute?
 				// floats are weird just deal with it
 				if math.Abs(float64(msg.proc.ticksPassed-msg.proc.procInternals.actualComp)) > 0.000001 {
 					// yes, even actual compute was less than ticks passed
-					if VERBOSE_LB {
-						fmt.Printf("lb received done proc, was a true negative: ticksPassed: %v, sla: %v, actual compute: %v\n", msg.proc.ticksPassed, msg.proc.procInternals.sla, msg.proc.procInternals.actualComp)
-					}
 					lb.numProcsOverSLA_TN += 1
 				} else {
 					// no, was in fact impossible to get it done on time (b/c we did the very best we could, ie ticksPassed = actualComp)
-					if VERBOSE_LB {
-						fmt.Printf("lb received done proc, was a false negative: ticksPassed: %v, sla: %v, actual compute: %v\n", msg.proc.ticksPassed, msg.proc.procInternals.sla, msg.proc.procInternals.actualComp)
-					}
 					lb.numProcsOverSLA_FN += 1
 				}
 			}
 		case PROC_KILLED:
-			if VERBOSE_LB {
-				fmt.Printf("lb received killed proc, requeuing\n")
+			if VERBOSE_STATS {
+				if !lb.printedThisTick {
+					fmt.Printf("killed a process on machine %v; state of the world: %v\n", msg.proc.machineId, lb.MachinesString())
+					lb.printedThisTick = true
+				} else {
+					fmt.Printf("killed a process on machine %v\n", msg.proc.machineId)
+				}
 			}
 			lb.numProcsKilled += 1
 			lb.procq.enq(msg.proc)
+			msg.wg.Done()
 		}
 	}
 }
@@ -84,6 +103,8 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 // rather than using directly via values, could also sample with probability
 // TODO: why does this not at all account for total number of procs on a machine?
 func (lb *LoadBalancer) placeProcs() {
+	lb.printedThisTick = false
+	lb.currTick += 1
 	p := lb.getProc()
 	for p != nil {
 		// place given proc
@@ -120,7 +141,7 @@ func (lb *LoadBalancer) placeProcs() {
 				normedDiffToMaxNumProcs := float64(diffToMaxNumProcs) * (float64(MAX_MEM) / float64(maxValInRange))
 				weight += normedDiffToMaxNumProcs
 				if VERBOSE_LB {
-					fmt.Printf("given that the max num procs in this range is %v, and this machine has %v procs (diff: %v, normed: %v), and %v mem free, gave it weight %v\n", maxValInRange, numProcsInRange, diffToMaxNumProcs, normedDiffToMaxNumProcs, memFree, weight)
+					fmt.Printf("given that the max num procs in this range is %v, and this machine has %v procs (diff: %v, normed: %v), gave it weight %v\n", maxValInRange, numProcsInRange, diffToMaxNumProcs, normedDiffToMaxNumProcs, weight)
 				}
 			} else {
 				if VERBOSE_LB {
@@ -133,7 +154,13 @@ func (lb *LoadBalancer) placeProcs() {
 		// place proc on machine, chosen by weighted random drawing? (could also just pick max -- trying for now)
 		// machineToUse := lb.machines[sampleFromWeightList(machineWeights)]
 		machineToUse := lb.machines[findMaxIndex(machineWeights)]
+		// machineToUse := lb.machines[lb.nextMachine]
+		// lb.nextMachine = (lb.nextMachine + 1) % len(lb.machines)
+		p.machineId = machineToUse.mid
 		machineToUse.sched.q.enq(p)
+		if VERBOSE_STATS {
+			fmt.Printf("adding: %v, %v, %v, %v, %v\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
+		}
 		p = lb.getProc()
 	}
 }

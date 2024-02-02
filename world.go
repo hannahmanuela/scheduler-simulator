@@ -6,25 +6,24 @@ import (
 
 const (
 	MAX_MEM                      = 12000 // the amount of memory every machine (currently machine=core) will have, in MB
-	PROC_MEM_CHANGE_MAX          = 5     // the maximal increase in memory usage a proc can experience when it runs
-	PROC_MEM_CHANGE_MIN          = -2    // the actual value is chosen uniform random between min and max
-	SCHEDULER_SLA_INCREMENT_SIZE = 0.5   // the increment size that we group slas together when creating histogram of procs on machines
+	SCHEDULER_SLA_HISTOGRAM_BASE = 2     // the base of the exponential histogram that procs are placed into in making load balancing decisions
 	ARRIVAL_RATE                 = 1     // number of procs per tick per machine
 	TARGET_PRESSURE_MIN          = 0     // this is the lower end of the target pressure for machines
 	TARGET_PRESSURE_MAX          = 0.5
 
 	VERBOSE_SCHEDULER = false
-	VERBOSE_WORLD     = true
+	VERBOSE_WORLD     = false
 	VERBOSE_LB        = false
 	VERBOSE_PROC      = false
 	VERBOSE_MACHINES  = false
+	VERBOSE_STATS     = true
 )
 
 type World struct {
-	currTick     Ttick
-	machines     []*Machine
-	loadBalancer *LoadBalancer
-	app          Website
+	currTick Ttick
+	machines []*Machine
+	lb       *LoadBalancer
+	app      Website
 }
 
 func newWorld(numMachines int) *World {
@@ -35,7 +34,7 @@ func newWorld(numMachines int) *World {
 		mid := Tmid(i)
 		w.machines[i] = newMachine(mid, lbMachineConn)
 	}
-	w.loadBalancer = newLoadBalancer(w.machines, lbMachineConn)
+	w.lb = newLoadBalancer(w.machines, lbMachineConn)
 	return w
 }
 
@@ -49,9 +48,14 @@ func (w *World) String() string {
 
 func (w *World) genLoad(nProcs int) int {
 	userProcs := w.app.genLoad(nProcs)
+	sumTicksAdded := Tftick(0)
 	for _, up := range userProcs {
+		sumTicksAdded += up.actualComp
 		provProc := newProvProc(w.currTick, up)
-		w.loadBalancer.putProc(provProc)
+		w.lb.putProc(provProc)
+	}
+	if VERBOSE_WORLD {
+		fmt.Printf("num ticks added this round: %v\n", sumTicksAdded)
 	}
 	return len(userProcs)
 }
@@ -62,6 +66,14 @@ func (w *World) compute() {
 			fmt.Printf(" ----- TICKING MACHINE %v ----- \n ", m.mid)
 		}
 		m.sched.tick()
+	}
+}
+
+func (w *World) printAllProcs() {
+	for _, m := range w.machines {
+		for _, p := range m.sched.q.q {
+			fmt.Printf("current: %v, %v, %v, %v, %v\n", w.currTick, m.mid, float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.procInternals.compDone))
+		}
 	}
 }
 
@@ -87,10 +99,13 @@ func (w *World) compute() {
 
 func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA_FN int) (int, int, int) {
 	w.currTick += 1
+	if VERBOSE_STATS {
+		w.printAllProcs()
+	}
 	// enqueues things into the procq
-	w.genLoad(ARRIVAL_RATE * len(w.machines))
+	w.genLoad(int(ARRIVAL_RATE * float64(len(w.machines))))
 	// dequeues things from procq to machines based on their util
-	w.loadBalancer.placeProcs()
+	w.lb.placeProcs()
 	if VERBOSE_MACHINES {
 		fmt.Printf("after getprocs: %v\n", w)
 	}
@@ -101,11 +116,11 @@ func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA
 	}
 	if VERBOSE_WORLD {
 		fmt.Printf("==============>>>>> TICK %v DONE <<<<<==============\n", w.currTick)
-		fmt.Printf("num procs killed this tick %v\n", w.loadBalancer.numProcsKilled-numProcsKilled)
-		fmt.Printf("num procs over sla TN this tick %v\n", w.loadBalancer.numProcsOverSLA_TN-numProcsOverSLA_TN)
-		fmt.Printf("num procs over sla FN this tick %v\n", w.loadBalancer.numProcsOverSLA_FN-numProcsOverSLA_FN)
+		fmt.Printf("num procs killed this tick %v\n", w.lb.numProcsKilled-numProcsKilled)
+		fmt.Printf("num procs over sla TN this tick %v\n", w.lb.numProcsOverSLA_TN-numProcsOverSLA_TN)
+		fmt.Printf("num procs over sla FN this tick %v\n \n", w.lb.numProcsOverSLA_FN-numProcsOverSLA_FN)
 	}
-	return w.loadBalancer.numProcsKilled, w.loadBalancer.numProcsOverSLA_TN, w.loadBalancer.numProcsOverSLA_FN
+	return w.lb.numProcsKilled, w.lb.numProcsOverSLA_TN, w.lb.numProcsOverSLA_FN
 	// min, max, avg := w.getComputePressureStats()
 	// fmt.Printf("compute pressures: min %v, max %v, avg %v\n", min, max, avg)
 }

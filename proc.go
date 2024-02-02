@@ -10,6 +10,7 @@ import (
 
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
+	machineId        Tmid
 	ticksPassed      Tftick
 	timeShouldBeDone Tftick
 	procInternals    *ProcInternals
@@ -20,7 +21,7 @@ func (p *Proc) String() string {
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
-	return &Proc{0, privProc.sla + Tftick(currTick), privProc}
+	return &Proc{-1, 0, privProc.sla + Tftick(currTick), privProc}
 }
 
 // runs proc for the number of ticks passed or until the proc is done,
