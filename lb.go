@@ -105,18 +105,14 @@ func (lb *LoadBalancer) placeProcs() {
 		lb.machines = lb.machines[1:]
 		lb.machinesNotInUse = append(lb.machinesNotInUse, toRemove)
 		if VERBOSE_SCHED_STATS {
-			fmt.Printf("machine remove: %v, %v, %v, %v\n", lb.currTick, toRemove.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)))
+			fmt.Printf("machine: 0, %v, %v, %v, %v\n", lb.currTick, toRemove.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)))
 		}
 	} else if (numProcsKilled > 0 || avg(maps.Values(memUsg)) > THRESHOLD_MEM_USG_MAX || avg(maps.Values(totalProcs)) > THRESHOLD_NUM_PROCS_MAX) && len(lb.machinesNotInUse) > 0 {
 		toAdd := lb.machinesNotInUse[0]
 		lb.machinesNotInUse = lb.machinesNotInUse[1:]
 		lb.machines = append(lb.machines, toAdd)
 		if VERBOSE_SCHED_STATS {
-			fmt.Printf("machine add: %v, %v, %v, %v, %v\n", lb.currTick, toAdd.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)), numProcsKilled)
-		}
-	} else {
-		if VERBOSE_SCHED_STATS {
-			fmt.Printf("machine nothing: %v, %v, %v, %v\n", lb.currTick, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)), numProcsKilled)
+			fmt.Printf("machine: 1, %v, %v, %v, %v, %v\n", lb.currTick, toAdd.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)), numProcsKilled)
 		}
 	}
 

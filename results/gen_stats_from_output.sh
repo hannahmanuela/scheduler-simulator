@@ -20,6 +20,7 @@ output_file2="results/procs_added.txt"
 output_file3="results/procs_current.txt"
 output_file4="results/procs_killed.txt"
 output_file5="results/sched.txt"
+output_file6="results/machines.txt"
 
 # clear files first
 >  "$output_file1"
@@ -27,28 +28,28 @@ output_file5="results/sched.txt"
 >  "$output_file3"
 >  "$output_file4"
 >  "$output_file5"
+>  "$output_file6"
 
 # scrape output and separate data
 while IFS= read -r line; do
     if [[ $line == *"done: "* ]]; then
         numbers=$(echo "$line" | sed -n -e 's/done: //p')
         echo "$numbers" >> "$output_file1"
-    fi
-    if [[ $line == *"adding: "* ]]; then
+    elif [[ $line == *"adding: "* ]]; then
         numbers=$(echo "$line" | sed -n -e 's/adding: //p')
         echo "$numbers" >> "$output_file2"
-    fi
-    if [[ $line == *"current: "* ]]; then
+    elif [[ $line == *"current: "* ]]; then
         numbers=$(echo "$line" | sed -n -e 's/current: //p')
         echo "$numbers" >> "$output_file3"
-    fi
-    if [[ $line == *"killing: "* ]]; then
+    elif [[ $line == *"killing: "* ]]; then
         numbers=$(echo "$line" | sed -n -e 's/killing: //p')
         echo "$numbers" >> "$output_file4"
-    fi
-    if [[ $line == *"sched: "* ]]; then
+    elif [[ $line == *"sched: "* ]]; then
         numbers=$(echo "$line" | sed -n -e 's/sched: //p')
         echo "$numbers" >> "$output_file5"
+    elif [[ $line == *"machine: "* ]]; then
+        numbers=$(echo "$line" | sed -n -e 's/machine: //p')
+        echo "$numbers" >> "$output_file6"
     fi
 done < "$input_file"
 
