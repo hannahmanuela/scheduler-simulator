@@ -7,10 +7,10 @@ import (
 // constants characterizing the wesbite traffic
 const (
 	// fraction of procs generated that are in each category
-	FRACTION_PAGE_STATIC     = 0.5
+	FRACTION_PAGE_STATIC     = 0.6
 	FRACTION_PAGE_DYNAMIC    = 0.35
-	FRACTION_DATA_PROCESS_FG = 0.1
-	FRACTION_DATA_PROCESS_BG = 0.05
+	FRACTION_DATA_PROCESS_FG = 0.04
+	FRACTION_DATA_PROCESS_BG = 0.01
 
 	// Tick = 100 ms
 	// the max/min value that a sla can have for the diff proc types - slas will have uniform random value in this range
@@ -81,13 +81,39 @@ func (website *SimpleWebsite) genLoad(nProcs int) []*ProcInternals {
 	// nproc := int(website.poisson.Rand())
 	procs := make([]*ProcInternals, 0)
 
+	numStatic, numDynamic, numProcessFg, numProcessBg := website.genNumberOfProcs(nProcs)
+
 	// gen all the proc types, for now this is manual
-	procs = append(procs, website.genPageStaticProcs(int(float64(nProcs)*FRACTION_PAGE_STATIC))...)
-	procs = append(procs, website.genPageDynamicProcs(int(float64(nProcs)*FRACTION_PAGE_DYNAMIC))...)
-	procs = append(procs, website.genDataProcessFgProcs(int(float64(nProcs)*FRACTION_DATA_PROCESS_FG))...)
-	procs = append(procs, website.genDataProcessBgProcs(int(float64(nProcs)*FRACTION_DATA_PROCESS_BG))...)
+	procs = append(procs, website.genPageStaticProcs(numStatic)...)
+	procs = append(procs, website.genPageDynamicProcs(numDynamic)...)
+	procs = append(procs, website.genDataProcessFgProcs(numProcessFg)...)
+	procs = append(procs, website.genDataProcessBgProcs(numProcessBg)...)
 
 	return procs
+}
+
+func (website *SimpleWebsite) genNumberOfProcs(totalNumProcs int) (int, int, int, int) {
+
+	numStatic := 0
+	numDynamic := 0
+	numProcessFg := 0
+	numProcessBg := 0
+
+	for i := 0; i < totalNumProcs; i++ {
+		randVal := rand.Float64()
+		if randVal < FRACTION_DATA_PROCESS_BG {
+			numProcessBg += 1
+		} else if randVal < FRACTION_DATA_PROCESS_BG+FRACTION_DATA_PROCESS_FG {
+			numProcessFg += 1
+		} else if randVal < FRACTION_PAGE_DYNAMIC+FRACTION_DATA_PROCESS_FG+FRACTION_DATA_PROCESS_BG {
+			numDynamic += 1
+		} else {
+			numStatic += 1
+		}
+	}
+
+	return numStatic, numDynamic, numProcessFg, numProcessBg
+
 }
 
 func (Website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals {

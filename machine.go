@@ -15,7 +15,7 @@ type Machine struct {
 func newMachine(mid Tmid, lbConn chan *MachineMessages) *Machine {
 	sd := &Machine{
 		mid:   mid,
-		sched: newSched(lbConn),
+		sched: newSched(lbConn, mid),
 	}
 	return sd
 }

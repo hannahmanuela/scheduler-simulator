@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"sync"
 )
 
 const (
@@ -17,15 +16,19 @@ type Sched struct {
 	avgDiffToSla float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
 	minSliceSize float64 // how little time did the least scheduled proc get
 	lbConn       chan *MachineMessages
+	currTick     int
+	machineId    Tmid
 }
 
-func newSched(lbConn chan *MachineMessages) *Sched {
+func newSched(lbConn chan *MachineMessages, mid Tmid) *Sched {
 	sd := &Sched{
 		totMem:       MAX_MEM,
 		q:            newQueue(),
 		avgDiffToSla: 0,
 		minSliceSize: 1,
 		lbConn:       lbConn,
+		currTick:     0,
+		machineId:    mid,
 	}
 	return sd
 }
@@ -79,6 +82,7 @@ func (sd *Sched) getRangeBottomFromSLA(sla Tftick) float64 {
 }
 
 func (sd *Sched) tick() {
+	sd.currTick += 1
 	if len(sd.q.q) == 0 {
 		return
 	}
@@ -101,11 +105,16 @@ func (sd *Sched) getComputePressure() float64 {
 	return propSliceTakenByOtherProcs + avgTimeWentOverSla
 }
 
+type TickBool struct {
+	tick Tftick
+	done bool
+}
+
 // do 1 tick of computation, spread across procs in q, and across different cores
 // TODO: use enq and deq here? otherwise structure in q is not actually maintained -- I'm not sure the structure is actually helpful to us tbh
 func (sd *Sched) runProcs() {
 	ticksLeftToGive := Tftick(1)
-	procToTicksMap := make(map[*Proc]Tftick, 0)
+	procToTicksMap := make(map[*Proc]TickBool, 0)
 
 OUTERLOOP:
 	for ticksLeftToGive-Tftick(0.001) > 0.0 && sd.q.qlen() > 0 {
@@ -125,7 +134,13 @@ OUTERLOOP:
 			}
 			if !done {
 				// add ticks used to the tick map - only if the proc isn't done (don't want to take into account small procs that just finished)
-				procToTicksMap[currProc] += ticksUsed
+				if val, ok := procToTicksMap[currProc]; ok {
+					val.tick += ticksUsed
+					procToTicksMap[currProc] = val
+				} else {
+					procToTicksMap[currProc] = TickBool{ticksUsed, false}
+				}
+
 				// add proc back into queue, check if the memroy used by the proc sent us over the edge (and if yes, kill then restart)
 				newProcQ = append(newProcQ, currProc)
 				if sd.memUsed() >= sd.totMem {
@@ -136,6 +151,13 @@ OUTERLOOP:
 					continue OUTERLOOP
 				}
 			} else {
+				if val, ok := procToTicksMap[currProc]; ok {
+					val.tick += ticksUsed
+					val.done = true
+					procToTicksMap[currProc] = val
+				} else {
+					procToTicksMap[currProc] = TickBool{ticksUsed, true}
+				}
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				// then update the pressure metric with that value
 				currProc.ticksPassed = currProc.ticksPassed + (1 - ticksLeftToGive)
@@ -151,11 +173,21 @@ OUTERLOOP:
 	// update min slice size
 	minVal := 1.0
 	for _, ticks := range procToTicksMap {
-		if ticks < Tftick(minVal) {
-			minVal = float64(ticks)
+		if ticks.tick < Tftick(minVal) {
+			minVal = float64(ticks.tick)
 		}
 	}
 	sd.minSliceSize = minVal
+
+	if VERBOSE_SCHED_STATS {
+		for proc, ticks := range procToTicksMap {
+			if ticks.done {
+				fmt.Printf("sched: %v, %v, %v, %v, %v, %v, 1\n", sd.currTick, sd.machineId, float64(proc.procInternals.sla), float64(proc.procInternals.compDone), float64(proc.ticksPassed), float64(ticks.tick))
+			} else {
+				fmt.Printf("sched: %v, %v, %v, %v, %v, %v, 0\n", sd.currTick, sd.machineId, float64(proc.procInternals.sla), float64(proc.procInternals.compDone), float64(proc.ticksPassed), float64(ticks.tick))
+			}
+		}
+	}
 
 }
 
@@ -235,10 +267,11 @@ func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
 		killed := currQueue[0]
 		currQueue = currQueue[1:]
 		memCut += int(killed.memUsed())
-		var wg sync.WaitGroup
-		wg.Add(1)
-		sd.lbConn <- &MachineMessages{PROC_KILLED, killed, &wg}
-		wg.Wait()
+		killed.migrated = true
+		// var wg sync.WaitGroup
+		// wg.Add(1)
+		sd.lbConn <- &MachineMessages{PROC_KILLED, killed, nil}
+		// wg.Wait()
 	}
 
 	sd.q.q = currQueue

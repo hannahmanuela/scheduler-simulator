@@ -19,12 +19,14 @@ output_file1="results/procs_done.txt"
 output_file2="results/procs_added.txt"
 output_file3="results/procs_current.txt"
 output_file4="results/procs_killed.txt"
+output_file5="results/sched.txt"
 
 # clear files first
 >  "$output_file1"
 >  "$output_file2"
 >  "$output_file3"
 >  "$output_file4"
+>  "$output_file5"
 
 # scrape output and separate data
 while IFS= read -r line; do
@@ -43,6 +45,10 @@ while IFS= read -r line; do
     if [[ $line == *"killing: "* ]]; then
         numbers=$(echo "$line" | sed -n -e 's/killing: //p')
         echo "$numbers" >> "$output_file4"
+    fi
+    if [[ $line == *"sched: "* ]]; then
+        numbers=$(echo "$line" | sed -n -e 's/sched: //p')
+        echo "$numbers" >> "$output_file5"
     fi
 done < "$input_file"
 

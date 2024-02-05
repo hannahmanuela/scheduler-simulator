@@ -7,16 +7,17 @@ import (
 const (
 	MAX_MEM                      = 12000 // the amount of memory every machine (currently machine=core) will have, in MB
 	SCHEDULER_SLA_HISTOGRAM_BASE = 2     // the base of the exponential histogram that procs are placed into in making load balancing decisions
-	ARRIVAL_RATE                 = 1     // number of procs per tick per machine
+	ARRIVAL_RATE                 = 0.8   // number of procs per tick per machine
 	TARGET_PRESSURE_MIN          = 0     // this is the lower end of the target pressure for machines
 	TARGET_PRESSURE_MAX          = 0.5
 
-	VERBOSE_SCHEDULER = false
-	VERBOSE_WORLD     = false
-	VERBOSE_LB        = false
-	VERBOSE_PROC      = false
-	VERBOSE_MACHINES  = false
-	VERBOSE_STATS     = true
+	VERBOSE_SCHEDULER   = false
+	VERBOSE_WORLD       = false
+	VERBOSE_LB          = false
+	VERBOSE_PROC        = false
+	VERBOSE_MACHINES    = false
+	VERBOSE_LB_STATS    = true
+	VERBOSE_SCHED_STATS = true
 )
 
 type World struct {
@@ -99,7 +100,7 @@ func (w *World) printAllProcs() {
 
 func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA_FN int) (int, int, int) {
 	w.currTick += 1
-	if VERBOSE_STATS {
+	if VERBOSE_LB_STATS {
 		w.printAllProcs()
 	}
 	// enqueues things into the procq

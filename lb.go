@@ -56,7 +56,7 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 		msg := <-lb.machineConn
 		switch msg.msgType {
 		case PROC_DONE:
-			if VERBOSE_STATS {
+			if VERBOSE_LB_STATS {
 				fmt.Printf("done: %v, %v, %v, %v, %v, %v \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
 			}
 			//  when a proc is done, the ticksPassed on it is updated to be exact, so we don't have to worry about half ticks here
@@ -72,12 +72,12 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 				}
 			}
 		case PROC_KILLED:
-			if VERBOSE_STATS {
+			if VERBOSE_LB_STATS {
 				fmt.Printf("killing: %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, float64(msg.proc.procInternals.sla), float64(msg.proc.procInternals.compDone), float64(msg.proc.procInternals.memUsed))
 			}
 			lb.numProcsKilled += 1
 			lb.procq.enq(msg.proc)
-			msg.wg.Done()
+			// msg.wg.Done()
 		}
 	}
 }
@@ -153,8 +153,13 @@ func (lb *LoadBalancer) placeProcs() {
 		// lb.nextMachine = (lb.nextMachine + 1) % len(lb.machines)
 		p.machineId = machineToUse.mid
 		machineToUse.sched.q.enq(p)
-		if VERBOSE_STATS {
-			fmt.Printf("adding: %v, %v, %v, %v, %v\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
+		if VERBOSE_LB_STATS {
+			if p.migrated {
+				fmt.Printf("adding: %v, %v, %v, %v, %v, 1\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
+			} else {
+				fmt.Printf("adding: %v, %v, %v, %v, %v, 0\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
+			}
+
 		}
 		p = lb.getProc()
 	}

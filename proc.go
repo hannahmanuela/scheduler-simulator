@@ -14,6 +14,7 @@ type Proc struct {
 	ticksPassed      Tftick
 	timeShouldBeDone Tftick
 	procInternals    *ProcInternals
+	migrated         bool
 }
 
 func (p *Proc) String() string {
@@ -21,7 +22,7 @@ func (p *Proc) String() string {
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
-	return &Proc{-1, 0, privProc.sla + Tftick(currTick), privProc}
+	return &Proc{-1, 0, privProc.sla + Tftick(currTick), privProc, false}
 }
 
 // runs proc for the number of ticks passed or until the proc is done,
