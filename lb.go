@@ -3,7 +3,10 @@ package slasched
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sync"
+
+	"golang.org/x/exp/maps"
 )
 
 type MsgType int
@@ -21,6 +24,7 @@ type MachineMessages struct {
 
 type LoadBalancer struct {
 	machines           []*Machine
+	machinesNotInUse   []*Machine
 	procq              *Queue
 	machineConn        chan *MachineMessages
 	numProcsKilled     int
@@ -28,17 +32,21 @@ type LoadBalancer struct {
 	numProcsOverSLA_FN int // fals enegatives, ie ones whose compute time was longer that the sla
 	currTick           int
 	printedThisTick    bool
-	nextMachine        int
 }
 
 func newLoadBalancer(machines []*Machine, machineConn chan *MachineMessages) *LoadBalancer {
-	lb := &LoadBalancer{machines: machines}
-	lb.procq = &Queue{q: make([]*Proc, 0)}
-	lb.machineConn = machineConn
-	lb.currTick = 0
-	lb.numProcsKilled = 0
-	lb.printedThisTick = false
-	lb.nextMachine = 0
+	lb := &LoadBalancer{
+		// start with one machine?
+		machines:         []*Machine{machines[0]},
+		machinesNotInUse: machines[1:],
+		// machines:         machines,
+		// machinesNotInUse: []*Machine{},
+		procq:           &Queue{q: make([]*Proc, 0)},
+		machineConn:     machineConn,
+		currTick:        0,
+		numProcsKilled:  0,
+		printedThisTick: false,
+	}
 	go lb.listenForMachineMessages()
 	return lb
 }
@@ -82,75 +90,48 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 	}
 }
 
-// DIFFERENT SCHEDULING GOALS IN REL TO SIGNALS WE HAVE
-
-// goal 1: maintain a similar distribution across all the machines for different SLAs
-// 	- benefit: no one machine will have all the procs with tight SLAs, but they are spread out (so that if they end up needing more than expected, there's few other small procs that have already been placed and are waiting, mostly procs that have a long SLA anyway)
-// 	- drawback: what if procs that have similar SLAs also share a bunch of stuff (state etc)
-// 			--> what if we also look at that, treat it as a separate dimension rather than using SLA as a proxy (what would the signal here be? cld look at what function the proc came from?)
-
-// goal 2: don't place proc on machine where mem is tight
-// - the higher a machine's mem pressure is, the less procs we should place there
-
-// goal 3: don't place proc on machine where lots of other procs already are
-// - this one should count less, say by a factor of 1/2?
-
-// rather than using directly via values, could also sample with probability
-// TODO: why does this not at all account for total number of procs on a machine?
 func (lb *LoadBalancer) placeProcs() {
+	// setup
 	lb.printedThisTick = false
 	lb.currTick += 1
 	p := lb.getProc()
+
+	// decide if we should add/remove a machine -- NOTE that we currently only add max one machine
+	totalProcs, memUsg, numProcsKilled := lb.getMachineStats()
+	// decrease if values are low and we have multiple machines; use AND
+	// increase if values are high and we have machines we can add; use OR
+	if avg(maps.Values(memUsg)) < THRESHOLD_MEM_USG_MIN && avg(maps.Values(totalProcs)) < THRESHOLD_NUM_PROCS_MIN && len(lb.machines) > 1 {
+		toRemove := lb.machines[0]
+		lb.machines = lb.machines[1:]
+		lb.machinesNotInUse = append(lb.machinesNotInUse, toRemove)
+		if VERBOSE_SCHED_STATS {
+			fmt.Printf("machine remove: %v, %v, %v, %v\n", lb.currTick, toRemove.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)))
+		}
+	} else if (numProcsKilled > 0 || avg(maps.Values(memUsg)) > THRESHOLD_MEM_USG_MAX || avg(maps.Values(totalProcs)) > THRESHOLD_NUM_PROCS_MAX) && len(lb.machinesNotInUse) > 0 {
+		toAdd := lb.machinesNotInUse[0]
+		lb.machinesNotInUse = lb.machinesNotInUse[1:]
+		lb.machines = append(lb.machines, toAdd)
+		if VERBOSE_SCHED_STATS {
+			fmt.Printf("machine add: %v, %v, %v, %v, %v\n", lb.currTick, toAdd.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)), numProcsKilled)
+		}
+	} else {
+		if VERBOSE_SCHED_STATS {
+			fmt.Printf("machine nothing: %v, %v, %v, %v\n", lb.currTick, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)), numProcsKilled)
+		}
+	}
+
 	for p != nil {
 		// place given proc
-		// fmt.Printf("placing proc %v\n", p)
-
-		// get number of procs in the same sla range as the proc to place on every machine, as well as the max
-		rangeVals := make(map[*Machine]int, 0)
-		maxValInRange := 0
-		maxValTotalProcs := 0
-		for _, m := range lb.machines {
-			// I could also do this by just being able to get the number of procs on a machine within a certain range
-			histogram := m.sched.makeHistogram()
-			numProcsInRange := histogram[m.sched.getRangeBottomFromSLA(p.procInternals.sla)]
-			rangeVals[m] = numProcsInRange
-			if numProcsInRange > maxValInRange {
-				maxValInRange = numProcsInRange
-			}
-			if m.sched.q.qlen() > maxValTotalProcs {
-				maxValTotalProcs = m.sched.q.qlen()
-			}
+		if VERBOSE_LB {
+			fmt.Printf("placing proc %v\n", p)
 		}
 
-		// calcluate weights
-		var machineWeights []float64
-		for _, m := range lb.machines {
-			memFree := float64(MAX_MEM - m.sched.memUsed())
-			diffToMaxNumProcs := maxValTotalProcs - m.sched.q.qlen()
-			normedDiffToMaxNumTotalProcs := float64(diffToMaxNumProcs) * (float64(MAX_MEM) / 2 * float64(maxValTotalProcs)) // factor that this counts less is in the last denominator
-			weight := memFree + normedDiffToMaxNumTotalProcs
-			if maxValInRange > 0 {
-				numProcsInRange := rangeVals[m]
-				diffToMaxNumProcs := maxValInRange - numProcsInRange
-				// MAX_MEM is going to be the maximal value possible (so that its equally weighted with mem - FOR NOW - )
-				normedDiffToMaxNumProcs := float64(diffToMaxNumProcs) * (float64(MAX_MEM) / float64(maxValInRange))
-				weight += normedDiffToMaxNumProcs
-				if VERBOSE_LB {
-					fmt.Printf("given that the max num procs in this range is %v, and this machine has %v procs (diff: %v, normed: %v), gave it weight %v\n", maxValInRange, numProcsInRange, diffToMaxNumProcs, normedDiffToMaxNumProcs, weight)
-				}
-			} else {
-				if VERBOSE_LB {
-					fmt.Printf("no procs in this range yet\n")
-				}
-			}
-			machineWeights = append(machineWeights, weight)
-		}
+		procsInRange := lb.getMachineStatsForRange(p.procInternals.sla)
 
-		// place proc on machine, chosen by weighted random drawing? (could also just pick max -- trying for now)
-		// machineToUse := lb.machines[sampleFromWeightList(machineWeights)]
+		machineWeights := lb.calcluateWeights(procsInRange)
+
+		// place proc on machine
 		machineToUse := lb.machines[findMaxIndex(machineWeights)]
-		// machineToUse := lb.machines[lb.nextMachine]
-		// lb.nextMachine = (lb.nextMachine + 1) % len(lb.machines)
 		p.machineId = machineToUse.mid
 		machineToUse.sched.q.enq(p)
 		if VERBOSE_LB_STATS {
@@ -163,6 +144,75 @@ func (lb *LoadBalancer) placeProcs() {
 		}
 		p = lb.getProc()
 	}
+}
+
+// DIFFERENT SCHEDULING GOALS IN REL TO SIGNALS WE HAVE
+
+// goal 1: maintain a similar distribution across all the machines for different SLAs
+// 	- benefit: no one machine will have all the procs with tight SLAs, but they are spread out (so that if they end up needing more than expected, there's few other small procs that have already been placed and are waiting, mostly procs that have a long SLA anyway)
+// 	- drawback: what if procs that have similar SLAs also share a bunch of stuff (state etc)
+// 			--> what if we also look at that, treat it as a separate dimension rather than using SLA as a proxy (what would the signal here be? cld look at what function the proc came from?)
+
+// goal 2: don't place proc on machine where mem is tight
+// - the higher a machine's mem pressure is, the less procs we should place there
+func (lb *LoadBalancer) calcluateWeights(procsInRange map[*Machine]int) []float64 {
+
+	maxNumProcsInRange := slices.Max(maps.Values(procsInRange))
+
+	var machineWeights []float64
+	for _, m := range lb.machines {
+		// memory factor
+		memFree := float64(MAX_MEM - m.sched.memUsed())
+		weight := memFree
+		// tke into account num procs in range of placed proc if there are others already
+		if maxNumProcsInRange > 0 {
+			numProcsInRange := procsInRange[m]
+			diffToMaxNumProcs := maxNumProcsInRange - numProcsInRange
+			// MAX_MEM is going to be the maximal value possible (so that its equally weighted with mem - FOR NOW - )
+			normedDiffToMaxNumProcs := float64(diffToMaxNumProcs) * (float64(MAX_MEM) / float64(maxNumProcsInRange))
+			weight += normedDiffToMaxNumProcs
+			if VERBOSE_LB {
+				fmt.Printf("given that the max num procs in this range is %v, and this machine has %v procs (diff: %v, normed: %v), gave it weight %v\n", maxNumProcsInRange, numProcsInRange, diffToMaxNumProcs, normedDiffToMaxNumProcs, weight)
+			}
+		} else {
+			if VERBOSE_LB {
+				fmt.Printf("no procs in this range yet\n")
+			}
+		}
+		machineWeights = append(machineWeights, weight)
+	}
+
+	return machineWeights
+}
+
+// returns:
+// totalProcs: number of procs on each machine
+// memUsg: the memory usage of each machine
+func (lb *LoadBalancer) getMachineStats() (map[*Machine]int, map[*Machine]float64, int) {
+	numProcsKilled := 0
+	totalProcs := make(map[*Machine]int, 0)
+	memUsg := make(map[*Machine]float64, 0)
+	for _, m := range lb.machines {
+		totalProcs[m] = m.sched.q.qlen()
+		memUsg[m] = m.sched.memUsage()
+		numProcsKilled += m.sched.numProcsKilledLastTick
+	}
+
+	return totalProcs, memUsg, numProcsKilled
+}
+
+// returns:
+// procsInRange: the number of procs in the same range as the given sla per machine
+func (lb *LoadBalancer) getMachineStatsForRange(sla Tftick) map[*Machine]int {
+	procsInRange := make(map[*Machine]int, 0)
+	for _, m := range lb.machines {
+		// I could also do this by just being able to get the number of procs on a machine within a certain range
+		histogram := m.sched.makeHistogram()
+		numProcsInRange := histogram[m.sched.getRangeBottomFromSLA(sla)]
+		procsInRange[m] = numProcsInRange
+	}
+
+	return procsInRange
 }
 
 func (lb *LoadBalancer) getProc() *Proc {

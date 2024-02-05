@@ -11,24 +11,26 @@ const (
 )
 
 type Sched struct {
-	totMem       Tmem
-	q            *Queue
-	avgDiffToSla float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
-	minSliceSize float64 // how little time did the least scheduled proc get
-	lbConn       chan *MachineMessages
-	currTick     int
-	machineId    Tmid
+	totMem                 Tmem
+	q                      *Queue
+	avgDiffToSla           float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
+	minSliceSize           float64 // how little time did the least scheduled proc get
+	numProcsKilledLastTick int
+	lbConn                 chan *MachineMessages
+	currTick               int
+	machineId              Tmid
 }
 
 func newSched(lbConn chan *MachineMessages, mid Tmid) *Sched {
 	sd := &Sched{
-		totMem:       MAX_MEM,
-		q:            newQueue(),
-		avgDiffToSla: 0,
-		minSliceSize: 1,
-		lbConn:       lbConn,
-		currTick:     0,
-		machineId:    mid,
+		totMem:                 MAX_MEM,
+		q:                      newQueue(),
+		avgDiffToSla:           0,
+		minSliceSize:           1,
+		numProcsKilledLastTick: 0,
+		lbConn:                 lbConn,
+		currTick:               0,
+		machineId:              mid,
 	}
 	return sd
 }
@@ -77,12 +79,13 @@ func (sd *Sched) makeHistogram() map[float64]int {
 // this is helpful for creating the histogram mapping number of procs in the scheduler to SLA slices
 // eg if we are looking at SLAs in an increment size of 2 and this is given 1.5, it will return 0 (since 1.5 would be in the 0-2 range)
 func (sd *Sched) getRangeBottomFromSLA(sla Tftick) float64 {
-	val := math.Pow(SCHEDULER_SLA_HISTOGRAM_BASE, math.Floor(math.Log(float64(sla))/math.Log(SCHEDULER_SLA_HISTOGRAM_BASE)))
+	val := math.Floor(float64(sla)/float64(SCHEDULER_SLA_INCREMENT_SIZE)) * SCHEDULER_SLA_INCREMENT_SIZE
 	return val
 }
 
 func (sd *Sched) tick() {
 	sd.currTick += 1
+	sd.numProcsKilledLastTick = 0
 	if len(sd.q.q) == 0 {
 		return
 	}
@@ -203,9 +206,11 @@ func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 	// also find out if there are procs over the SLA, and if yes how many
 	totalTimeLeft := Tftick(0)
 	numberOverSLA := 0
+	totalAmountOverSLA := 0.0
 	for _, p := range sd.q.q {
 		if p.timeLeftOnSLA() <= 0 {
 			numberOverSLA += 1
+			totalAmountOverSLA += math.Abs(float64(p.timeLeftOnSLA()))
 		} else {
 			totalTimeLeft += p.timeLeftOnSLA()
 		}
@@ -222,9 +227,9 @@ func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 		allocatedTicks := ((totalTimeLeft / currProc.timeLeftOnSLA()) / relativeNeedsSum) * ticksLeftToGive
 		if numberOverSLA > 0 {
 			// ~ p a n i c ~
-			// go into emergency mode where the tick is only split (for now, evenly) among the procs that are over
+			// go into emergency mode where the tick is only split among the procs that are over, proportionally to how late they are
 			if currProc.timeLeftOnSLA() < 0 {
-				allocatedTicks = ticksLeftToGive / Tftick(numberOverSLA)
+				allocatedTicks = Tftick(float64(ticksLeftToGive) * math.Abs(float64(currProc.timeLeftOnSLA())) / totalAmountOverSLA)
 			} else {
 				allocatedTicks = 0
 			}
@@ -271,6 +276,7 @@ func (sd *Sched) kill(currProcIdx int, newProcQ []*Proc) {
 		// var wg sync.WaitGroup
 		// wg.Add(1)
 		sd.lbConn <- &MachineMessages{PROC_KILLED, killed, nil}
+		sd.numProcsKilledLastTick += 1
 		// wg.Wait()
 	}
 
