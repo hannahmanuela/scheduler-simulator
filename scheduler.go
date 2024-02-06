@@ -16,6 +16,7 @@ type Sched struct {
 	avgDiffToSla           float64 // average left over budget (using an ewma with alpha value EWMA_ALPHA)
 	minSliceSize           float64 // how little time did the least scheduled proc get
 	numProcsKilledLastTick int
+	ticksUnusedLastTick    Tftick
 	lbConn                 chan *MachineMessages
 	currTick               int
 	machineId              Tmid
@@ -28,6 +29,7 @@ func newSched(lbConn chan *MachineMessages, mid Tmid) *Sched {
 		avgDiffToSla:           0,
 		minSliceSize:           1,
 		numProcsKilledLastTick: 0,
+		ticksUnusedLastTick:    0,
 		lbConn:                 lbConn,
 		currTick:               0,
 		machineId:              mid,
@@ -86,6 +88,7 @@ func (sd *Sched) getRangeBottomFromSLA(sla Tftick) float64 {
 func (sd *Sched) tick() {
 	sd.currTick += 1
 	sd.numProcsKilledLastTick = 0
+	sd.ticksUnusedLastTick = 0
 	if len(sd.q.q) == 0 {
 		return
 	}
@@ -172,6 +175,8 @@ OUTERLOOP:
 
 		sd.q.q = newProcQ
 	}
+
+	sd.ticksUnusedLastTick = ticksLeftToGive
 
 	// update min slice size
 	minVal := 1.0

@@ -1,7 +1,6 @@
 package slasched
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -15,9 +14,4 @@ func TestSanityCheck(t *testing.T) {
 	w.app = newSimpleWebsite()
 	w.Run(NTICK)
 
-	fmt.Println("---------------")
-	fmt.Println("---------------")
-	fmt.Printf("total num procs killed: %v\n", w.lb.numProcsKilled)
-	fmt.Printf("total num procs over sla TN: %v\n", w.lb.numProcsOverSLA_TN)
-	fmt.Printf("total num procs over sla FN: %v\n", w.lb.numProcsOverSLA_FN)
 }

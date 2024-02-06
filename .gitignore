@@ -5,3 +5,4 @@ results/procs_done.txt
 results/procs_killed.txt
 results/sched.txt
 results/machines.txt
+results/usage.txt

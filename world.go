@@ -2,6 +2,7 @@ package slasched
 
 import (
 	"fmt"
+	"math"
 )
 
 const (
@@ -14,13 +15,15 @@ const (
 	THRESHOLD_NUM_PROCS_MIN      = 3
 	THRESHOLD_NUM_PROCS_MAX      = 5
 
-	VERBOSE_SCHEDULER   = false
-	VERBOSE_WORLD       = false
-	VERBOSE_LB          = false
-	VERBOSE_PROC        = false
-	VERBOSE_MACHINES    = false
-	VERBOSE_LB_STATS    = true
-	VERBOSE_SCHED_STATS = true
+	VERBOSE_SCHEDULER           = false
+	VERBOSE_WORLD               = false
+	VERBOSE_LB                  = false
+	VERBOSE_PROC                = false
+	VERBOSE_MACHINES            = false
+	VERBOSE_LB_STATS            = true
+	VERBOSE_SCHED_STATS         = true
+	VERBOSE_WORLD_STATS         = true
+	VERBOSE_MACHINE_USAGE_STATS = true
 )
 
 type World struct {
@@ -81,25 +84,14 @@ func (w *World) printAllProcs() {
 	}
 }
 
-// returns max, min, avd
-// func (w *World) getComputePressureStats() (float64, float64, float64) {
-// 	maxVal := 0.0
-// 	minVal := math.Inf(1)
-// 	sum := 0.0
-// 	num := 0
-// 	for _, m := range w.machines {
-// 		press := m.sched.getComputePressure()
-// 		sum += press
-// 		num += 1
-// 		if press > maxVal {
-// 			maxVal = press
-// 		}
-// 		if press < minVal {
-// 			minVal = press
-// 		}
-// 	}
-// 	return maxVal, minVal, (sum / float64(num))
-// }
+func (w *World) printTickStats() {
+	for _, m := range w.lb.machines {
+		fmt.Printf("usage: %v, %v, 1, %.2f, %.2f\n", w.currTick, m.mid, math.Abs(float64(m.sched.ticksUnusedLastTick)), m.sched.memUsage())
+	}
+	for _, m := range w.lb.machinesNotInUse {
+		fmt.Printf("usage: %v, %v, 0, %.2f, %.2f\n", w.currTick, m.mid, math.Abs(float64(m.sched.ticksUnusedLastTick)), m.sched.memUsage())
+	}
+}
 
 func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA_FN int) (int, int, int) {
 	w.currTick += 1
@@ -118,6 +110,10 @@ func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA
 	if VERBOSE_MACHINES {
 		fmt.Printf("after compute: %v\n", w)
 	}
+	if VERBOSE_MACHINE_USAGE_STATS {
+		w.printTickStats()
+	}
+
 	if VERBOSE_WORLD {
 		fmt.Printf("==============>>>>> TICK %v DONE <<<<<==============\n", w.currTick)
 		fmt.Printf("num procs killed this tick %v\n", w.lb.numProcsKilled-numProcsKilled)

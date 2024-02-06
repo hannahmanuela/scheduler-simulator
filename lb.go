@@ -64,9 +64,6 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 		msg := <-lb.machineConn
 		switch msg.msgType {
 		case PROC_DONE:
-			if VERBOSE_LB_STATS {
-				fmt.Printf("done: %v, %v, %v, %v, %v, %v \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
-			}
 			//  when a proc is done, the ticksPassed on it is updated to be exact, so we don't have to worry about half ticks here
 			if msg.proc.timeLeftOnSLA() < 0 {
 				// proc went over based on sla, but was it over given actual compute?
@@ -74,9 +71,15 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 				if math.Abs(float64(msg.proc.ticksPassed-msg.proc.procInternals.actualComp)) > 0.000001 {
 					// yes, even actual compute was less than ticks passed
 					lb.numProcsOverSLA_TN += 1
+					if VERBOSE_LB_STATS {
+						fmt.Printf("done: %v, %v, %v, %v, %v, %v, 1 \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
+					}
 				} else {
 					// no, was in fact impossible to get it done on time (b/c we did the very best we could, ie ticksPassed = actualComp)
 					lb.numProcsOverSLA_FN += 1
+					if VERBOSE_LB_STATS {
+						fmt.Printf("done: %v, %v, %v, %v, %v, %v, 0 \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
+					}
 				}
 			}
 		case PROC_KILLED:

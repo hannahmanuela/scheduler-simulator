@@ -3,17 +3,6 @@
 
 input_file="results/out.txt"
 
-# get number of times each type of proc was late
-# countStatic=$(grep -c 'done.*static' "$input_file")
-# countDynamic=$(grep -c 'done.*dynamic' "$input_file")
-# countFg=$(grep -c 'done.*fg' "$input_file")
-# countBg=$(grep -c 'done.*bg' "$input_file")
-
-# echo "Number of late static procs: $countStatic"
-# echo "Number of late dynamic procs: $countDynamic"
-# echo "Number of late fg procs: $countFg"
-# echo "Number of late bg procs: $countBg"
-
 # put proc done and proc created stats into different files
 output_file1="results/procs_done.txt"
 output_file2="results/procs_added.txt"
@@ -21,6 +10,7 @@ output_file3="results/procs_current.txt"
 output_file4="results/procs_killed.txt"
 output_file5="results/sched.txt"
 output_file6="results/machines.txt"
+output_file7="results/usage.txt"
 
 # clear files first
 >  "$output_file1"
@@ -29,6 +19,7 @@ output_file6="results/machines.txt"
 >  "$output_file4"
 >  "$output_file5"
 >  "$output_file6"
+>  "$output_file7"
 
 # scrape output and separate data
 while IFS= read -r line; do
@@ -50,20 +41,9 @@ while IFS= read -r line; do
     elif [[ $line == *"machine: "* ]]; then
         numbers=$(echo "$line" | sed -n -e 's/machine: //p')
         echo "$numbers" >> "$output_file6"
+    elif [[ $line == *"usage: "* ]]; then
+        numbers=$(echo "$line" | sed -n -e 's/usage: //p')
+        echo "$numbers" >> "$output_file7"
     fi
 done < "$input_file"
 
-
-# plot times over
-
-# extract times
-# output_file="times_over.txt"
-# while IFS= read -r line; do
-#     if [[ $line == *"over sla: "* ]]; then
-#         numbers=$(echo "$line" | sed -n -e 's/^.*over sla: \([^T]*\).*/\1/p')
-#         echo "$numbers" >> "$output_file"
-#     fi
-# done < "$input_file"
-
-
-# machine, proc type, sla, time over sla, time over actual comp
