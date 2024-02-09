@@ -6,8 +6,7 @@ import (
 )
 
 const (
-	MAX_MEM = 11000 // the amount of memory every machine (currently machine=core) will have, in MB
-	// SCHEDULER_SLA_HISTOGRAM_BASE = 2     // the base of the exponential histogram that procs are placed into in making load balancing decisions
+	MAX_MEM                      = 11000 // the amount of memory every machine (currently machine=core) will have, in MB
 	SCHEDULER_SLA_INCREMENT_SIZE = 10
 	ARRIVAL_RATE                 = 0.8 // number of procs per tick per machine
 	THRESHOLD_MEM_USG_MIN        = 0.4
@@ -121,8 +120,6 @@ func (w *World) Tick(numProcsKilled int, numProcsOverSLA_TN int, numProcsOverSLA
 		fmt.Printf("num procs over sla FN this tick %v\n \n", w.lb.numProcsOverSLA_FN-numProcsOverSLA_FN)
 	}
 	return w.lb.numProcsKilled, w.lb.numProcsOverSLA_TN, w.lb.numProcsOverSLA_FN
-	// min, max, avg := w.getComputePressureStats()
-	// fmt.Printf("compute pressures: min %v, max %v, avg %v\n", min, max, avg)
 }
 
 func (w *World) Run(nTick int) {

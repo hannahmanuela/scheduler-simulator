@@ -18,7 +18,7 @@ type Proc struct {
 }
 
 func (p *Proc) String() string {
-	return p.procInternals.String() + ", ticks passed: " + p.ticksPassed.String()
+	return p.procInternals.String() + ", deadline: " + p.timeShouldBeDone.String()
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
@@ -37,8 +37,12 @@ func (p *Proc) timeLeftOnSLA() Tftick {
 	return p.procInternals.sla - p.ticksPassed
 }
 
+func (p *Proc) expectedCompLeft() Tftick {
+	return p.procInternals.sla - p.procInternals.compDone
+}
+
 func (p *Proc) memUsed() Tmem {
-	return p.procInternals.memUsed
+	return p.procInternals.memUsed()
 }
 
 // returns a measure of how killable a proc is
@@ -57,14 +61,17 @@ func (p *Proc) killableScore() float64 {
 type ProcInternals struct {
 	sla        Tftick
 	compDone   Tftick
-	memUsed    Tmem
 	actualComp Tftick
 	procType   ProcType
 }
 
 func (p *ProcInternals) String() string {
 	return fmt.Sprintf("{type %v, sla %v actualComp %v compDone %v memUsed %d}", p.procType, p.sla,
-		p.actualComp, p.compDone, p.memUsed)
+		p.actualComp, p.compDone, p.memUsed())
+}
+
+func (p *ProcInternals) memUsed() Tmem {
+	return p.procType.getMemoryUsage()
 }
 
 func newPrivProc(sla Tftick, procType ProcType) *ProcInternals {
@@ -76,7 +83,7 @@ func newPrivProc(sla Tftick, procType ProcType) *ProcInternals {
 		actualComp = Tftick(0.3)
 	}
 
-	return &ProcInternals{sla, 0, 0, actualComp, procType}
+	return &ProcInternals{sla, 0, actualComp, procType}
 }
 
 func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
@@ -96,7 +103,6 @@ func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 		// enforcing 0 <= memUsed <= MAX_MEM
 		// p.memUsed = Tmem(math.Min(math.Max(float64(p.memUsed), 0), MAX_MEM))
 		// fmt.Printf("adding %v memory, for a total of %v\n", memUsage, p.memUsed)
-		p.memUsed = p.procType.getMemoryUsage()
 		return toRun, false
 	}
 }
