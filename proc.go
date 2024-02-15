@@ -38,9 +38,10 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool, bool) {
 	ticksUsed, done := p.procInternals.runTillOutOrDone(toRun)
 
 	// if the proc is running over its sla, double it once, then kill the proc (or should it be allowed to replenish more times than that?)
-	fmt.Printf("diff btw comp done (%v) and effective sla (%v) is %v\n", p.procInternals.compDone, p.effectiveSla(), p.procInternals.compDone-p.effectiveSla())
 	if p.procInternals.compDone-p.effectiveSla() >= 0.0 {
-		fmt.Printf("replenished: old sla: %v, new sla: %v\n", p.procInternals.sla, p.procInternals.sla*Tftick((2+p.timesReplenished)))
+		if VERBOSE_PROC {
+			fmt.Printf("replenished: old sla: %v, new sla: %v\n", p.procInternals.sla, p.procInternals.sla*Tftick((2+p.timesReplenished)))
+		}
 		if p.timesReplenished > 0 {
 			return ticksUsed, true, true
 		} else {

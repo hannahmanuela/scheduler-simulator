@@ -97,7 +97,7 @@ func (sd *Sched) runProcs() {
 
 		// get proc to run, which will be the one at the head of the q (earliest deadline first)
 		procToRun := sd.q.deq()
-		ticksToGive := min(ticksLeftToGive, procToRun.expectedCompLeft())
+		ticksToGive := sd.allocTicksToProc(ticksLeftToGive, procToRun)
 		ticksUsed, done, _ := procToRun.runTillOutOrDone(ticksToGive)
 		ticksLeftToGive -= ticksUsed
 		if VERBOSE_SCHEDULER {
@@ -146,6 +146,40 @@ func (sd *Sched) runProcs() {
 		}
 	}
 
+}
+
+// allocates ticks
+// inversely proportional to how much expected computation the proc has left
+// if there are procs that are over, will (for now, equally) spread all ticks between them
+func (sd *Sched) allocTicksToProc(ticksLeftToGive Tftick, procToRun *Proc) Tftick {
+
+	// get values that allow us to inert the realtionsip between expectedCompLeft and ticks given
+	// (because more time left should equal less ticks given)
+	// also find out if there are procs over the SLA, and if yes how many
+	totalTimeLeft := procToRun.expectedCompLeft()
+	for _, p := range sd.q.q {
+		if p.expectedCompLeft() <= 0 {
+			fmt.Printf("ERROR -- somehow a proc has negative time left -- shouldn't it have been replenished?\n")
+		} else {
+			totalTimeLeft += p.expectedCompLeft()
+		}
+	}
+	relativeNeedsSum := Tftick(totalTimeLeft / procToRun.expectedCompLeft())
+	for _, p := range sd.q.q {
+		if p.expectedCompLeft() > 0 {
+			relativeNeedsSum += totalTimeLeft / p.expectedCompLeft()
+		}
+	}
+
+	allocatedTicks := ((totalTimeLeft / procToRun.expectedCompLeft()) / relativeNeedsSum) * ticksLeftToGive
+	if allocatedTicks < 0 {
+		fmt.Printf("ERROR -- allocated negative ticks. totalTimeLeft: %v, procToRun.expectedCompLeft() %v, relativeNeedsSum %v\n", totalTimeLeft, procToRun.expectedCompLeft(), relativeNeedsSum)
+	}
+	if VERBOSE_SCHEDULER {
+		fmt.Printf("giving %v ticks \n", allocatedTicks)
+	}
+
+	return allocatedTicks
 }
 
 // currently just using EWMA, in both cases (went over SLA and was still under)

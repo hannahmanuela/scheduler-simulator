@@ -37,15 +37,15 @@ type LoadBalancer struct {
 func newLoadBalancer(machines []*Machine, machineConn chan *MachineMessages) *LoadBalancer {
 	lb := &LoadBalancer{
 		// start with one machine?
-		// machines:         []*Machine{machines[0]},
-		// machinesNotInUse: machines[1:],
-		machines:         machines,
-		machinesNotInUse: []*Machine{},
-		procq:            &Queue{q: make([]*Proc, 0)},
-		machineConn:      machineConn,
-		currTick:         0,
-		numProcsKilled:   0,
-		printedThisTick:  false,
+		machines:         []*Machine{machines[0]},
+		machinesNotInUse: machines[1:],
+		// machines:         machines,
+		// machinesNotInUse: []*Machine{},
+		procq:           &Queue{q: make([]*Proc, 0)},
+		machineConn:     machineConn,
+		currTick:        0,
+		numProcsKilled:  0,
+		printedThisTick: false,
 	}
 	go lb.listenForMachineMessages()
 	return lb
@@ -64,6 +64,9 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 		msg := <-lb.machineConn
 		switch msg.msgType {
 		case PROC_DONE:
+			if VERBOSE_LB_STATS {
+				fmt.Printf("done: %v, %v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp), msg.proc.timesReplenished)
+			}
 			//  when a proc is done, the ticksPassed on it is updated to be exact, so we don't have to worry about half ticks here
 			if msg.proc.timeLeftOnSLA() < 0 {
 				// proc went over based on sla, but was it over given actual compute?
@@ -71,15 +74,10 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 				if math.Abs(float64(msg.proc.ticksPassed-msg.proc.procInternals.actualComp)) > 0.000001 {
 					// yes, even actual compute was less than ticks passed
 					lb.numProcsOverSLA_TN += 1
-					if VERBOSE_LB_STATS {
-						fmt.Printf("done: %v, %v, %v, %v, %v, %v, 1 \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
-					}
 				} else {
 					// no, was in fact impossible to get it done on time (b/c we did the very best we could, ie ticksPassed = actualComp)
 					lb.numProcsOverSLA_FN += 1
-					if VERBOSE_LB_STATS {
-						fmt.Printf("done: %v, %v, %v, %v, %v, %v, 0 \n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
-					}
+
 				}
 			}
 		case PROC_KILLED:
@@ -110,13 +108,13 @@ func (lb *LoadBalancer) placeProcs() {
 		machineToUse := lb.machines[findMaxIndex(machineWeights)]
 
 		// if there is no good option, we add a machine and put it there
-		// if (machineToUse.sched.getTicksAhead(p.timeShouldBeDone) > THRESHOLD_TICKS_AHEAD_MAX || machineToUse.sched.memUsage() > THRESHOLD_MEM_USG_MAX) && len(lb.machinesNotInUse) > 0 {
-		// 	// add a nnew machine
-		// 	// NOTE the process of choosing a machine will get more sophisticated later (for now we cycle, ie append to end and pull from front)
-		// 	machineToUse = lb.machinesNotInUse[0]
-		// 	lb.machinesNotInUse = lb.machinesNotInUse[1:]
-		// 	lb.machines = append(lb.machines, machineToUse)
-		// }
+		if (machineToUse.sched.getTicksAhead(p.timeShouldBeDone) > THRESHOLD_TICKS_AHEAD_MAX || machineToUse.sched.memUsage() > THRESHOLD_MEM_USG_MAX) && len(lb.machinesNotInUse) > 0 {
+			// add a nnew machine
+			// NOTE the process of choosing a machine will get more sophisticated later (for now we cycle, ie append to end and pull from front)
+			machineToUse = lb.machinesNotInUse[0]
+			lb.machinesNotInUse = lb.machinesNotInUse[1:]
+			lb.machines = append(lb.machines, machineToUse)
+		}
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
@@ -134,17 +132,17 @@ func (lb *LoadBalancer) placeProcs() {
 
 	// remove a machine if the load is overall pretty low
 	// (should we do this before or after placing this round of procs? after might be a bit overestimating amount of load we are experiencing?
-	// totalTicks, memUsg := lb.getMachineStats()
-	// // decrease if values are low and we have multiple machines
-	// if avg(maps.Values(memUsg)) < THRESHOLD_MEM_USG_MIN && avg(maps.Values(totalTicks)) < THRESHOLD_NUM_TICKS_MIN && len(lb.machines) > 1 {
-	// 	// ah, we might want to be a bit more smart in which machine we remove?
-	// 	toRemove := lb.machines[0]
-	// 	lb.machines = lb.machines[1:]
-	// 	lb.machinesNotInUse = append(lb.machinesNotInUse, toRemove)
-	// 	if VERBOSE_SCHED_STATS {
-	// 		fmt.Printf("machine: 0, %v, %v, %v, %v\n", lb.currTick, toRemove.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalTicks)))
-	// 	}
-	// }
+	totalTicks, memUsg := lb.getMachineStats()
+	// decrease if values are low and we have multiple machines
+	if avg(maps.Values(memUsg)) < THRESHOLD_MEM_USG_MIN && avg(maps.Values(totalTicks)) < THRESHOLD_NUM_TICKS_MIN && len(lb.machines) > 1 {
+		// ah, we might want to be a bit more smart in which machine we remove?
+		toRemove := lb.machines[0]
+		lb.machines = lb.machines[1:]
+		lb.machinesNotInUse = append(lb.machinesNotInUse, toRemove)
+		if VERBOSE_SCHED_STATS {
+			fmt.Printf("machine: 0, %v, %v, %v, %v\n", lb.currTick, toRemove.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalTicks)))
+		}
+	}
 }
 
 // DIFFERENT SCHEDULING GOALS IN REL TO SIGNALS WE HAVE
