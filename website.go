@@ -7,10 +7,10 @@ import (
 // constants characterizing the wesbite traffic
 const (
 	// fraction of procs generated that are in each category
-	FRACTION_PAGE_STATIC     = 0.6
+	FRACTION_PAGE_STATIC     = 0.6 // 0.5
 	FRACTION_PAGE_DYNAMIC    = 0.35
-	FRACTION_DATA_PROCESS_FG = 0.04
-	FRACTION_DATA_PROCESS_BG = 0.01
+	FRACTION_DATA_PROCESS_FG = 0.04 // 10
+	FRACTION_DATA_PROCESS_BG = 0.01 // 05
 
 	// Tick = 100 ms
 	// the max/min value that a sla can have for the diff proc types - slas will have uniform random value in this range
@@ -63,8 +63,18 @@ func (pt ProcType) getMemoryUsage() Tmem {
 	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FB_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
 }
 
+// type CacheClnt interface {
+// 	put(k string, val string)
+// 	get(k string) string
+// }
+
+type Website interface {
+	genLoad(nProcs int) []*ProcInternals
+}
+
 // the website struct itself
 type SimpleWebsite struct {
+	// cacheClnt CacheClnt
 }
 
 func newSimpleWebsite() *SimpleWebsite {
@@ -116,7 +126,7 @@ func (website *SimpleWebsite) genNumberOfProcs(totalNumProcs int) (int, int, int
 
 }
 
-func (Website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals {
+func (website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
 		procSLA := Tftick(rand.Float64()*(PAGE_STATIC_SLA_RANGE_MAX-PAGE_DYNAMIC_SLA_RANGE_MIN)) + PAGE_STATIC_SLA_RANGE_MIN
@@ -126,7 +136,7 @@ func (Website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals 
 	return procs
 }
 
-func (Website *SimpleWebsite) genPageDynamicProcs(numProcs int) []*ProcInternals {
+func (website *SimpleWebsite) genPageDynamicProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
 		procSLA := Tftick(rand.Float64()*(PAGE_DYNAMIC_SLA_RANGE_MAX-PAGE_DYNAMIC_SLA_RANGE_MIN)) + PAGE_DYNAMIC_SLA_RANGE_MIN
@@ -135,7 +145,7 @@ func (Website *SimpleWebsite) genPageDynamicProcs(numProcs int) []*ProcInternals
 	return procs
 }
 
-func (Website *SimpleWebsite) genDataProcessFgProcs(numProcs int) []*ProcInternals {
+func (website *SimpleWebsite) genDataProcessFgProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
 		procSLA := Tftick(rand.Float64()*(DATA_PROCESS_FG_SLA_RANGE_MAX-DATA_PROCESS_FG_SLA_RANGE_MIN)) + DATA_PROCESS_FG_SLA_RANGE_MIN
@@ -144,7 +154,7 @@ func (Website *SimpleWebsite) genDataProcessFgProcs(numProcs int) []*ProcInterna
 	return procs
 }
 
-func (Website *SimpleWebsite) genDataProcessBgProcs(numProcs int) []*ProcInternals {
+func (website *SimpleWebsite) genDataProcessBgProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
 		procSLA := Tftick(rand.Float64()*(DATA_PROCESS_BG_SLA_RANGE_MAX-DATA_PROCESS_BG_SLA_RANGE_MIN)) + DATA_PROCESS_BG_SLA_RANGE_MIN
@@ -152,3 +162,12 @@ func (Website *SimpleWebsite) genDataProcessBgProcs(numProcs int) []*ProcInterna
 	}
 	return procs
 }
+
+// func (website *SimpleWebsite) getFrontPage() string {
+// 	return website.cacheClnt.get("home-page")
+// }
+
+// func (website *SimpleWebsite) getMyPage(userName string) string {
+// 	user_posts_query := userName + "-posts"
+// 	return website.cacheClnt.get(user_posts_query)
+// }

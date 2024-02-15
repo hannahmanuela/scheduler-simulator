@@ -16,10 +16,6 @@ func (f Tftick) String() string {
 	return fmt.Sprintf("%.3fT", f)
 }
 
-type Website interface {
-	genLoad(nProcs int) []*ProcInternals
-}
-
 func sampleNormal(mu, sigma float64) float64 {
 	return rand.NormFloat64()*float64(sigma) + float64(mu)
 }

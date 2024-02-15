@@ -97,7 +97,8 @@ func (sd *Sched) runProcs() {
 
 		// get proc to run, which will be the one at the head of the q (earliest deadline first)
 		procToRun := sd.q.deq()
-		ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftToGive)
+		ticksToGive := min(ticksLeftToGive, procToRun.expectedCompLeft())
+		ticksUsed, done, _ := procToRun.runTillOutOrDone(ticksToGive)
 		ticksLeftToGive -= ticksUsed
 		if VERBOSE_SCHEDULER {
 			fmt.Printf("used %v ticks\n", ticksUsed)

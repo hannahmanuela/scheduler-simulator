@@ -99,38 +99,26 @@ func (lb *LoadBalancer) placeProcs() {
 	lb.currTick += 1
 	p := lb.getProc()
 
-	// // decide if we should add/remove a machine -- NOTE that we currently only add max one machine
-	// totalProcs, memUsg, numProcsKilled := lb.getMachineStats()
-	// // decrease if values are low and we have multiple machines; use AND
-	// // increase if values are high and we have machines we can add; use OR
-	// if avg(maps.Values(memUsg)) < THRESHOLD_MEM_USG_MIN && avg(maps.Values(totalProcs)) < THRESHOLD_NUM_PROCS_MIN && len(lb.machines) > 1 {
-	// 	toRemove := lb.machines[0]
-	// 	lb.machines = lb.machines[1:]
-	// 	lb.machinesNotInUse = append(lb.machinesNotInUse, toRemove)
-	// 	if VERBOSE_SCHED_STATS {
-	// 		fmt.Printf("machine: 0, %v, %v, %v, %v\n", lb.currTick, toRemove.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)))
-	// 	}
-	// } else if (numProcsKilled > 0 || avg(maps.Values(memUsg)) > THRESHOLD_MEM_USG_MAX || avg(maps.Values(totalProcs)) > THRESHOLD_NUM_PROCS_MAX) && len(lb.machinesNotInUse) > 0 {
-	// 	toAdd := lb.machinesNotInUse[0]
-	// 	lb.machinesNotInUse = lb.machinesNotInUse[1:]
-	// 	lb.machines = append(lb.machines, toAdd)
-	// 	if VERBOSE_SCHED_STATS {
-	// 		fmt.Printf("machine: 1, %v, %v, %v, %v, %v\n", lb.currTick, toAdd.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalProcs)), numProcsKilled)
-	// 	}
-	// }
-
 	for p != nil {
 		// place given proc
 		if VERBOSE_LB {
 			fmt.Printf("placing proc %v\n", p)
 		}
 
-		ticksAhead := lb.getMachineStatsForRange(p.timeShouldBeDone)
-
+		ticksAhead := lb.getMachineStatsForDeadline(p.timeShouldBeDone)
 		machineWeights := lb.calcluateWeights(ticksAhead)
-
-		// place proc on machine
 		machineToUse := lb.machines[findMaxIndex(machineWeights)]
+
+		// if there is no good option, we add a machine and put it there
+		// if (machineToUse.sched.getTicksAhead(p.timeShouldBeDone) > THRESHOLD_TICKS_AHEAD_MAX || machineToUse.sched.memUsage() > THRESHOLD_MEM_USG_MAX) && len(lb.machinesNotInUse) > 0 {
+		// 	// add a nnew machine
+		// 	// NOTE the process of choosing a machine will get more sophisticated later (for now we cycle, ie append to end and pull from front)
+		// 	machineToUse = lb.machinesNotInUse[0]
+		// 	lb.machinesNotInUse = lb.machinesNotInUse[1:]
+		// 	lb.machines = append(lb.machines, machineToUse)
+		// }
+
+		// place proc on chosen machine
 		p.machineId = machineToUse.mid
 		machineToUse.sched.q.enq(p)
 		if VERBOSE_LB_STATS {
@@ -143,6 +131,20 @@ func (lb *LoadBalancer) placeProcs() {
 		}
 		p = lb.getProc()
 	}
+
+	// remove a machine if the load is overall pretty low
+	// (should we do this before or after placing this round of procs? after might be a bit overestimating amount of load we are experiencing?
+	// totalTicks, memUsg := lb.getMachineStats()
+	// // decrease if values are low and we have multiple machines
+	// if avg(maps.Values(memUsg)) < THRESHOLD_MEM_USG_MIN && avg(maps.Values(totalTicks)) < THRESHOLD_NUM_TICKS_MIN && len(lb.machines) > 1 {
+	// 	// ah, we might want to be a bit more smart in which machine we remove?
+	// 	toRemove := lb.machines[0]
+	// 	lb.machines = lb.machines[1:]
+	// 	lb.machinesNotInUse = append(lb.machinesNotInUse, toRemove)
+	// 	if VERBOSE_SCHED_STATS {
+	// 		fmt.Printf("machine: 0, %v, %v, %v, %v\n", lb.currTick, toRemove.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalTicks)))
+	// 	}
+	// }
 }
 
 // DIFFERENT SCHEDULING GOALS IN REL TO SIGNALS WE HAVE
@@ -163,17 +165,17 @@ func (lb *LoadBalancer) calcluateWeights(ticksAhead map[*Machine]Tftick) []float
 		weight := memFree
 		// tke into account the amount of ticks a proc would have to wait before it can start to run
 		if maxTicksAhead > 0 {
-			numProcsInRange := ticksAhead[m]
-			diffToMaxNumProcs := maxTicksAhead - numProcsInRange
+			numTicksAhead := ticksAhead[m]
+			diffToMaxTicksAhead := maxTicksAhead - numTicksAhead
 			// MAX_MEM is going to be the maximal value possible (so that its equally weighted with mem - FOR NOW - )
-			normedDiffToMaxNumProcs := float64(diffToMaxNumProcs) * (float64(MAX_MEM) / float64(maxTicksAhead))
-			weight += normedDiffToMaxNumProcs
+			normedDiffToMaxNumTicks := float64(diffToMaxTicksAhead) * (float64(MAX_MEM) / float64(maxTicksAhead))
+			weight += normedDiffToMaxNumTicks
 			if VERBOSE_LB {
-				fmt.Printf("given that the max ticks ahead is %v, and this machine has %v procs (diff: %v, normed: %v), gave it weight %v\n", maxTicksAhead, numProcsInRange, diffToMaxNumProcs, normedDiffToMaxNumProcs, weight)
+				fmt.Printf("given that the max ticks ahead is %v, and this machine has %v ticks ahead (diff: %v, normed: %v), gave it weight %v\n", maxTicksAhead, numTicksAhead, diffToMaxTicksAhead, normedDiffToMaxNumTicks, weight)
 			}
 		} else {
 			if VERBOSE_LB {
-				fmt.Printf("no procs in this range yet\n")
+				fmt.Printf("no ticks ahead anywhere!\n")
 			}
 		}
 		machineWeights = append(machineWeights, weight)
@@ -183,24 +185,22 @@ func (lb *LoadBalancer) calcluateWeights(ticksAhead map[*Machine]Tftick) []float
 }
 
 // returns:
-// totalProcs: number of procs on each machine
+// totalTicks: number of expected ticks of computation left
 // memUsg: the memory usage of each machine
-func (lb *LoadBalancer) getMachineStats() (map[*Machine]int, map[*Machine]float64, int) {
-	numProcsKilled := 0
-	totalProcs := make(map[*Machine]int, 0)
+func (lb *LoadBalancer) getMachineStats() (map[*Machine]Tftick, map[*Machine]float64) {
+	totalTicks := make(map[*Machine]Tftick, 0)
 	memUsg := make(map[*Machine]float64, 0)
 	for _, m := range lb.machines {
-		totalProcs[m] = m.sched.q.qlen()
+		totalTicks[m] = m.sched.q.ticksInQueue()
 		memUsg[m] = m.sched.memUsage()
-		numProcsKilled += m.sched.numProcsKilledLastTick
 	}
 
-	return totalProcs, memUsg, numProcsKilled
+	return totalTicks, memUsg
 }
 
 // returns:
 // ticksBeforeSla: the sum of the SLA of all procs that have an earlier deadline than the proc being placed (ie how long the proc would have to wait worst case scenario)
-func (lb *LoadBalancer) getMachineStatsForRange(deadline Tftick) map[*Machine]Tftick {
+func (lb *LoadBalancer) getMachineStatsForDeadline(deadline Tftick) map[*Machine]Tftick {
 	ticksAhead := make(map[*Machine]Tftick, 0)
 	for _, m := range lb.machines {
 		ticks := m.sched.getTicksAhead(deadline)
