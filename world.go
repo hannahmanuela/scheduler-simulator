@@ -6,13 +6,14 @@ import (
 )
 
 const (
-	MAX_MEM                      = 11000 // the amount of memory every machine (currently machine=core) will have, in MB
+	MAX_MEM_PER_CORE             = 11000 // the amount of memory every core will have, in MB
 	SCHEDULER_SLA_INCREMENT_SIZE = 10
 	ARRIVAL_RATE                 = 15  // number of procs per tick
 	THRESHOLD_MEM_USG_MIN        = 0.4 // avg memory usage below which we will remove a machine
 	THRESHOLD_NUM_TICKS_MIN      = 3   // avg number of ticks on a machine below which we will remove a machine
 	THRESHOLD_TICKS_AHEAD_MAX    = 1.5 // if the "best option" machine has more than this many ticks ahead, take a new machine
 	THRESHOLD_MEM_USG_MAX        = 0.9 // if the "best option" machine has higher than this memory usage, take a new machine
+	THRESHOLD_QLEN               = 2
 
 	VERBOSE_SCHEDULER           = false
 	VERBOSE_WORLD               = false
@@ -32,13 +33,13 @@ type World struct {
 	app      Website
 }
 
-func newWorld(numMachines int) *World {
+func newWorld(numMachines int, numCores int) *World {
 	w := &World{}
 	w.machines = make([]*Machine, numMachines)
 	lbMachineConn := make(chan *MachineMessages)
 	for i := 0; i < numMachines; i++ {
-		mid := Tmid(i)
-		w.machines[i] = newMachine(mid, lbMachineConn)
+		mid := Tid(i)
+		w.machines[i] = newMachine(mid, numCores, lbMachineConn)
 	}
 	w.lb = newLoadBalancer(w.machines, lbMachineConn)
 	return w
@@ -77,7 +78,7 @@ func (w *World) compute() {
 
 func (w *World) printAllProcs() {
 	for _, m := range w.machines {
-		for _, p := range m.sched.q.q {
+		for _, p := range m.sched.q.getQ() {
 			fmt.Printf("current: %v, %v, %v, %v, %v\n", w.currTick, m.mid, float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.procInternals.compDone))
 		}
 	}
@@ -85,10 +86,14 @@ func (w *World) printAllProcs() {
 
 func (w *World) printTickStats() {
 	for _, m := range w.lb.machines {
-		fmt.Printf("usage: %v, %v, 1, %.2f, %.2f\n", w.currTick, m.mid, math.Abs(float64(m.sched.ticksUnusedLastTick)), m.sched.memUsage())
+		for _, core := range m.sched.coreScheds {
+			fmt.Printf("usage: %v, %v, %v, 1, %.2f, %.2f\n", w.currTick, m.mid, core.coreId, math.Abs(float64(core.ticksUnusedLastTick)), core.memUsage())
+		}
 	}
 	for _, m := range w.lb.machinesNotInUse {
-		fmt.Printf("usage: %v, %v, 0, %.2f, %.2f\n", w.currTick, m.mid, math.Abs(float64(m.sched.ticksUnusedLastTick)), m.sched.memUsage())
+		for _, core := range m.sched.coreScheds {
+			fmt.Printf("usage: %v, %v, %v, 0, %.2f, %.2f\n", w.currTick, m.mid, core.coreId, math.Abs(float64(core.ticksUnusedLastTick)), core.memUsage())
+		}
 	}
 }
 

@@ -1,8 +1,11 @@
 package slasched
 
+import "sync"
+
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {
 	q []*Proc
+	m sync.RWMutex
 }
 
 func newQueue() *Queue {
@@ -11,6 +14,9 @@ func newQueue() *Queue {
 }
 
 func (q *Queue) String() string {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
 	str := ""
 	for _, p := range q.q {
 		str += p.String()
@@ -18,7 +24,16 @@ func (q *Queue) String() string {
 	return str
 }
 
+func (q *Queue) getQ() []*Proc {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
+	return q.q
+}
+
 func (q *Queue) enq(p *Proc) {
+	q.m.Lock()
+	defer q.m.Unlock()
 
 	if len(q.q) == 0 {
 		q.q = append(q.q, p)
@@ -36,6 +51,9 @@ func (q *Queue) enq(p *Proc) {
 }
 
 func (q *Queue) deq() *Proc {
+	q.m.Lock()
+	defer q.m.Unlock()
+
 	if len(q.q) == 0 {
 		return nil
 	}
@@ -45,10 +63,16 @@ func (q *Queue) deq() *Proc {
 }
 
 func (q *Queue) qlen() int {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
 	return len(q.q)
 }
 
 func (q *Queue) ticksInQueue() Tftick {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
 	ticks := Tftick(0)
 	for _, t := range q.q {
 		ticks += t.expectedCompLeft()

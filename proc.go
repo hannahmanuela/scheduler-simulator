@@ -10,7 +10,7 @@ import (
 
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
-	machineId        Tmid
+	machineId        Tid
 	ticksPassed      Tftick
 	timeShouldBeDone Tftick
 	procInternals    *ProcInternals

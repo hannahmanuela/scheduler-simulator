@@ -4,22 +4,35 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sync"
 
 	"golang.org/x/exp/maps"
 )
 
-type MsgType int
+type MachineMsgType int
 
 const (
-	PROC_DONE MsgType = iota
+	PROC_DONE MachineMsgType = iota
 	PROC_KILLED
 )
 
+type CoreMsgType int
+
+const (
+	NEED_WORK      CoreMsgType = iota // msg by core bc it is out of work
+	PUSH_PROC                         // msg by the controller to the core with a proc it should take
+	RETURNING_PROC                    // potentially if proc pushed to core it responds with a proc it is then returning
+	PROC_DONE_CORE
+	PROC_KILLED_CORE
+)
+
 type MachineMessages struct {
-	msgType MsgType
+	msgType MachineMsgType
 	proc    *Proc
-	wg      *sync.WaitGroup
+}
+
+type CoreMessages struct {
+	msgType CoreMsgType
+	proc    *Proc
 }
 
 type LoadBalancer struct {
@@ -158,15 +171,15 @@ func (lb *LoadBalancer) calcluateWeights(ticksAhead map[*Machine]Tftick) []float
 
 	var machineWeights []float64
 	for _, m := range lb.machines {
-		// memory factor
-		memFree := float64(MAX_MEM - m.sched.memUsed())
+		// memory factor - as a percentage
+		memFree := m.sched.memUsage()
 		weight := memFree
 		// tke into account the amount of ticks a proc would have to wait before it can start to run
 		if maxTicksAhead > 0 {
 			numTicksAhead := ticksAhead[m]
 			diffToMaxTicksAhead := maxTicksAhead - numTicksAhead
-			// MAX_MEM is going to be the maximal value possible (so that its equally weighted with mem - FOR NOW - )
-			normedDiffToMaxNumTicks := float64(diffToMaxTicksAhead) * (float64(MAX_MEM) / float64(maxTicksAhead))
+			// as a percentage of the max val
+			normedDiffToMaxNumTicks := float64(diffToMaxTicksAhead) / float64(maxTicksAhead)
 			weight += normedDiffToMaxNumTicks
 			if VERBOSE_LB {
 				fmt.Printf("given that the max ticks ahead is %v, and this machine has %v ticks ahead (diff: %v, normed: %v), gave it weight %v\n", maxTicksAhead, numTicksAhead, diffToMaxTicksAhead, normedDiffToMaxNumTicks, weight)
@@ -185,16 +198,16 @@ func (lb *LoadBalancer) calcluateWeights(ticksAhead map[*Machine]Tftick) []float
 // returns:
 // totalTicks: number of expected ticks of computation left
 // memUsg: the memory usage of each machine
-func (lb *LoadBalancer) getMachineStats() (map[*Machine]Tftick, map[*Machine]float64) {
-	totalTicks := make(map[*Machine]Tftick, 0)
-	memUsg := make(map[*Machine]float64, 0)
-	for _, m := range lb.machines {
-		totalTicks[m] = m.sched.q.ticksInQueue()
-		memUsg[m] = m.sched.memUsage()
-	}
+// func (lb *LoadBalancer) getMachineStats() (map[*Machine]Tftick, map[*Machine]float64) {
+// 	totalTicks := make(map[*Machine]Tftick, 0)
+// 	memUsg := make(map[*Machine]float64, 0)
+// 	for _, m := range lb.machines {
+// 		totalTicks[m] = m.sched.q.ticksInQueue()
+// 		memUsg[m] = m.sched.memUsage()
+// 	}
 
-	return totalTicks, memUsg
-}
+// 	return totalTicks, memUsg
+// }
 
 // returns:
 // ticksBeforeSla: the sum of the SLA of all procs that have an earlier deadline than the proc being placed (ie how long the proc would have to wait worst case scenario)

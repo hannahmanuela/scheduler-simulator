@@ -2,25 +2,27 @@ package slasched
 
 import "fmt"
 
-type Tmid int
+type Tid int
 
-type Ttickmap map[Tmid]Tftick
-type Tprocmap map[Tmid]int
+type Ttickmap map[Tid]Tftick
+type Tprocmap map[Tid]int
 
 type Machine struct {
-	mid   Tmid
-	sched *Sched
+	mid      Tid
+	sched    *Sched
+	numCores int
 }
 
-func newMachine(mid Tmid, lbConn chan *MachineMessages) *Machine {
+func newMachine(mid Tid, numCores int, lbConn chan *MachineMessages) *Machine {
 	sd := &Machine{
-		mid:   mid,
-		sched: newSched(lbConn, mid),
+		mid:      mid,
+		sched:    newSched(lbConn, mid, numCores),
+		numCores: numCores,
 	}
 	return sd
 }
 
-func (m Machine) String() string {
+func (m *Machine) String() string {
 	str := fmt.Sprintf("mid: %d, sched: %s\n", m.mid, m.sched.String())
 	return str
 }

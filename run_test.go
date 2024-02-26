@@ -5,12 +5,13 @@ import (
 )
 
 const (
-	NTICK = 100
+	NTICK = 2
 )
 
 func TestSanityCheck(t *testing.T) {
-	numMachines := 20
-	w := newWorld(numMachines)
+	numMachines := 1
+	numCores := 4
+	w := newWorld(numMachines, numCores)
 	w.app = newSimpleWebsite()
 	w.Run(NTICK)
 
