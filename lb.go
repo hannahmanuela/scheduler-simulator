@@ -118,7 +118,7 @@ func (lb *LoadBalancer) placeProcs() {
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
-		machineToUse.sched.q.enq(p)
+		machineToUse.sched.getQ().enq(p)
 		if VERBOSE_LB_STATS {
 			if p.migrated {
 				fmt.Printf("adding: %v, %v, %v, %v, %v, 1\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
@@ -189,7 +189,7 @@ func (lb *LoadBalancer) getMachineStats() (map[*Machine]Tftick, map[*Machine]flo
 	totalTicks := make(map[*Machine]Tftick, 0)
 	memUsg := make(map[*Machine]float64, 0)
 	for _, m := range lb.machines {
-		totalTicks[m] = m.sched.q.ticksInQueue()
+		totalTicks[m] = m.sched.getQ().ticksInQueue()
 		memUsg[m] = m.sched.memUsage()
 	}
 

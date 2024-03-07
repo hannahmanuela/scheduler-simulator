@@ -44,6 +44,15 @@ func (q *Queue) deq() *Proc {
 	return procSelected
 }
 
+func (q *Queue) remove(procToRemove *Proc) {
+	for i, currProc := range q.q {
+		if currProc == procToRemove {
+			q.q = append(q.q[:i], q.q[i+1:]...)
+			return
+		}
+	}
+}
+
 func (q *Queue) qlen() int {
 	return len(q.q)
 }

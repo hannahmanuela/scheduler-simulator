@@ -7,17 +7,34 @@ type Tmid int
 type Ttickmap map[Tmid]Tftick
 type Tprocmap map[Tmid]int
 
+type SchedulerType int
+
+const (
+	SHINJUKU SchedulerType = iota
+	PS
+	EDF
+)
+
 type Machine struct {
-	mid   Tmid
-	sched *Sched
+	mid       Tmid
+	sched     Sched
+	schedType SchedulerType
 }
 
-func newMachine(mid Tmid, lbConn chan *MachineMessages) *Machine {
-	sd := &Machine{
-		mid:   mid,
-		sched: newSched(lbConn, mid),
+func newMachine(schedType SchedulerType, mid Tmid, lbConn chan *MachineMessages) *Machine {
+	m := &Machine{
+		mid:       mid,
+		schedType: schedType,
 	}
-	return sd
+	switch schedType {
+	case SHINJUKU:
+		m.sched = newShinjukuSched(lbConn, mid)
+	case PS:
+		m.sched = newPSSched(lbConn, mid)
+	case EDF:
+		m.sched = newEDFSched(lbConn, mid)
+	}
+	return m
 }
 
 func (m Machine) String() string {

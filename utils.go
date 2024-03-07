@@ -12,6 +12,11 @@ type Tmem int
 
 type Tftick float64
 
+type TickBool struct {
+	tick Tftick
+	done bool
+}
+
 func (f Tftick) String() string {
 	return fmt.Sprintf("%.3fT", f)
 }
@@ -22,19 +27,6 @@ func sampleNormal(mu, sigma float64) float64 {
 
 type Number interface {
 	constraints.Integer | constraints.Float
-}
-
-func avg[T Number](list []T) float64 {
-	if len(list) == 0 {
-		return 0
-	}
-
-	var sum T
-	sum = 0
-	for _, val := range list {
-		sum += val
-	}
-	return float64(sum) / float64(len(list))
 }
 
 func findMaxIndex(numbers []float64) int {
