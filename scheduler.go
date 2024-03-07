@@ -6,4 +6,5 @@ type Sched interface {
 	String() string
 	memUsed() Tmem
 	memUsage() float64
+	getTicksUnusedLastTick() float64
 }

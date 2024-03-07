@@ -2,7 +2,6 @@ package slasched
 
 import (
 	"fmt"
-	"sort"
 )
 
 type PSSched struct {
@@ -10,18 +9,16 @@ type PSSched struct {
 	q                      *Queue
 	numProcsKilledLastTick int
 	ticksUnusedLastTick    Tftick
-	lbConn                 chan *MachineMessages
 	currTick               int
 	machineId              Tmid
 }
 
-func newPSSched(lbConn chan *MachineMessages, mid Tmid) *PSSched {
+func newPSSched(mid Tmid) *PSSched {
 	sd := &PSSched{
 		totMem:                 MAX_MEM,
 		q:                      newQueue(),
 		numProcsKilledLastTick: 0,
 		ticksUnusedLastTick:    0,
-		lbConn:                 lbConn,
 		currTick:               0,
 		machineId:              mid,
 	}
@@ -42,6 +39,10 @@ func (sd *PSSched) getQ() *Queue {
 	return sd.q
 }
 
+func (sd *PSSched) getTicksUnusedLastTick() float64 {
+	return float64(sd.ticksUnusedLastTick)
+}
+
 func (sd *PSSched) memUsage() float64 {
 	return float64(sd.memUsed()) / float64(sd.totMem)
 }
@@ -50,17 +51,6 @@ func (sd *PSSched) memUsed() Tmem {
 	sum := Tmem(0)
 	for _, p := range sd.q.q {
 		sum += p.memUsed()
-	}
-	return sum
-}
-
-// returns the amount of ticks of projected work that the scheduler has before it would get to the given deadline
-func (sd *PSSched) getTicksAhead(deadline Tftick) Tftick {
-	sum := Tftick(0)
-	for _, p := range sd.q.q {
-		if p.timeShouldBeDone < deadline {
-			sum += p.expectedCompLeft()
-		}
 	}
 	return sum
 }
@@ -111,18 +101,13 @@ func (sd *PSSched) runProcs() {
 			if !done {
 				// check if the memroy used by the proc sent us over the edge (and if yes, kill as needed)
 				if sd.memUsed() >= sd.totMem {
-					if VERBOSE_SCHEDULER {
-						fmt.Println("--> KILLING")
-					}
-					sd.kill()
+					fmt.Println("--> KILLING")
 				}
 				newQ = append(newQ, procToRun)
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				// then update the pressure metric with that value
 				procToRun.ticksPassed = procToRun.ticksPassed + (1 - ticksLeftToGive)
-				// don't need to wait if we are just telling it a proc is done
-				sd.lbConn <- &MachineMessages{PROC_DONE, procToRun, nil}
 			}
 		}
 
@@ -142,28 +127,4 @@ func (sd *PSSched) runProcs() {
 		}
 	}
 
-}
-
-func (sd *PSSched) kill() {
-
-	// sort by killable score :D
-	sort.Slice(sd.q.q, func(i, j int) bool {
-		return sd.q.q[i].killableScore() > sd.q.q[j].killableScore()
-	})
-
-	memOver := sd.memUsed() - MAX_MEM
-	memCut := Tmem(0)
-
-	// this threshold is kinda arbitrary
-	for memCut < memOver {
-		killed := sd.q.q[0]
-		sd.q.q = sd.q.q[1:]
-		memCut += killed.memUsed()
-		killed.migrated = true
-		// var wg sync.WaitGroup
-		// wg.Add(1)
-		sd.lbConn <- &MachineMessages{PROC_KILLED, killed, nil}
-		sd.numProcsKilledLastTick += 1
-		// wg.Wait()
-	}
 }

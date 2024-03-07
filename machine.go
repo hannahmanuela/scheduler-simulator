@@ -21,18 +21,11 @@ type Machine struct {
 	schedType SchedulerType
 }
 
-func newMachine(schedType SchedulerType, mid Tmid, lbConn chan *MachineMessages) *Machine {
+func newMachine(schedType SchedulerType, mid Tmid) *Machine {
 	m := &Machine{
 		mid:       mid,
 		schedType: schedType,
-	}
-	switch schedType {
-	case SHINJUKU:
-		m.sched = newShinjukuSched(lbConn, mid)
-	case PS:
-		m.sched = newPSSched(lbConn, mid)
-	case EDF:
-		m.sched = newEDFSched(lbConn, mid)
+		sched:     newShinjukuSched(mid),
 	}
 	return m
 }
