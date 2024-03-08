@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	SCHED_QUANT = 0.05 // 5 micro sec, given that 1 tick = 1 ms
+	SCHED_QUANT = 0.5 // 500 micro sec, given that 1 tick = 1 ms
 )
 
 type ShinjukuSched struct {
@@ -134,7 +134,7 @@ func (sd *ShinjukuSched) getNextProc() *Proc {
 	maxRatio := Tftick(0)
 
 	for _, proc := range sd.q.q {
-		ratio := (Tftick(sd.currTick) - proc.ticksPassed) / proc.effectiveSla()
+		ratio := proc.ticksPassed / proc.effectiveSla()
 		if ratio > Tftick(maxRatio) {
 			maxRatio = ratio
 			nextProc = proc

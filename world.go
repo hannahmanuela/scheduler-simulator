@@ -8,7 +8,7 @@ import (
 const (
 	MAX_MEM                      = 64000 // the amount of memory every machine (currently machine=core) will have, in MB
 	SCHEDULER_SLA_INCREMENT_SIZE = 10
-	ARRIVAL_RATE                 = 2   // number of procs per tick
+	ARRIVAL_RATE                 = 4   // number of procs per tick
 	THRESHOLD_MEM_USG_MIN        = 0.4 // avg memory usage below which we will remove a machine
 	THRESHOLD_NUM_TICKS_MIN      = 3   // avg number of ticks on a machine below which we will remove a machine
 	THRESHOLD_TICKS_AHEAD_MAX    = 1.5 // if the "best option" machine has more than this many ticks ahead, take a new machine

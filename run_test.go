@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	NTICK = 100
+	NTICK = 1000
 )
 
 func TestSanityCheck(t *testing.T) {
