@@ -146,7 +146,7 @@ func (sd *ShinjukuSched) getNextProc() *Proc {
 	maxRatio := Tftick(0)
 
 	for _, proc := range sd.q.q {
-		ratio := (Tftick(sd.currTick) - proc.ticksPassed) / proc.effectiveSla()
+		ratio := proc.ticksPassed / proc.effectiveSla()
 		if ratio > Tftick(maxRatio) {
 			maxRatio = ratio
 			nextProc = proc
