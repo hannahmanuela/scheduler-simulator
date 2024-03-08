@@ -10,12 +10,11 @@ import (
 
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
-	machineId        Tmid
+	machineId        Tid
 	ticksPassed      Tftick
 	timeShouldBeDone Tftick
 	procInternals    *ProcInternals
 	migrated         bool
-	timesReplenished int
 }
 
 func (p *Proc) String() string {
@@ -28,42 +27,26 @@ func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
 		ticksPassed:      0,
 		timeShouldBeDone: privProc.sla + Tftick(currTick),
 		procInternals:    privProc,
-		migrated:         false,
-		timesReplenished: 0}
+		migrated:         false}
 }
 
 // runs proc for the number of ticks passed or until the proc is done,
 // returning whether the proc is done and how many ticks were run, as well as whether the proc finished or was forcefully terminated for going over
-func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool, bool) {
-	ticksUsed, done := p.procInternals.runTillOutOrDone(toRun)
-
-	// if the proc is running over its sla, double it once, then kill the proc (or should it be allowed to replenish more times than that?)
-	if p.procInternals.compDone-p.effectiveSla() >= 0.0 {
-		if VERBOSE_PROC {
-			fmt.Printf("replenished: old sla: %v, new sla: %v\n", p.procInternals.sla, p.procInternals.sla*Tftick((2+p.timesReplenished)))
-		}
-		if p.timesReplenished > 0 {
-			return ticksUsed, true, true
-		} else {
-			p.timesReplenished += 1
-			p.timeShouldBeDone += p.procInternals.sla
-		}
-	}
-
-	return ticksUsed, done, false
+func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
+	return p.procInternals.runTillOutOrDone(toRun)
 }
 
-func (p *Proc) effectiveSla() Tftick {
-	return p.procInternals.sla * Tftick(1+p.timesReplenished)
+func (p *Proc) getSla() Tftick {
+	return p.procInternals.sla
 }
 
 // difference between the time that has passed since the proc started and its SLA
 func (p *Proc) timeLeftOnSLA() Tftick {
-	return p.effectiveSla() - p.ticksPassed
+	return p.getSla() - p.ticksPassed
 }
 
 func (p *Proc) expectedCompLeft() Tftick {
-	return p.effectiveSla() - p.procInternals.compDone
+	return p.getSla() - p.procInternals.compDone
 }
 
 func (p *Proc) memUsed() Tmem {
@@ -75,7 +58,7 @@ func (p *Proc) memUsed() Tmem {
 func (p *Proc) killableScore() float64 {
 	// higher score: memUsed, sla
 	// lower score: compDone
-	return float64(p.memUsed())*(float64(p.effectiveSla())) - float64(p.procInternals.compDone)
+	return float64(p.memUsed())*(float64(p.getSla())) - float64(p.procInternals.compDone)
 }
 
 // ------------------------------------------------------------------------------------------------

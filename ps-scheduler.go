@@ -2,7 +2,6 @@ package slasched
 
 import (
 	"fmt"
-	"sort"
 )
 
 type PSSched struct {
@@ -12,12 +11,12 @@ type PSSched struct {
 	ticksUnusedLastTick    Tftick
 	lbConn                 chan *MachineMessages
 	currTick               int
-	machineId              Tmid
+	machineId              Tid
 }
 
-func newPSSched(lbConn chan *MachineMessages, mid Tmid) *PSSched {
+func newPSSched(lbConn chan *MachineMessages, mid Tid) *PSSched {
 	sd := &PSSched{
-		totMem:                 MAX_MEM,
+		totMem:                 MAX_MEM_PER_CORE,
 		q:                      newQueue(),
 		numProcsKilledLastTick: 0,
 		ticksUnusedLastTick:    0,
@@ -93,7 +92,7 @@ func (sd *PSSched) runProcs() {
 
 		for _, procToRun := range sd.q.q {
 
-			ticksUsed, done, _ := procToRun.runTillOutOrDone(ticksLeftToGive / Tftick(numProcs))
+			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftToGive / Tftick(numProcs))
 			ticksLeftToGive -= ticksUsed
 			if VERBOSE_SCHEDULER {
 				fmt.Printf("used %v ticks\n", ticksUsed)
@@ -114,15 +113,12 @@ func (sd *PSSched) runProcs() {
 					if VERBOSE_SCHEDULER {
 						fmt.Println("--> KILLING")
 					}
-					sd.kill()
 				}
 				newQ = append(newQ, procToRun)
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				// then update the pressure metric with that value
 				procToRun.ticksPassed = procToRun.ticksPassed + (1 - ticksLeftToGive)
-				// don't need to wait if we are just telling it a proc is done
-				sd.lbConn <- &MachineMessages{PROC_DONE, procToRun, nil}
 			}
 		}
 
@@ -142,28 +138,4 @@ func (sd *PSSched) runProcs() {
 		}
 	}
 
-}
-
-func (sd *PSSched) kill() {
-
-	// sort by killable score :D
-	sort.Slice(sd.q.q, func(i, j int) bool {
-		return sd.q.q[i].killableScore() > sd.q.q[j].killableScore()
-	})
-
-	memOver := sd.memUsed() - MAX_MEM
-	memCut := Tmem(0)
-
-	// this threshold is kinda arbitrary
-	for memCut < memOver {
-		killed := sd.q.q[0]
-		sd.q.q = sd.q.q[1:]
-		memCut += killed.memUsed()
-		killed.migrated = true
-		// var wg sync.WaitGroup
-		// wg.Add(1)
-		sd.lbConn <- &MachineMessages{PROC_KILLED, killed, nil}
-		sd.numProcsKilledLastTick += 1
-		// wg.Wait()
-	}
 }

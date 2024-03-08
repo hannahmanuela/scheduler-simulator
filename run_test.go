@@ -9,8 +9,9 @@ const (
 )
 
 func TestSanityCheck(t *testing.T) {
-	numMachines := 20
-	w := newWorld(numMachines)
+	numMachines := 1
+	numCoresPerMachine := 8
+	w := newWorld(numMachines, numCoresPerMachine)
 	w.app = newSimpleWebsite()
 	w.Run(NTICK)
 

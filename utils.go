@@ -28,21 +28,3 @@ func sampleNormal(mu, sigma float64) float64 {
 type Number interface {
 	constraints.Integer | constraints.Float
 }
-
-func findMaxIndex(numbers []float64) int {
-	if len(numbers) == 0 {
-		return -1
-	}
-
-	maxIndex := 0
-	maxValue := numbers[0]
-
-	for i, value := range numbers {
-		if value > maxValue {
-			maxIndex = i
-			maxValue = value
-		}
-	}
-
-	return maxIndex
-}
