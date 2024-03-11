@@ -56,11 +56,3 @@ func (q *Queue) remove(procToRemove *Proc) {
 func (q *Queue) qlen() int {
 	return len(q.q)
 }
-
-func (q *Queue) ticksInQueue() Tftick {
-	ticks := Tftick(0)
-	for _, t := range q.q {
-		ticks += t.expectedCompLeft()
-	}
-	return ticks
-}

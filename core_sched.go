@@ -6,7 +6,7 @@ import (
 
 const (
 	SCHED_QUANT    = 0.05
-	THRESHOLD_QLEN = 2
+	THRESHOLD_QLEN = 5
 )
 
 type SchedulerType int
@@ -23,9 +23,10 @@ type CoreSched struct {
 	dispatcherConn chan *CoreMessages
 	currTick       int
 	machineId      Tid
+	currSchedType  SchedulerType
 }
 
-func newCoreSched(dispatcherConn chan *CoreMessages, mid Tid, coreId Tid) *CoreSched {
+func newCoreSched(dispatcherConn chan *CoreMessages, mid Tid, coreId Tid, schedType SchedulerType) *CoreSched {
 	cs := &CoreSched{
 		machineId:      mid,
 		coreId:         coreId,
@@ -33,6 +34,7 @@ func newCoreSched(dispatcherConn chan *CoreMessages, mid Tid, coreId Tid) *CoreS
 		coreQ:          newQueue(),
 		dispatcherConn: dispatcherConn,
 		currTick:       0,
+		currSchedType:  schedType,
 	}
 	return cs
 }
@@ -49,22 +51,8 @@ func (cs *CoreSched) String() string {
 
 func (cs *CoreSched) printAllProcs() {
 	for _, p := range cs.coreQ.q {
-		fmt.Printf("current: %v, %v, %v, %v, %v\n", cs.currTick, cs.machineId, float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.procInternals.compDone))
+		fmt.Printf("current: %v, %v, %v, %v, %v, %v\n", cs.currTick, cs.machineId, cs.coreId, float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.procInternals.compDone))
 	}
-}
-
-func (cs *CoreSched) checkIfGotMessage() {
-	select {
-	case msg := <-cs.dispatcherConn:
-		fmt.Println("looked for messages on core and had one")
-		switch msg.msgType {
-		case PUSH_PROC:
-			cs.coreQ.enq(msg.proc)
-		}
-	default:
-		return
-	}
-
 }
 
 func (cs *CoreSched) memUsage() float64 {
@@ -80,24 +68,33 @@ func (cs *CoreSched) memUsed() Tmem {
 }
 
 func (cs *CoreSched) tick() {
-	cs.currTick += 1
-	if len(cs.coreQ.q) == 0 {
-		return
+
+	procToTicksMap := make(map[*Proc]TickBool, 0)
+	switch cs.currSchedType {
+	case SHINJUKU:
+		procToTicksMap = cs.runProcsShinjuku()
+	case PS:
+		procToTicksMap = cs.runProcsPS()
 	}
-	cs.runProcs()
+
+	if VERBOSE_SCHED_STATS {
+		for proc, ticks := range procToTicksMap {
+			fmt.Printf("sched: %v, %v, %v, %v, %v, %v, %v\n", cs.currTick, cs.machineId, cs.coreId, float64(proc.procInternals.sla), float64(proc.procInternals.compDone), float64(proc.ticksPassed), float64(ticks.tick))
+		}
+	}
+
 	for _, currProc := range cs.coreQ.q {
 		currProc.ticksPassed += 1
 	}
+
+	cs.currTick += 1
 }
 
+// right now only shinjuku cores call this
 func (cs *CoreSched) potentiallyGetWork() {
-	// see if core was sent work
-	cs.checkIfGotMessage()
-
 	// if we don't have any, ask for work
 	if cs.coreQ.qlen() < THRESHOLD_QLEN {
-		cs.dispatcherConn <- &CoreMessages{NEED_WORK, nil}
-		fmt.Println("core asking for work")
+		cs.dispatcherConn <- &CoreMessages{NEED_WORK, nil, cs.currSchedType}
 		msg := <-cs.dispatcherConn
 		if msg.proc != nil {
 			cs.coreQ.enq(msg.proc)
@@ -105,8 +102,8 @@ func (cs *CoreSched) potentiallyGetWork() {
 	}
 }
 
-// do 1 tick of computation, spread across procs in q, and across different cores
-func (cs *CoreSched) runProcs() {
+// do 1 tick of computation, spread across procs in q
+func (cs *CoreSched) runProcsShinjuku() map[*Proc]TickBool {
 
 	cs.potentiallyGetWork()
 
@@ -115,7 +112,7 @@ func (cs *CoreSched) runProcs() {
 
 	for ticksLeftToGive-Tftick(0.0001) > 0.0 && cs.coreQ.qlen() > 0 {
 		if VERBOSE_SCHEDULER {
-			fmt.Printf("scheduling round: ticksLeftToGive is %v, so diff to 0.001 is %v\n", ticksLeftToGive, ticksLeftToGive-Tftick(0.001))
+			fmt.Printf("scheduling round: ticksLeftToGive is %v\n", ticksLeftToGive)
 		}
 
 		// get proc to run, which will be the one at the head of the q (earliest deadline first)
@@ -147,23 +144,64 @@ func (cs *CoreSched) runProcs() {
 			// remove proc from q
 			cs.coreQ.remove(procToRun)
 
-			fmt.Printf("done: %v, %v, %v, %v, %v, %v\n", cs.currTick, cs.machineId, procToRun.procInternals.procType, float64(procToRun.procInternals.sla), float64(procToRun.ticksPassed), float64(procToRun.procInternals.actualComp))
+			fmt.Printf("done: %v, %v, %v, %v, %v, %v\n", cs.currTick, cs.machineId, cs.coreId, float64(procToRun.procInternals.sla), float64(procToRun.ticksPassed), float64(procToRun.procInternals.actualComp))
 		}
 
 		cs.potentiallyGetWork()
 
 	}
 
-	if VERBOSE_SCHED_STATS {
-		for proc, ticks := range procToTicksMap {
-			if ticks.done {
-				fmt.Printf("sched: %v, %v, %v, %v, %v, %v, 1\n", cs.currTick, cs.machineId, float64(proc.procInternals.sla), float64(proc.procInternals.compDone), float64(proc.ticksPassed), float64(ticks.tick))
+	return procToTicksMap
+}
+
+func (cs *CoreSched) runProcsPS() map[*Proc]TickBool {
+
+	ticksLeftToGive := Tftick(1)
+	procToTicksMap := make(map[*Proc]TickBool, 0)
+
+	for ticksLeftToGive-Tftick(0.001) > 0.0 && cs.coreQ.qlen() > 0 {
+		if VERBOSE_SCHEDULER {
+			fmt.Printf("scheduling round: ticksLeftToGive is %v, so diff to 0.001 is %v\n", ticksLeftToGive, ticksLeftToGive-Tftick(0.001))
+		}
+
+		numProcs := cs.coreQ.qlen()
+		newQ := make([]*Proc, 0)
+
+		for _, procToRun := range cs.coreQ.q {
+
+			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftToGive / Tftick(numProcs))
+			ticksLeftToGive -= ticksUsed
+			if VERBOSE_SCHEDULER {
+				fmt.Printf("used %v ticks\n", ticksUsed)
+			}
+
+			// add ticks used to the tick map
+			if val, ok := procToTicksMap[procToRun]; ok {
+				val.tick += ticksUsed
+				val.done = done
+				procToTicksMap[procToRun] = val
 			} else {
-				fmt.Printf("sched: %v, %v, %v, %v, %v, %v, 0\n", cs.currTick, cs.machineId, float64(proc.procInternals.sla), float64(proc.procInternals.compDone), float64(proc.ticksPassed), float64(ticks.tick))
+				procToTicksMap[procToRun] = TickBool{ticksUsed, done}
+			}
+
+			if !done {
+				// check if the memroy used by the proc sent us over the edge (and if yes, kill as needed)
+				if cs.memUsed() >= cs.totMem {
+					fmt.Println("--> OUT OF MEMORY")
+				}
+				newQ = append(newQ, procToRun)
+			} else {
+				// if the proc is done, update the ticksPassed to be exact for metrics etc
+				// then update the pressure metric with that value
+				procToRun.ticksPassed = procToRun.ticksPassed + (1 - ticksLeftToGive)
 			}
 		}
+
+		cs.coreQ.q = newQ
+
 	}
 
+	return procToTicksMap
 }
 
 func (cs *CoreSched) getNextProc() *Proc {

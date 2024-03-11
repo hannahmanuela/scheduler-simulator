@@ -5,9 +5,9 @@ import (
 )
 
 const (
-	MAX_MEM_PER_CORE             = 11000 // the amount of memory every machine (currently machine=core) will have, in MB
+	MAX_MEM_PER_CORE             = 32000 // the amount of memory every machine (currently machine=core) will have, in MB
 	SCHEDULER_SLA_INCREMENT_SIZE = 10
-	ARRIVAL_RATE                 = 15  // number of procs per tick
+	ARRIVAL_RATE                 = 8   // number of procs per tick
 	THRESHOLD_MEM_USG_MIN        = 0.4 // avg memory usage below which we will remove a machine
 	THRESHOLD_NUM_TICKS_MIN      = 3   // avg number of ticks on a machine below which we will remove a machine
 	THRESHOLD_TICKS_AHEAD_MAX    = 1.5 // if the "best option" machine has more than this many ticks ahead, take a new machine
@@ -81,7 +81,6 @@ func (w *World) printAllProcs() {
 }
 
 func (w *World) Tick() {
-	w.currTick += 1
 	if VERBOSE_LB_STATS {
 		w.printAllProcs()
 	}
@@ -97,6 +96,7 @@ func (w *World) Tick() {
 	if VERBOSE_MACHINES {
 		fmt.Printf("after compute: %v\n", w)
 	}
+	w.currTick += 1
 }
 
 func (w *World) Run(nTick int) {

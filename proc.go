@@ -40,25 +40,8 @@ func (p *Proc) getSla() Tftick {
 	return p.procInternals.sla
 }
 
-// difference between the time that has passed since the proc started and its SLA
-func (p *Proc) timeLeftOnSLA() Tftick {
-	return p.getSla() - p.ticksPassed
-}
-
-func (p *Proc) expectedCompLeft() Tftick {
-	return p.getSla() - p.procInternals.compDone
-}
-
 func (p *Proc) memUsed() Tmem {
 	return p.procInternals.memUsed()
-}
-
-// returns a measure of how killable a proc is
-// (based on how much memory its using, how long it has already been running, and what its sla is)
-func (p *Proc) killableScore() float64 {
-	// higher score: memUsed, sla
-	// lower score: compDone
-	return float64(p.memUsed())*(float64(p.getSla())) - float64(p.procInternals.compDone)
 }
 
 // ------------------------------------------------------------------------------------------------
