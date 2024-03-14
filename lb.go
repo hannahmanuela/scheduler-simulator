@@ -65,7 +65,8 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 		switch msg.msgType {
 		case PROC_DONE:
 			if VERBOSE_LB_STATS {
-				fmt.Printf("done: %v, %v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp), msg.proc.timesReplenished)
+				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp), msg.proc.timesReplenished)
+				logWrite(DONE_PROCS, toWrite)
 			}
 			if _, ok := lb.procTypeProfiles[msg.proc.procType]; ok {
 				lb.procTypeProfiles[msg.proc.procType].updateMem(msg.proc.memUsed())
@@ -100,7 +101,8 @@ func (lb *LoadBalancer) placeProcs() {
 		p.machineId = machineToUse.mid
 		machineToUse.sched.q.enq(p)
 		if VERBOSE_LB_STATS {
-			fmt.Printf("adding: %v, %v, %v, %v, %v\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
+			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
+			logWrite(ADDED_PROCS, toWrite)
 		}
 		p = lb.getProc()
 	}

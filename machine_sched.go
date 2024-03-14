@@ -43,7 +43,10 @@ func (sd *Sched) runCoreConn(coreChan chan *CoreMessages) {
 		msg := <-coreChan
 		switch msg.msgType {
 		case NEED_WORK:
+			// TODO: this could do cross core work stealing if there isn't any left on machine q
 			coreChan <- &CoreMessages{PUSH_PROC, sd.q.deq()}
+		case PROC_DONE_CORE:
+			sd.lbConn <- &MachineMessages{PROC_DONE, msg.proc}
 		}
 	}
 

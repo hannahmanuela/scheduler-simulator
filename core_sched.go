@@ -153,11 +153,13 @@ func (cs *CoreSched) runProcs() {
 	if VERBOSE_SCHED_STATS {
 		for proc, ticks := range procToTicksMap {
 			if ticks.done {
-				fmt.Printf("sched: %v, %v, %v, %v, %v, %v, %v, 1\n", cs.currTick, cs.machineId, cs.coreId,
+				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, 1\n", cs.currTick, cs.machineId, cs.coreId,
 					float64(proc.procInternals.sla), float64(proc.compUsed()), float64(proc.ticksPassed), float64(ticks.tick))
+				logWrite(SCHED, toWrite)
 			} else {
-				fmt.Printf("sched: %v, %v, %v, %v, %v, %v, %v, 0\n", cs.currTick, cs.machineId, cs.coreId,
+				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, 0\n", cs.currTick, cs.machineId, cs.coreId,
 					float64(proc.procInternals.sla), float64(proc.compUsed()), float64(proc.ticksPassed), float64(ticks.tick))
+				logWrite(SCHED, toWrite)
 			}
 		}
 	}

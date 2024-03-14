@@ -61,7 +61,9 @@ func (w *World) compute() {
 func (w *World) printAllProcs() {
 	for _, m := range w.machines {
 		for _, p := range m.sched.q.getQ() {
-			fmt.Printf("current: %v, %v, %v, %v, %v\n", w.currTick, m.mid, float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.compUsed()))
+			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", w.currTick, m.mid,
+				float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.compUsed()))
+			logWrite(CURR_PROCS, toWrite)
 		}
 	}
 }
@@ -69,7 +71,9 @@ func (w *World) printAllProcs() {
 func (w *World) printTickStats() {
 	for _, m := range w.lb.machines {
 		for _, core := range m.sched.coreScheds {
-			fmt.Printf("usage: %v, %v, %v, 1, %.2f, %.2f\n", w.currTick, m.mid, core.coreId, math.Abs(float64(core.ticksUnusedLastTick)), core.memUsage())
+			toWrite := fmt.Sprintf("%v, %v, %v, 1, %.2f, %.2f\n", w.currTick, m.mid, core.coreId,
+				math.Abs(float64(core.ticksUnusedLastTick)), core.memUsage())
+			logWrite(USAGE, toWrite)
 		}
 	}
 }
@@ -91,8 +95,7 @@ func (w *World) Tick(numProcs int) {
 }
 
 func (w *World) Run(nTick int) {
-	numProcs := 5
 	for i := 0; i < nTick; i++ {
-		w.Tick(numProcs)
+		w.Tick(6)
 	}
 }
