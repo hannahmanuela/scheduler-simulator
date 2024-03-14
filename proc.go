@@ -14,8 +14,8 @@ type Proc struct {
 	ticksPassed      Tftick
 	timeShouldBeDone Tftick
 	procInternals    *ProcInternals
-	migrated         bool
 	timesReplenished int
+	procType         ProcType
 }
 
 func (p *Proc) String() string {
@@ -28,7 +28,6 @@ func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
 		ticksPassed:      0,
 		timeShouldBeDone: privProc.sla + Tftick(currTick),
 		procInternals:    privProc,
-		migrated:         false,
 		timesReplenished: 0}
 }
 
@@ -39,10 +38,8 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool, bool) {
 
 	// if the proc is running over its sla, double it once, then kill the proc (or should it be allowed to replenish more times than that?)
 	if p.procInternals.compDone-p.effectiveSla() >= 0.0 {
-		if VERBOSE_PROC {
-			fmt.Printf("replenished: old sla: %v, new sla: %v\n", p.procInternals.sla, p.procInternals.sla*Tftick((2+p.timesReplenished)))
-		}
 		if p.timesReplenished > 0 {
+			// pretend the proc is done, even if its not, if we've already replenished it
 			return ticksUsed, true, true
 		} else {
 			p.timesReplenished += 1
@@ -57,11 +54,6 @@ func (p *Proc) effectiveSla() Tftick {
 	return p.procInternals.sla * Tftick(1+p.timesReplenished)
 }
 
-// difference between the time that has passed since the proc started and its SLA
-func (p *Proc) timeLeftOnSLA() Tftick {
-	return p.effectiveSla() - p.ticksPassed
-}
-
 func (p *Proc) expectedCompLeft() Tftick {
 	return p.effectiveSla() - p.procInternals.compDone
 }
@@ -70,12 +62,8 @@ func (p *Proc) memUsed() Tmem {
 	return p.procInternals.memUsed()
 }
 
-// returns a measure of how killable a proc is
-// (based on how much memory its using, how long it has already been running, and what its sla is)
-func (p *Proc) killableScore() float64 {
-	// higher score: memUsed, sla
-	// lower score: compDone
-	return float64(p.memUsed())*(float64(p.effectiveSla())) - float64(p.procInternals.compDone)
+func (p *Proc) compUsed() Tftick {
+	return p.procInternals.compDone
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -117,9 +105,6 @@ func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 
 	if workLeft <= toRun {
 		p.compDone = p.actualComp
-		if VERBOSE_PROC {
-			fmt.Printf("proc done: had %v work left\n", workLeft)
-		}
 		return workLeft, true
 	} else {
 		p.compDone += toRun
@@ -127,7 +112,6 @@ func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 		// p.memUsed += Tmem(memUsage)
 		// enforcing 0 <= memUsed <= MAX_MEM
 		// p.memUsed = Tmem(math.Min(math.Max(float64(p.memUsed), 0), MAX_MEM))
-		// fmt.Printf("adding %v memory, for a total of %v\n", memUsage, p.memUsed)
 		return toRun, false
 	}
 }

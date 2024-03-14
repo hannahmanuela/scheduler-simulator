@@ -68,14 +68,3 @@ func (q *Queue) qlen() int {
 
 	return len(q.q)
 }
-
-func (q *Queue) ticksInQueue() Tftick {
-	q.m.RLock()
-	defer q.m.RUnlock()
-
-	ticks := Tftick(0)
-	for _, t := range q.q {
-		ticks += t.expectedCompLeft()
-	}
-	return ticks
-}

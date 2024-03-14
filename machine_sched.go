@@ -9,7 +9,7 @@ const (
 type Sched struct {
 	machineId  Tid
 	numCores   int
-	coreScheds []*CoreSched
+	coreScheds map[Tid]*CoreSched
 	q          *Queue
 	lbConn     chan *MachineMessages
 	currTick   int
@@ -23,10 +23,10 @@ func newSched(lbConn chan *MachineMessages, mid Tid, numCores int) *Sched {
 		lbConn:    lbConn,
 		currTick:  0,
 	}
-	coreScheds := []*CoreSched{}
+	coreScheds := map[Tid]*CoreSched{}
 	for i := 0; i < numCores; i++ {
 		coreChan := make(chan *CoreMessages)
-		coreScheds = append(coreScheds, newCoreSched(coreChan, mid, Tid(i)))
+		coreScheds[Tid(i)] = newCoreSched(coreChan, mid, Tid(i))
 		go sd.runCoreConn(coreChan)
 	}
 	sd.coreScheds = coreScheds
@@ -61,21 +61,18 @@ func (sd *Sched) tick() {
 	}
 }
 
-func (sd *Sched) memUsage() float64 {
+func (sd *Sched) memFree() float64 {
 	memFree := Tmem(0)
 	for _, core := range sd.coreScheds {
 		memFree += MAX_MEM_PER_CORE - core.memUsed()
 	}
-	return float64(memFree / (MAX_MEM_PER_CORE * Tmem(sd.numCores)))
+	return float64(memFree)
 }
 
-func (sd *Sched) getTicksAhead(deadline Tftick) Tftick {
-	minTicksAhead := Tftick(0)
+func (sd *Sched) ticksInQ() float64 {
+	totalTicks := Tftick(0)
 	for _, core := range sd.coreScheds {
-		coreTicksAhead := core.getTicksAhead(deadline)
-		if coreTicksAhead < minTicksAhead {
-			minTicksAhead = coreTicksAhead
-		}
+		totalTicks += core.ticksInQ()
 	}
-	return minTicksAhead
+	return float64(totalTicks)
 }
