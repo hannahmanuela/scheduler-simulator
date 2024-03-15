@@ -13,10 +13,10 @@ type Machine struct {
 	numCores int
 }
 
-func newMachine(mid Tid, numCores int, lbConn chan *MachineMessages) *Machine {
+func newMachine(mid Tid, numCores int, lbConnSend chan *Message, lbConnRecv chan *Message) *Machine {
 	sd := &Machine{
 		mid:      mid,
-		sched:    newSched(lbConn, mid, numCores),
+		sched:    newSched(lbConnSend, lbConnRecv, mid, numCores),
 		numCores: numCores,
 	}
 	return sd

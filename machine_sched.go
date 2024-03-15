@@ -1,35 +1,48 @@
 package slasched
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 const (
-	EWMA_ALPHA = 0.2
+	SLA_PUSH_THRESHOLD = 0.01 // 1 tick = 100 ms ==> 1 ms (see website.go)
 )
 
 type Sched struct {
-	machineId  Tid
-	numCores   int
-	coreScheds map[Tid]*CoreSched
-	q          *Queue
-	lbConn     chan *MachineMessages
-	currTick   int
+	machineId    Tid
+	numCores     int
+	coreScheds   map[Tid]*CoreSched
+	coreConnRecv chan *Message
+	coreConnSend map[Tid]chan *Message
+	q            *Queue
+	lbConnSend   chan *Message // channel to send messages to LB
+	lbConnRecv   chan *Message // channel this machine recevies messages on from the LB
+	currTick     int
 }
 
-func newSched(lbConn chan *MachineMessages, mid Tid, numCores int) *Sched {
+func newSched(lbConnSend chan *Message, lbConnRecv chan *Message, mid Tid, numCores int) *Sched {
 	sd := &Sched{
-		machineId: mid,
-		numCores:  numCores,
-		q:         newQueue(),
-		lbConn:    lbConn,
-		currTick:  0,
+		machineId:    mid,
+		numCores:     numCores,
+		q:            newQueue(),
+		lbConnSend:   lbConnSend,
+		lbConnRecv:   lbConnRecv,
+		coreConnSend: map[Tid]chan *Message{},
+		currTick:     0,
 	}
+	coreChanRecv := make(chan *Message)
+	sd.coreConnRecv = coreChanRecv
 	coreScheds := map[Tid]*CoreSched{}
 	for i := 0; i < numCores; i++ {
-		coreChan := make(chan *CoreMessages)
-		coreScheds[Tid(i)] = newCoreSched(coreChan, mid, Tid(i))
-		go sd.runCoreConn(coreChan)
+		coreId := Tid(i)
+		coreChanSend := make(chan *Message)
+		coreScheds[coreId] = newCoreSched(coreChanRecv, coreChanSend, mid, coreId)
+		sd.coreConnSend[coreId] = coreChanSend
 	}
 	sd.coreScheds = coreScheds
+	go sd.runLBConn()
+	go sd.runCoreConn()
 	return sd
 }
 
@@ -37,16 +50,44 @@ func (sd *Sched) String() string {
 	return fmt.Sprintf("machine scheduler: %v", sd.machineId)
 }
 
-func (sd *Sched) runCoreConn(coreChan chan *CoreMessages) {
+func (sd *Sched) runLBConn() {
+
+	// listen to messages
+	for {
+		msg := <-sd.lbConnRecv
+		switch msg.msgType {
+		case LB_M_PLACE_PROC:
+			if msg.proc.effectiveSla() < SLA_PUSH_THRESHOLD {
+				// place on core with min ticksInQ
+				minVal := Tftick(math.Inf(1))
+				var coreToUse *CoreSched
+				for _, c := range sd.coreScheds {
+					if c.ticksInQ() < minVal {
+						minVal = c.ticksInQ()
+						coreToUse = c
+					}
+				}
+				// is this safe? -> yes, because I only add in between ticks, not while they're running
+				sd.coreScheds[coreToUse.coreId].q.enq(msg.proc)
+			} else {
+				sd.q.enq(msg.proc)
+			}
+			msg.wg.Done()
+		}
+	}
+
+}
+
+func (sd *Sched) runCoreConn() {
 
 	for {
-		msg := <-coreChan
+		msg := <-sd.coreConnRecv
 		switch msg.msgType {
-		case NEED_WORK:
+		case C_M_NEED_WORK:
 			// TODO: this could do cross core work stealing if there isn't any left on machine q
-			coreChan <- &CoreMessages{PUSH_PROC, sd.q.deq()}
-		case PROC_DONE_CORE:
-			sd.lbConn <- &MachineMessages{PROC_DONE, msg.proc}
+			sd.coreConnSend[msg.sender] <- &Message{sd.machineId, M_C_PUSH_PROC, sd.q.deq(), nil}
+		case C_M_PROC_DONE:
+			sd.lbConnSend <- &Message{sd.machineId, M_LB_PROC_DONE, msg.proc, nil}
 		}
 	}
 
@@ -74,6 +115,9 @@ func (sd *Sched) memFree() float64 {
 
 func (sd *Sched) ticksInQ() float64 {
 	totalTicks := Tftick(0)
+	for _, p := range sd.q.getQ() {
+		totalTicks += p.expectedCompLeft()
+	}
 	for _, core := range sd.coreScheds {
 		totalTicks += core.ticksInQ()
 	}

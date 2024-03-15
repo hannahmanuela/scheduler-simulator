@@ -4,49 +4,45 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sync"
 )
 
-type MachineMsgType int
+type MsgType int
 
 const (
-	PROC_DONE MachineMsgType = iota
-	PROC_KILLED
+	M_LB_PROC_DONE  MsgType = iota // machine -> lb; proc is done
+	LB_M_PLACE_PROC                // lb -> machine; placing proc on machine
+	C_M_NEED_WORK                  // core -> machine; core is out of work
+	C_M_PROC_DONE                  // core -> machine; proc is done
+	M_C_PUSH_PROC                  // machine -> core; proc for core
 )
 
-type CoreMsgType int
-
-const (
-	NEED_WORK CoreMsgType = iota // msg by core bc it is out of work
-	PUSH_PROC                    // msg by the controller to the core with a proc it should take
-	PROC_DONE_CORE
-)
-
-type MachineMessages struct {
-	msgType MachineMsgType
+type Message struct {
+	sender  Tid
+	msgType MsgType
 	proc    *Proc
-}
-
-type CoreMessages struct {
-	msgType CoreMsgType
-	proc    *Proc
+	wg      *sync.WaitGroup
 }
 
 type LoadBalancer struct {
 	machines         map[Tid]*Machine
 	procq            *Queue
-	machineConn      chan *MachineMessages
+	machineConnRecv  chan *Message         // listen for messages from machines
+	machineConnSend  map[Tid]chan *Message // send messages to machine
 	currTick         int
 	procTypeProfiles map[ProcType]*ProvProcDistribution
 }
 
-func newLoadBalancer(machines map[Tid]*Machine, machineConn chan *MachineMessages) *LoadBalancer {
+func newLoadBalancer(machines map[Tid]*Machine, lbSendToMachines map[Tid]chan *Message, lbRecv chan *Message) *LoadBalancer {
 	lb := &LoadBalancer{
 		machines:         machines,
 		procq:            &Queue{q: make([]*Proc, 0)},
-		machineConn:      machineConn,
+		machineConnRecv:  lbRecv,
+		machineConnSend:  lbSendToMachines,
 		currTick:         0,
 		procTypeProfiles: make(map[ProcType]*ProvProcDistribution),
 	}
+
 	go lb.listenForMachineMessages()
 	return lb
 }
@@ -61,9 +57,9 @@ func (lb *LoadBalancer) MachinesString() string {
 
 func (lb *LoadBalancer) listenForMachineMessages() {
 	for {
-		msg := <-lb.machineConn
+		msg := <-lb.machineConnRecv
 		switch msg.msgType {
-		case PROC_DONE:
+		case M_LB_PROC_DONE:
 			if VERBOSE_LB_STATS {
 				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp), msg.proc.timesReplenished)
 				logWrite(DONE_PROCS, toWrite)
@@ -99,7 +95,10 @@ func (lb *LoadBalancer) placeProcs() {
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
-		machineToUse.sched.q.enq(p)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		lb.machineConnSend[machineToUse.mid] <- &Message{-1, LB_M_PLACE_PROC, p, &wg}
+		wg.Wait()
 		if VERBOSE_LB_STATS {
 			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
 			logWrite(ADDED_PROCS, toWrite)

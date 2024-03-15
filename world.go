@@ -24,12 +24,15 @@ type World struct {
 func newWorld(numMachines int, numCores int) *World {
 	w := &World{}
 	w.machines = map[Tid]*Machine{}
-	lbMachineConn := make(chan *MachineMessages)
+	lbMachineConn := make(chan *Message) // channel all machines send on to lb
+	machineToLBConns := map[Tid]chan *Message{}
 	for i := 0; i < numMachines; i++ {
 		mid := Tid(i)
-		w.machines[Tid(i)] = newMachine(mid, numCores, lbMachineConn)
+		chanMacheineToLB := make(chan *Message)
+		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
+		w.machines[Tid(i)] = newMachine(mid, numCores, lbMachineConn, chanMacheineToLB)
 	}
-	w.lb = newLoadBalancer(w.machines, lbMachineConn)
+	w.lb = newLoadBalancer(w.machines, machineToLBConns, lbMachineConn)
 	return w
 }
 

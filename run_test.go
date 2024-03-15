@@ -2,10 +2,11 @@ package slasched
 
 import (
 	"testing"
+	"time"
 )
 
 const (
-	NTICK = 300
+	NTICK = 1000
 )
 
 func TestSanityCheck(t *testing.T) {
@@ -14,6 +15,7 @@ func TestSanityCheck(t *testing.T) {
 	emptyFiles()
 	w := newWorld(numMachines, numCores)
 	w.app = newSimpleWebsite()
+	// wait for channels to set up, etc
+	time.Sleep(100 * time.Millisecond)
 	w.Run(NTICK)
-
 }

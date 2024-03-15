@@ -5,24 +5,27 @@ import (
 )
 
 const (
-	THRESHOLD_QLEN = 2
+	THRESHOLD_QLEN       = 1
+	TICK_SCHED_THRESHOLD = 0.00001 // given that 1 tick = 100ms (see website.go)
 )
 
 type CoreSched struct {
 	totMem              Tmem
 	q                   *Queue
 	ticksUnusedLastTick Tftick
-	machineSchedConn    chan *CoreMessages
+	machineConnSend     chan *Message
+	machineConnRecv     chan *Message
 	currTick            int
 	machineId           Tid
 	coreId              Tid
 }
 
-func newCoreSched(machineSchedConn chan *CoreMessages, mid Tid, cid Tid) *CoreSched {
+func newCoreSched(machineConnSend chan *Message, machineConnRecv chan *Message, mid Tid, cid Tid) *CoreSched {
 	sd := &CoreSched{
 		totMem:              MAX_MEM_PER_CORE,
 		q:                   newQueue(),
-		machineSchedConn:    machineSchedConn,
+		machineConnSend:     machineConnSend,
+		machineConnRecv:     machineConnRecv,
 		ticksUnusedLastTick: 0,
 		currTick:            0,
 		machineId:           mid,
@@ -39,20 +42,6 @@ func (cs *CoreSched) String() string {
 	}
 	str += "}"
 	return str
-}
-
-func (cd *CoreSched) checkIfGotMessage() {
-	select {
-	case msg := <-cd.machineSchedConn:
-		fmt.Println("looked for messages on core and had one")
-		switch msg.msgType {
-		case PUSH_PROC:
-			cd.q.enq(msg.proc)
-		}
-	default:
-		return
-	}
-
 }
 
 func (cs *CoreSched) memUsage() float64 {
@@ -88,26 +77,27 @@ type TickBool struct {
 	done bool
 }
 
+func (cs *CoreSched) tryGetWork() {
+	if cs.q.qlen() < THRESHOLD_QLEN {
+		cs.machineConnSend <- &Message{cs.coreId, C_M_NEED_WORK, nil, nil}
+		msg := <-cs.machineConnRecv
+		if msg.proc != nil {
+			cs.q.enq(msg.proc)
+		}
+	}
+}
+
 // do 1 tick of computation
 // run procs in q, asking for more if we don't have any or run out of them in the middle
 // deq from q then run for an amount of time inversely prop to expectedComputationLeft
 // TODO: the way I ask for work right now is stupid I should batch things?
 func (cs *CoreSched) runProcs() {
-
-	cs.checkIfGotMessage()
-
-	if cs.q.qlen() < THRESHOLD_QLEN {
-		cs.machineSchedConn <- &CoreMessages{NEED_WORK, nil}
-		msg := <-cs.machineSchedConn
-		if msg.proc != nil {
-			cs.q.enq(msg.proc)
-		}
-	}
+	cs.tryGetWork()
 
 	ticksLeftToGive := Tftick(1)
 	procToTicksMap := make(map[*Proc]TickBool, 0)
 
-	for ticksLeftToGive-Tftick(0.001) > 0.0 && cs.q.qlen() > 0 {
+	for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && cs.q.qlen() > 0 {
 
 		// get proc to run, which will be the one at the head of the q (earliest deadline first)
 		procToRun := cs.q.deq()
@@ -135,16 +125,10 @@ func (cs *CoreSched) runProcs() {
 			// if the proc is done, update the ticksPassed to be exact for metrics etc
 			procToRun.ticksPassed = procToRun.ticksPassed + (1 - ticksLeftToGive)
 			// don't need to wait if we are just telling it a proc is done
-			cs.machineSchedConn <- &CoreMessages{PROC_DONE_CORE, procToRun}
+			cs.machineConnSend <- &Message{cs.coreId, C_M_PROC_DONE, procToRun, nil}
 		}
 
-		if cs.q.qlen() < THRESHOLD_QLEN {
-			cs.machineSchedConn <- &CoreMessages{NEED_WORK, nil}
-			msg := <-cs.machineSchedConn
-			if msg.proc != nil {
-				cs.q.enq(msg.proc)
-			}
-		}
+		cs.tryGetWork()
 
 	}
 
