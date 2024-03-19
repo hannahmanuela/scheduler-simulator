@@ -8,7 +8,7 @@ type Distribution struct {
 	stdDev float64
 }
 
-func (d Distribution) update(newVal float64) {
+func (d *Distribution) update(newVal float64) {
 	d.avg = (d.avg*float64(d.count) + float64(newVal)) / float64(d.count+1)
 	d.stdDev = math.Sqrt((math.Pow(d.stdDev, 2)*float64(d.count) + math.Pow(newVal-d.avg, 2)) / float64(d.count+1))
 	d.count += 1

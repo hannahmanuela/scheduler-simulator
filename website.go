@@ -14,9 +14,9 @@ const (
 
 	// Tick = 100 ms
 	// the max/min value that a sla can have for the diff proc types - slas will have uniform random value in this range
-	PAGE_STATIC_SLA_RANGE_MIN     = 0
+	PAGE_STATIC_SLA_RANGE_MIN     = 0.001 // 0.1 ms
 	PAGE_STATIC_SLA_RANGE_MAX     = 0.5
-	PAGE_DYNAMIC_SLA_RANGE_MIN    = 0
+	PAGE_DYNAMIC_SLA_RANGE_MIN    = 0.001
 	PAGE_DYNAMIC_SLA_RANGE_MAX    = 5
 	DATA_PROCESS_FG_SLA_RANGE_MIN = 3
 	DATA_PROCESS_FG_SLA_RANGE_MAX = 5

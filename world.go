@@ -63,11 +63,7 @@ func (w *World) compute() {
 
 func (w *World) printAllProcs() {
 	for _, m := range w.machines {
-		for _, p := range m.sched.q.getQ() {
-			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", w.currTick, m.mid,
-				float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.compUsed()))
-			logWrite(CURR_PROCS, toWrite)
-		}
+		m.sched.printAllProcs()
 	}
 }
 

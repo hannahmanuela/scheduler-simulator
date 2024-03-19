@@ -64,6 +64,17 @@ func (cs *CoreSched) ticksInQ() Tftick {
 	return sum
 }
 
+func (cs *CoreSched) procsInRange(sla Tftick) int {
+	slaBottom := getRangeBottomFromSLA(sla)
+	numProcs := 0
+	for _, p := range cs.q.getQ() {
+		if getRangeBottomFromSLA(p.effectiveSla()) == slaBottom {
+			numProcs += 1
+		}
+	}
+	return numProcs
+}
+
 func (cs *CoreSched) tick() {
 	cs.currTick += 1
 	cs.runProcs()
@@ -97,6 +108,9 @@ func (cs *CoreSched) runProcs() {
 	ticksLeftToGive := Tftick(1)
 	procToTicksMap := make(map[*Proc]TickBool, 0)
 
+	toWrite := fmt.Sprintf("%v, %v, %v, curr q: %v \n", cs.currTick, cs.machineId, cs.coreId, cs.q.String())
+	logWrite(SCHED, toWrite)
+
 	for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && cs.q.qlen() > 0 {
 
 		// get proc to run, which will be the one at the head of the q (earliest deadline first)
@@ -104,6 +118,8 @@ func (cs *CoreSched) runProcs() {
 		ticksToGive := cs.allocTicksToProc(ticksLeftToGive, procToRun)
 		ticksUsed, done, _ := procToRun.runTillOutOrDone(ticksToGive)
 		ticksLeftToGive -= ticksUsed
+		toWrite := fmt.Sprintf("%v, %v, %v running proc %v, gave %v ticks, used %v ticks\n", cs.currTick, cs.machineId, cs.coreId, procToRun.String(), ticksToGive.String(), ticksUsed.String())
+		logWrite(SCHED, toWrite)
 
 		// add ticks used to the tick map
 		if val, ok := procToTicksMap[procToRun]; ok {
@@ -127,57 +143,100 @@ func (cs *CoreSched) runProcs() {
 			// don't need to wait if we are just telling it a proc is done
 			cs.machineConnSend <- &Message{cs.coreId, C_M_PROC_DONE, procToRun, nil}
 		}
-
 		cs.tryGetWork()
-
 	}
 
 	cs.ticksUnusedLastTick = ticksLeftToGive
 
-	if VERBOSE_SCHED_STATS {
-		for proc, ticks := range procToTicksMap {
-			if ticks.done {
-				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, 1\n", cs.currTick, cs.machineId, cs.coreId,
-					float64(proc.procInternals.sla), float64(proc.compUsed()), float64(proc.ticksPassed), float64(ticks.tick))
-				logWrite(SCHED, toWrite)
-			} else {
-				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, 0\n", cs.currTick, cs.machineId, cs.coreId,
-					float64(proc.procInternals.sla), float64(proc.compUsed()), float64(proc.ticksPassed), float64(ticks.tick))
-				logWrite(SCHED, toWrite)
-			}
-		}
-	}
+	// if VERBOSE_SCHED_STATS {
+	// 	for proc, ticks := range procToTicksMap {
+	// 		if ticks.done {
+	// 			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, 1\n", cs.currTick, cs.machineId, cs.coreId,
+	// 				float64(proc.procInternals.sla), float64(proc.compUsed()), float64(proc.ticksPassed), float64(ticks.tick))
+	// 			logWrite(SCHED, toWrite)
+	// 		} else {
+	// 			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, 0\n", cs.currTick, cs.machineId, cs.coreId,
+	// 				float64(proc.procInternals.sla), float64(proc.compUsed()), float64(proc.ticksPassed), float64(ticks.tick))
+	// 			logWrite(SCHED, toWrite)
+	// 		}
+	// 	}
+	// }
 
 }
 
-// allocates ticks
-// inversely proportional to how much expected computation the proc has left
-// if there are procs that are over, will (for now, equally) spread all ticks between them
+// func (cs *CoreSched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
+
+// 	procToTicks := make(map[*Proc]Tftick, 0)
+
+// 	// get values that allow us to inert the realtionsip between timeLeftOnSLA and ticks given
+// 	// (because more time left should equal less ticks given)
+// 	// also find out if there are procs over the SLA, and if yes how many
+// 	totalTimeLeft := Tftick(0)
+// 	numberOverSLA := 0
+// 	totalAmountOverSLA := 0.0
+// 	for _, p := range cs.q.getQ() {
+// 		if p.timeLeftOnSLA() < 0 {
+// 			numberOverSLA += 1
+// 			totalAmountOverSLA += math.Abs(float64(p.timeLeftOnSLA()))
+// 		} else {
+// 			totalTimeLeft += p.timeLeftOnSLA()
+// 		}
+// 	}
+// 	relativeNeedsSum := Tftick(0)
+// 	for _, p := range cs.q.getQ() {
+// 		if p.timeLeftOnSLA() > 0 {
+// 			relativeNeedsSum += totalTimeLeft / p.timeLeftOnSLA()
+// 		}
+// 	}
+
+// 	ticksGiven := Tftick(0)
+// 	for _, currProc := range cs.q.getQ() {
+// 		allocatedTicks := ((totalTimeLeft / currProc.timeLeftOnSLA()) / relativeNeedsSum) * ticksLeftToGive
+// 		if numberOverSLA > 0 {
+// 			// ~ p a n i c ~
+// 			// go into emergency mode where the tick is only split among the procs that are over, proportionally to how late they are
+// 			if currProc.timeLeftOnSLA() < 0 {
+// 				allocatedTicks = Tftick(float64(ticksLeftToGive) * math.Abs(float64(currProc.timeLeftOnSLA())) / totalAmountOverSLA)
+// 			} else {
+// 				allocatedTicks = 0
+// 			}
+// 		}
+// 		procToTicks[currProc] = allocatedTicks
+// 		ticksGiven += allocatedTicks
+// 	}
+
+// 	return procToTicks
+// }
+
 func (cs *CoreSched) allocTicksToProc(ticksLeftToGive Tftick, procToRun *Proc) Tftick {
 
 	// get values that allow us to inert the realtionsip between expectedCompLeft and ticks given
 	// (because more time left should equal less ticks given)
 	// TODO: is this the metric we want? or rather time left on sla?
-	totalTimeLeft := procToRun.expectedCompLeft()
+	slaSum := procToRun.effectiveSla()
 	for _, p := range cs.q.getQ() {
-		if p.expectedCompLeft() <= 0 {
-			fmt.Printf("ERROR -- somehow a proc has negative time left -- shouldn't it have been replenished?\n")
-		} else {
-			totalTimeLeft += p.expectedCompLeft()
-		}
+		slaSum += p.effectiveSla()
 	}
-	relativeNeedsSum := Tftick(totalTimeLeft / procToRun.expectedCompLeft())
+	relativeNeedsSum := Tftick(slaSum / procToRun.effectiveSla())
 	for _, p := range cs.q.getQ() {
-		if p.expectedCompLeft() > 0 {
-			relativeNeedsSum += totalTimeLeft / p.expectedCompLeft()
+		if p.effectiveSla() > 0 {
+			relativeNeedsSum += slaSum / p.effectiveSla()
 		}
 	}
 
-	allocatedTicks := ((totalTimeLeft / procToRun.expectedCompLeft()) / relativeNeedsSum) * ticksLeftToGive
+	allocatedTicks := ((slaSum / procToRun.effectiveSla()) / relativeNeedsSum) * ticksLeftToGive
 	if allocatedTicks < 0 {
 		fmt.Printf("ERROR -- allocated negative ticks. totalTimeLeft: %v, procToRun.expectedCompLeft() %v, relativeNeedsSum %v\n",
-			totalTimeLeft, procToRun.expectedCompLeft(), relativeNeedsSum)
+			slaSum, procToRun.effectiveSla(), relativeNeedsSum)
 	}
 
 	return allocatedTicks
+}
+
+func (cs *CoreSched) printAllProcs() {
+	for _, p := range cs.q.getQ() {
+		toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", cs.currTick, cs.machineId, cs.coreId,
+			float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.compUsed()))
+		logWrite(CURR_PROCS, toWrite)
+	}
 }

@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	SLA_PUSH_THRESHOLD = 0.01 // 1 tick = 100 ms ==> 1 ms (see website.go)
+	SLA_PUSH_THRESHOLD = 0.1 // 1 tick = 100 ms ==> 5 ms (see website.go)
 )
 
 type Sched struct {
@@ -50,6 +50,17 @@ func (sd *Sched) String() string {
 	return fmt.Sprintf("machine scheduler: %v", sd.machineId)
 }
 
+func (sd *Sched) printAllProcs() {
+	for _, p := range sd.q.getQ() {
+		toWrite := fmt.Sprintf("%v, %v, -1, %v, %v, %v\n", sd.currTick, sd.machineId,
+			float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.compUsed()))
+		logWrite(CURR_PROCS, toWrite)
+	}
+	for _, core := range sd.coreScheds {
+		core.printAllProcs()
+	}
+}
+
 func (sd *Sched) runLBConn() {
 
 	// listen to messages
@@ -59,11 +70,11 @@ func (sd *Sched) runLBConn() {
 		case LB_M_PLACE_PROC:
 			if msg.proc.effectiveSla() < SLA_PUSH_THRESHOLD {
 				// place on core with min ticksInQ
-				minVal := Tftick(math.Inf(1))
+				minVal := int(math.Inf(1))
 				var coreToUse *CoreSched
 				for _, c := range sd.coreScheds {
-					if c.ticksInQ() < minVal {
-						minVal = c.ticksInQ()
+					if c.procsInRange(msg.proc.effectiveSla()) < minVal {
+						minVal = c.procsInRange(msg.proc.effectiveSla())
 						coreToUse = c
 					}
 				}
@@ -95,10 +106,6 @@ func (sd *Sched) runCoreConn() {
 
 func (sd *Sched) tick() {
 
-	// place procs? or based on work stealing?
-	// combo: if one of the new procs has a deadline less than the max deadline on a cpu, push it there
-	// if not, just put them in q and it'll be based on work stealing
-
 	sd.currTick += 1
 	for _, cs := range sd.coreScheds {
 		cs.tick()
@@ -122,4 +129,18 @@ func (sd *Sched) ticksInQ() float64 {
 		totalTicks += core.ticksInQ()
 	}
 	return float64(totalTicks)
+}
+
+func (sd *Sched) procsInRange(sla Tftick) int {
+	slaBottom := getRangeBottomFromSLA(sla)
+	numProcs := 0
+	for _, p := range sd.q.getQ() {
+		if getRangeBottomFromSLA(p.effectiveSla()) == slaBottom {
+			numProcs += 1
+		}
+	}
+	for _, core := range sd.coreScheds {
+		numProcs += core.procsInRange(sla)
+	}
+	return numProcs
 }

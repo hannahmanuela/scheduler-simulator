@@ -41,7 +41,7 @@ func (q *Queue) enq(p *Proc) {
 	}
 
 	for index, currProc := range q.q {
-		if currProc.timeShouldBeDone > p.timeShouldBeDone {
+		if currProc.effectiveSla() > p.effectiveSla() {
 			q.q = append(q.q[:index+1], q.q[index:]...)
 			q.q[index] = p
 			return

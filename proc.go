@@ -2,6 +2,7 @@ package slasched
 
 import (
 	"fmt"
+	"strconv"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -19,7 +20,10 @@ type Proc struct {
 }
 
 func (p *Proc) String() string {
-	return p.procInternals.String() + ", deadline: " + p.timeShouldBeDone.String()
+	return p.procInternals.String() +
+		", deadline: " + p.timeShouldBeDone.String() +
+		", ticks passed: " + p.ticksPassed.String() +
+		", times replenished: " + strconv.Itoa(p.timesReplenished)
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
@@ -52,6 +56,10 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool, bool) {
 
 func (p *Proc) effectiveSla() Tftick {
 	return p.procInternals.sla * Tftick(1+p.timesReplenished)
+}
+
+func (p *Proc) timeLeftOnSLA() Tftick {
+	return p.effectiveSla() - p.ticksPassed
 }
 
 func (p *Proc) expectedCompLeft() Tftick {

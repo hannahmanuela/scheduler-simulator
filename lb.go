@@ -111,7 +111,8 @@ func (lb *LoadBalancer) placeProcs() {
 // that way we avoid the "gold rush" things, although since this is one by one anyway maybe its fine
 func (lb *LoadBalancer) pickMachineGivenProfile(dist *ProvProcDistribution) *Machine {
 
-	minTicks := math.Inf(1)
+	// minTicks := math.Inf(1)
+	minNumProcs := int(math.Inf(1))
 	var machineToUse *Machine
 
 	maxMemFree := float64(0)
@@ -119,8 +120,9 @@ func (lb *LoadBalancer) pickMachineGivenProfile(dist *ProvProcDistribution) *Mac
 
 	// check if memory fits, and from those machines take the one with the least ticksInQ
 	for _, m := range lb.machines {
-		if m.sched.memFree() > (dist.memUsg.avg+dist.memUsg.stdDev) && m.sched.ticksInQ() < minTicks {
-			minTicks = m.sched.ticksInQ()
+		if m.sched.memFree() > (dist.memUsg.avg+dist.memUsg.stdDev) && m.sched.procsInRange(Tftick(dist.computeUsed.avg)) < minNumProcs {
+			// minTicks = m.sched.ticksInQ()
+			minNumProcs = m.sched.procsInRange(Tftick(dist.computeUsed.avg))
 			machineToUse = m
 		}
 		if m.sched.memFree() < maxMemFree {
