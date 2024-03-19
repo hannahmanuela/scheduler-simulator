@@ -1,6 +1,8 @@
 package slasched
 
-import "sync"
+import (
+	"sync"
+)
 
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {
@@ -60,6 +62,27 @@ func (q *Queue) deq() *Proc {
 	procSelected := q.q[0]
 	q.q = q.q[1:]
 	return procSelected
+}
+
+// gets Qs lowest priority proc
+func (q *Queue) workSteal(maxMem Tmem) *Proc {
+	q.m.Lock()
+	defer q.m.Unlock()
+
+	if len(q.q) == 0 {
+		return nil
+	}
+
+	// for i := len(q.q) - 1; i >= 0; i-- {
+	for i := 0; i < len(q.q); i++ {
+		if Tmem(q.q[i].procTypeProfile.memUsg.avg) < maxMem {
+			procSelected := q.q[i]
+			newQ := append(q.q[:i], q.q[i+1:]...)
+			q.q = newQ
+			return procSelected
+		}
+	}
+	return nil
 }
 
 func (q *Queue) qlen() int {

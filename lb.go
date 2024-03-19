@@ -43,6 +43,28 @@ func newLoadBalancer(machines map[Tid]*Machine, lbSendToMachines map[Tid]chan *M
 		procTypeProfiles: make(map[ProcType]*ProvProcDistribution),
 	}
 
+	// hard-coded for now
+	lb.procTypeProfiles[PAGE_STATIC] = &ProvProcDistribution{
+		computeUsed: Distribution{avg: PAGE_STATIC_SLA_RANGE_MAX, count: 0,
+			stdDev: (PAGE_STATIC_SLA_RANGE_MAX - PAGE_STATIC_SLA_RANGE_MIN) / 2.0},
+		memUsg: Distribution{avg: PAGE_STATIC_MEM_USG, count: 0, stdDev: 0},
+	}
+	lb.procTypeProfiles[PAGE_DYNAMIC] = &ProvProcDistribution{
+		computeUsed: Distribution{avg: PAGE_DYNAMIC_SLA_RANGE_MAX, count: 0,
+			stdDev: (PAGE_DYNAMIC_SLA_RANGE_MAX - PAGE_DYNAMIC_SLA_RANGE_MIN) / 2.0},
+		memUsg: Distribution{avg: PAGE_DYNAMIC_MEM_USG, count: 0, stdDev: 0},
+	}
+	lb.procTypeProfiles[DATA_PROCESS_FG] = &ProvProcDistribution{
+		computeUsed: Distribution{avg: DATA_PROCESS_FG_SLA_RANGE_MAX, count: 0,
+			stdDev: (DATA_PROCESS_FG_SLA_RANGE_MAX - DATA_PROCESS_FG_SLA_RANGE_MIN) / 2.0},
+		memUsg: Distribution{avg: DATA_PROCESS_FG_MEM_USG, count: 0, stdDev: 0},
+	}
+	lb.procTypeProfiles[DATA_PROCESS_BG] = &ProvProcDistribution{
+		computeUsed: Distribution{avg: DATA_PROCESS_BG_SLA_RANGE_MAX, count: 0,
+			stdDev: (DATA_PROCESS_BG_SLA_RANGE_MAX - DATA_PROCESS_BG_SLA_RANGE_MIN) / 2.0},
+		memUsg: Distribution{avg: DATA_PROCESS_BG_MEM_USG, count: 0, stdDev: 0},
+	}
+
 	go lb.listenForMachineMessages()
 	return lb
 }
@@ -64,11 +86,11 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp), msg.proc.timesReplenished)
 				logWrite(DONE_PROCS, toWrite)
 			}
-			if _, ok := lb.procTypeProfiles[msg.proc.procType]; ok {
-				lb.procTypeProfiles[msg.proc.procType].updateMem(msg.proc.memUsed())
-				lb.procTypeProfiles[msg.proc.procType].updateCompute(msg.proc.compUsed())
+			if _, ok := lb.procTypeProfiles[msg.proc.procType()]; ok {
+				lb.procTypeProfiles[msg.proc.procType()].updateMem(msg.proc.memUsed())
+				lb.procTypeProfiles[msg.proc.procType()].updateCompute(msg.proc.compUsed())
 			} else {
-				lb.procTypeProfiles[msg.proc.procType] = newProcProcDistribution(msg.proc.memUsed(), msg.proc.compUsed())
+				lb.procTypeProfiles[msg.proc.procType()] = newProcProcDistribution(msg.proc.memUsed(), msg.proc.compUsed())
 			}
 		}
 	}
@@ -85,9 +107,9 @@ func (lb *LoadBalancer) placeProcs() {
 		// keep profiles on procs, use that
 		// sample machines and see which one might be good
 		var machineToUse *Machine
-		if _, ok := lb.procTypeProfiles[p.procType]; ok {
+		if _, ok := lb.procTypeProfiles[p.procType()]; ok {
 			// if we have profiling information, use it
-			machineToUse = lb.pickMachineGivenProfile(lb.procTypeProfiles[p.procType])
+			machineToUse = lb.pickMachineGivenProfile(lb.procTypeProfiles[p.procType()])
 		} else {
 			// otherwise just pick a machine
 			machineToUse = lb.machines[Tid(rand.Int()%len(lb.machines))]
@@ -95,6 +117,7 @@ func (lb *LoadBalancer) placeProcs() {
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
+		p.procTypeProfile = lb.procTypeProfiles[p.procType()]
 		var wg sync.WaitGroup
 		wg.Add(1)
 		lb.machineConnSend[machineToUse.mid] <- &Message{-1, LB_M_PLACE_PROC, p, &wg}

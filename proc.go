@@ -16,14 +16,15 @@ type Proc struct {
 	timeShouldBeDone Tftick
 	procInternals    *ProcInternals
 	timesReplenished int
-	procType         ProcType
+	procTypeProfile  *ProvProcDistribution
 }
 
 func (p *Proc) String() string {
 	return p.procInternals.String() +
 		", deadline: " + p.timeShouldBeDone.String() +
 		", ticks passed: " + p.ticksPassed.String() +
-		", times replenished: " + strconv.Itoa(p.timesReplenished)
+		", times replenished: " + strconv.Itoa(p.timesReplenished) +
+		", procTypeProfile: " + p.procTypeProfile.String()
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
@@ -32,7 +33,8 @@ func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
 		ticksPassed:      0,
 		timeShouldBeDone: privProc.sla + Tftick(currTick),
 		procInternals:    privProc,
-		timesReplenished: 0}
+		timesReplenished: 0,
+	}
 }
 
 // runs proc for the number of ticks passed or until the proc is done,
@@ -72,6 +74,10 @@ func (p *Proc) memUsed() Tmem {
 
 func (p *Proc) compUsed() Tftick {
 	return p.procInternals.compDone
+}
+
+func (p *Proc) procType() ProcType {
+	return p.procInternals.procType
 }
 
 // ------------------------------------------------------------------------------------------------

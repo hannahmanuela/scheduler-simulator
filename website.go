@@ -26,7 +26,7 @@ const (
 	// in MB
 	PAGE_STATIC_MEM_USG     = 20
 	PAGE_DYNAMIC_MEM_USG    = 300
-	DATA_PROCESS_FB_MEM_USG = 1000
+	DATA_PROCESS_FG_MEM_USG = 1000
 	DATA_PROCESS_BG_MEM_USG = 10000
 )
 
@@ -38,7 +38,6 @@ const (
 	PAGE_DYNAMIC
 	DATA_PROCESS_FG
 	DATA_PROCESS_BG
-	NUM_PROC_TYPES
 )
 
 func (pt ProcType) String() string {
@@ -60,7 +59,7 @@ func (pt ProcType) getExpectedSlaBuffer() float64 {
 // the amount memory a proc of the given type will use (for now this is static)
 func (pt ProcType) getMemoryUsage() Tmem {
 	// page static, page dynamic, data process fg, data process bg
-	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FB_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
+	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
 }
 
 // type CacheClnt interface {

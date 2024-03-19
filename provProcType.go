@@ -1,6 +1,9 @@
 package slasched
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 type Distribution struct {
 	avg    float64
@@ -24,6 +27,10 @@ func newProcProcDistribution(initMem Tmem, initCompute Tftick) *ProvProcDistribu
 		memUsg:      Distribution{float64(initMem), 1, 0},
 		computeUsed: Distribution{float64(initCompute), 1, 0},
 	}
+}
+
+func (ppt *ProvProcDistribution) String() string {
+	return fmt.Sprintf("avgComp: %v, stdDev: %v; avg memL %v, stdDev: %v\n", ppt.computeUsed.avg, ppt.computeUsed.stdDev, ppt.memUsg.avg, ppt.memUsg.stdDev)
 }
 
 func (ppt *ProvProcDistribution) updateMem(val Tmem) {

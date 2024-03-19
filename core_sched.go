@@ -10,7 +10,6 @@ const (
 )
 
 type CoreSched struct {
-	totMem              Tmem
 	q                   *Queue
 	ticksUnusedLastTick Tftick
 	machineConnSend     chan *Message
@@ -22,7 +21,6 @@ type CoreSched struct {
 
 func newCoreSched(machineConnSend chan *Message, machineConnRecv chan *Message, mid Tid, cid Tid) *CoreSched {
 	sd := &CoreSched{
-		totMem:              MAX_MEM_PER_CORE,
 		q:                   newQueue(),
 		machineConnSend:     machineConnSend,
 		machineConnRecv:     machineConnRecv,
@@ -45,7 +43,7 @@ func (cs *CoreSched) String() string {
 }
 
 func (cs *CoreSched) memUsage() float64 {
-	return float64(cs.memUsed()) / float64(cs.totMem)
+	return float64(cs.memUsed()) / float64(MAX_MEM_PER_CORE)
 }
 
 func (cs *CoreSched) memUsed() Tmem {
@@ -132,8 +130,9 @@ func (cs *CoreSched) runProcs() {
 
 		if !done {
 			// check if the memroy used by the proc sent us over the edge (and if yes, kill as needed)
-			if cs.memUsed() >= cs.totMem {
+			if cs.memUsed() > MAX_MEM_PER_CORE {
 				fmt.Println("--> OUT OF MEMORY")
+				fmt.Printf("q: %v\n", cs.q.String())
 			}
 			// add proc back into queue
 			cs.q.enq(procToRun)

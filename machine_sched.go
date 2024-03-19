@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	SLA_PUSH_THRESHOLD = 0.1 // 1 tick = 100 ms ==> 5 ms (see website.go)
+	SLA_PUSH_THRESHOLD = 1 // 1 tick = 100 ms ==> 5 ms (see website.go)
 )
 
 type Sched struct {
@@ -73,13 +73,19 @@ func (sd *Sched) runLBConn() {
 				minVal := int(math.Inf(1))
 				var coreToUse *CoreSched
 				for _, c := range sd.coreScheds {
-					if c.procsInRange(msg.proc.effectiveSla()) < minVal {
+					// core is a contender if has min procs in range and has memory for it
+					if c.procsInRange(msg.proc.effectiveSla()) < minVal &&
+						((MAX_MEM_PER_CORE - c.memUsed()) < Tmem(msg.proc.procTypeProfile.memUsg.avg+msg.proc.procTypeProfile.memUsg.stdDev)) {
 						minVal = c.procsInRange(msg.proc.effectiveSla())
 						coreToUse = c
 					}
 				}
 				// is this safe? -> yes, because I only add in between ticks, not while they're running
-				sd.coreScheds[coreToUse.coreId].q.enq(msg.proc)
+				if coreToUse != nil {
+					sd.coreScheds[coreToUse.coreId].q.enq(msg.proc)
+				} else {
+					sd.q.enq(msg.proc)
+				}
 			} else {
 				sd.q.enq(msg.proc)
 			}
@@ -95,13 +101,35 @@ func (sd *Sched) runCoreConn() {
 		msg := <-sd.coreConnRecv
 		switch msg.msgType {
 		case C_M_NEED_WORK:
-			// TODO: this could do cross core work stealing if there isn't any left on machine q
-			sd.coreConnSend[msg.sender] <- &Message{sd.machineId, M_C_PUSH_PROC, sd.q.deq(), nil}
+			memFree := MAX_MEM_PER_CORE - sd.coreScheds[msg.sender].memUsed()
+			// if global q has work that fits, steal that
+			if p := sd.q.deq(); p != nil {
+				if (p.procTypeProfile.memUsg.avg + p.procTypeProfile.memUsg.stdDev) < float64(memFree) {
+					sd.coreConnSend[msg.sender] <- &Message{sd.machineId, M_C_PUSH_PROC, p, nil}
+					continue
+				} else {
+					sd.q.enq(p)
+				}
+			}
+
+			// otherwise look for another core that might have work
+			var procToSteal *Proc
+			var coreWithMaxWork *CoreSched
+			maxTicks := Tftick(0)
+			for _, c := range sd.coreScheds {
+				if c.ticksInQ() > maxTicks {
+					maxTicks = c.ticksInQ()
+					coreWithMaxWork = c
+				}
+			}
+			if coreWithMaxWork != nil {
+				procToSteal = coreWithMaxWork.q.workSteal(memFree)
+			}
+			sd.coreConnSend[msg.sender] <- &Message{sd.machineId, M_C_PUSH_PROC, procToSteal, nil}
 		case C_M_PROC_DONE:
 			sd.lbConnSend <- &Message{sd.machineId, M_LB_PROC_DONE, msg.proc, nil}
 		}
 	}
-
 }
 
 func (sd *Sched) tick() {
