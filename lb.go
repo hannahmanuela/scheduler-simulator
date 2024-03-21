@@ -83,7 +83,7 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 		switch msg.msgType {
 		case M_LB_PROC_DONE:
 			if VERBOSE_LB_STATS {
-				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp), msg.proc.timesReplenished)
+				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
 				logWrite(DONE_PROCS, toWrite)
 			}
 			if _, ok := lb.procTypeProfiles[msg.proc.procType()]; ok {
@@ -109,7 +109,8 @@ func (lb *LoadBalancer) placeProcs() {
 		var machineToUse *Machine
 		if _, ok := lb.procTypeProfiles[p.procType()]; ok {
 			// if we have profiling information, use it
-			machineToUse = lb.pickMachineGivenProfile(lb.procTypeProfiles[p.procType()])
+			machineToUse = lb.pickMachineGivenProfile(p)
+
 		} else {
 			// otherwise just pick a machine
 			machineToUse = lb.machines[Tid(rand.Int()%len(lb.machines))]
@@ -132,33 +133,63 @@ func (lb *LoadBalancer) placeProcs() {
 
 // probably actually want this to be via communication with the machine itself, let it say yes or no?
 // that way we avoid the "gold rush" things, although since this is one by one anyway maybe its fine
-func (lb *LoadBalancer) pickMachineGivenProfile(dist *ProvProcDistribution) *Machine {
+func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 
-	// minTicks := math.Inf(1)
-	minNumProcs := int(math.Inf(1))
-	var machineToUse *Machine
+	profile := lb.procTypeProfiles[procToPlace.procType()]
 
-	maxMemFree := float64(0)
-	var minMemMachine *Machine
+	toWrite := fmt.Sprintf("%v, LB placing proc: %v \n", lb.currTick, procToPlace.effectiveSla())
+	logWrite(SCHED, toWrite)
 
-	// check if memory fits, and from those machines take the one with the least ticksInQ
+	minProcsInRange := int(math.Inf(1))
+	maxProcsInRange := 0
+	minMaxRatioTicksPassedToSla := math.Inf(0)
+	maxMaxRatioTicksPassedToSla := 0.0
 	for _, m := range lb.machines {
-		if m.sched.memFree() > (dist.memUsg.avg+dist.memUsg.stdDev) && m.sched.procsInRange(Tftick(dist.computeUsed.avg)) < minNumProcs {
-			// minTicks = m.sched.ticksInQ()
-			minNumProcs = m.sched.procsInRange(Tftick(dist.computeUsed.avg))
-			machineToUse = m
+		// core is a contender if has memory for it
+		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
+			if m.sched.minMaxRatioTicksPassedToSla() > maxMaxRatioTicksPassedToSla {
+				maxMaxRatioTicksPassedToSla = m.sched.minMaxRatioTicksPassedToSla()
+			}
+			if m.sched.minMaxRatioTicksPassedToSla() < minMaxRatioTicksPassedToSla {
+				minMaxRatioTicksPassedToSla = m.sched.minMaxRatioTicksPassedToSla()
+			}
+			if m.sched.procsInRange(procToPlace.effectiveSla()) > maxProcsInRange {
+				maxProcsInRange = m.sched.procsInRange(procToPlace.effectiveSla())
+			}
+			if m.sched.procsInRange(procToPlace.effectiveSla()) < minProcsInRange {
+				minProcsInRange = m.sched.procsInRange(procToPlace.effectiveSla())
+			}
 		}
-		if m.sched.memFree() < maxMemFree {
-			maxMemFree = m.sched.memFree()
-			minMemMachine = m
+	}
+	// toWrite = fmt.Sprintf("minProcsInRange: %v, maxProcsInRange: %v, minTicksInQ: %v, maxTicksInQ: %v, minRatioSlaToTicksPassed: %v, maxRatioSlaToTicksPassed: %v \n", minProcsInRange, maxProcsInRange, minTicksInQ, maxTicksInQ, minRatioSlaToTicksPassed, maxRatioSlaToTicksPassed)
+	// logWrite(SCHED, toWrite)
+
+	machineToPressure := make(map[*Machine]float64, 0)
+	for _, m := range lb.machines {
+		// core is a contender if has memory for it
+		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
+			// factors: num procs in range; min max sla to ticksPassed ratio [for both, being smaller is better]
+			// normalized based on above min/max values
+			press := 0.0
+			if maxMaxRatioTicksPassedToSla != minMaxRatioTicksPassedToSla {
+				press += (m.sched.minMaxRatioTicksPassedToSla() - minMaxRatioTicksPassedToSla) / (maxMaxRatioTicksPassedToSla - minMaxRatioTicksPassedToSla)
+			}
+			if maxProcsInRange != minProcsInRange {
+				press += float64((m.sched.procsInRange(procToPlace.effectiveSla()))-minProcsInRange) / float64(maxProcsInRange-minProcsInRange)
+			}
+			machineToPressure[m] = press
+			toWrite := fmt.Sprintf("giving machine %v pressure val %v \n", m.mid, press)
+			logWrite(SCHED, toWrite)
 		}
 	}
 
-	// if memory doesn't fit anywhere, we're fucked I guess? pick machine with least memory used
-	//  TODO: maybe make an LB queue?
-	if machineToUse == nil {
-		fmt.Println("IT DOES'T EVEN FIT ANYWHERE")
-		machineToUse = minMemMachine
+	var machineToUse *Machine
+	minPressure := math.Inf(1)
+	for machine, press := range machineToPressure {
+		if press < minPressure {
+			machineToUse = machine
+			minPressure = press
+		}
 	}
 
 	return machineToUse

@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	PUSH_SLA_THRESHOLD   = 1   // 1 tick = 100 ms ==> 5 ms (see website.go)
+	PUSH_SLA_THRESHOLD   = 2   // 1 tick = 100 ms ==> 5 ms (see website.go)
 	PUSH_RATIO_THRESHOLD = 0.3 // if a proc has waited in the machine's q for longer than this percentage of its SLA, push it to a core
 )
 
@@ -260,4 +260,14 @@ func (sd *Sched) procsInRange(sla Tftick) int {
 		numProcs += core.procsInRange(sla)
 	}
 	return numProcs
+}
+
+func (sd *Sched) minMaxRatioTicksPassedToSla() float64 {
+	minVal := math.Inf(1)
+	for _, c := range sd.coreScheds {
+		if c.maxRatioTicksPassedToSla() < minVal {
+			minVal = c.maxRatioTicksPassedToSla()
+		}
+	}
+	return minVal
 }

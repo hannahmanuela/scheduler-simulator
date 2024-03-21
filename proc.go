@@ -2,7 +2,6 @@ package slasched
 
 import (
 	"fmt"
-	"strconv"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -15,49 +14,33 @@ type Proc struct {
 	ticksPassed      Tftick
 	timeShouldBeDone Tftick
 	procInternals    *ProcInternals
-	timesReplenished int
 	procTypeProfile  *ProvProcDistribution
 }
 
 func (p *Proc) String() string {
 	return p.procInternals.String() +
 		// ", deadline: " + p.timeShouldBeDone.String() +
-		", ticks passed: " + p.ticksPassed.String() +
-		", times replenished: " + strconv.Itoa(p.timesReplenished)
+		", ticks passed: " + p.ticksPassed.String()
 	// ", procTypeProfile: " + p.procTypeProfile.String()
 }
 
-func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
+func newProvProc(currTick int, privProc *ProcInternals) *Proc {
 	return &Proc{
 		machineId:        -1,
 		ticksPassed:      0,
 		timeShouldBeDone: privProc.sla + Tftick(currTick),
 		procInternals:    privProc,
-		timesReplenished: 0,
 	}
 }
 
 // runs proc for the number of ticks passed or until the proc is done,
 // returning whether the proc is done and how many ticks were run, as well as whether the proc finished or was forcefully terminated for going over
-func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool, bool) {
-	ticksUsed, done := p.procInternals.runTillOutOrDone(toRun)
-
-	// if the proc is running over its sla, double it once, then kill the proc (or should it be allowed to replenish more times than that?)
-	if p.procInternals.compDone-p.effectiveSla() >= 0.0 {
-		if p.timesReplenished > 0 {
-			// pretend the proc is done, even if its not, if we've already replenished it
-			return ticksUsed, true, true
-		} else {
-			p.timesReplenished += 1
-			p.timeShouldBeDone += p.procInternals.sla
-		}
-	}
-
-	return ticksUsed, done, false
+func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
+	return p.procInternals.runTillOutOrDone(toRun)
 }
 
 func (p *Proc) effectiveSla() Tftick {
-	return p.procInternals.sla * Tftick(1+p.timesReplenished)
+	return p.procInternals.sla
 }
 
 func (p *Proc) timeLeftOnSLA() Tftick {
@@ -105,6 +88,7 @@ func newPrivProc(sla Tftick, procType ProcType) *ProcInternals {
 	// get actual comp from a normal distribution, assuming the sla left a buffer
 	slaWithoutBuffer := float64(sla) - procType.getExpectedSlaBuffer()*float64(sla)
 	actualComp := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance(slaWithoutBuffer)))
+	actualComp = min(sla, actualComp)
 	if actualComp < 0 {
 		actualComp = Tftick(0.3)
 	}

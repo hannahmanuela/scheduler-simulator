@@ -2,10 +2,14 @@ package slasched
 
 import (
 	"fmt"
+	"math"
 )
 
 const (
 	MAX_MEM_PER_CORE = 11000 // the amount of memory every core will have, in MB
+
+	TICKS_WAIT_LOAD_CHANGES = 10
+	INITIAL_LOAD            = 1
 
 	VERBOSE_LB_STATS            = true
 	VERBOSE_SCHED_STATS         = true
@@ -14,15 +18,20 @@ const (
 )
 
 type World struct {
-	currTick Ttick
-	machines map[Tid]*Machine
-	lb       *LoadBalancer
-	app      Website
+	currTick        int
+	numProcsToGen   int
+	lastChangedLoad int
+	machines        map[Tid]*Machine
+	lb              *LoadBalancer
+	app             Website
 }
 
 func newWorld(numMachines int, numCores int) *World {
-	w := &World{}
-	w.machines = map[Tid]*Machine{}
+	w := &World{
+		machines:        map[Tid]*Machine{},
+		numProcsToGen:   INITIAL_LOAD,
+		lastChangedLoad: 0,
+	}
 	lbMachineConn := make(chan *Message) // channel all machines send on to lb
 	machineToLBConns := map[Tid]chan *Message{}
 	for i := 0; i < numMachines; i++ {
@@ -41,6 +50,26 @@ func (w *World) String() string {
 		str += "   " + m.String()
 	}
 	return str
+}
+
+func (w *World) minMaxRatioTicksPassedToSla() float64 {
+	minVal := math.Inf(1)
+	for _, m := range w.machines {
+		if m.sched.minMaxRatioTicksPassedToSla() < minVal {
+			minVal = m.sched.minMaxRatioTicksPassedToSla()
+		}
+	}
+	return minVal
+}
+
+func (w *World) evalLoad() {
+	if w.minMaxRatioTicksPassedToSla() < 0.1 && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
+		w.numProcsToGen += 1
+		w.lastChangedLoad = w.currTick
+	} else if w.minMaxRatioTicksPassedToSla() > 0.5 && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
+		w.numProcsToGen -= 1
+		w.lastChangedLoad = w.currTick
+	}
 }
 
 func (w *World) genLoad(nProcs int) int {
@@ -75,8 +104,8 @@ func (w *World) tickAllProcs() {
 func (w *World) printTickStats() {
 	for _, m := range w.lb.machines {
 		for _, core := range m.sched.coreScheds {
-			toWrite := fmt.Sprintf("%v, %v, %v, %.2f, %.2f\n", w.currTick, m.mid, core.coreId,
-				core.maxRatioTicksPassedToSla(), core.memUsage())
+			toWrite := fmt.Sprintf("%v, %v, %v, %.2f, %.2f, %v\n", w.currTick, m.mid, core.coreId,
+				core.maxRatioTicksPassedToSla(), core.memUsage(), core.q.String())
 			logWrite(USAGE, toWrite)
 		}
 	}
@@ -101,6 +130,7 @@ func (w *World) Tick(numProcs int) {
 
 func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
-		w.Tick(6)
+		w.evalLoad()
+		w.Tick(4)
 	}
 }

@@ -121,7 +121,7 @@ func (cs *CoreSched) runProcs() {
 		// get proc to run, which will be the one at the head of the q (earliest deadline first)
 		procToRun := cs.q.deq()
 		ticksToGive := cs.allocTicksToProc(ticksLeftToGive, procToRun)
-		ticksUsed, done, _ := procToRun.runTillOutOrDone(ticksToGive)
+		ticksUsed, done := procToRun.runTillOutOrDone(ticksToGive)
 		ticksLeftToGive -= ticksUsed
 		toWrite := fmt.Sprintf("%v, %v, %v running proc %v, gave %v ticks, used %v ticks\n", cs.currTick, cs.machineId, cs.coreId, procToRun.String(), ticksToGive.String(), ticksUsed.String())
 		logWrite(SCHED, toWrite)

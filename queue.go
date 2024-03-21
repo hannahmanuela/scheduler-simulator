@@ -3,7 +3,6 @@ package slasched
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {
 	q []*Proc
-	// m sync.RWMutex
 }
 
 func newQueue() *Queue {
@@ -12,9 +11,6 @@ func newQueue() *Queue {
 }
 
 func (q *Queue) String() string {
-	// q.m.RLock()
-	// defer q.m.RUnlock()
-
 	str := ""
 	for _, p := range q.q {
 		str += p.String() + "; "
@@ -23,16 +19,10 @@ func (q *Queue) String() string {
 }
 
 func (q *Queue) getQ() []*Proc {
-	// q.m.RLock()
-	// defer q.m.RUnlock()
-
 	return q.q
 }
 
 func (q *Queue) enq(p *Proc) {
-	// q.m.Lock()
-	// defer q.m.Unlock()
-
 	if len(q.q) == 0 {
 		q.q = append(q.q, p)
 		return
@@ -49,9 +39,6 @@ func (q *Queue) enq(p *Proc) {
 }
 
 func (q *Queue) deq() *Proc {
-	// q.m.Lock()
-	// defer q.m.Unlock()
-
 	if len(q.q) == 0 {
 		return nil
 	}
@@ -62,9 +49,6 @@ func (q *Queue) deq() *Proc {
 
 // gets Qs lowest priority proc
 func (q *Queue) workSteal(maxMem Tmem) *Proc {
-	// q.m.Lock()
-	// defer q.m.Unlock()
-
 	if len(q.q) == 0 {
 		return nil
 	}
@@ -93,8 +77,5 @@ func (q *Queue) remove(toRemove *Proc) {
 }
 
 func (q *Queue) qlen() int {
-	// q.m.RLock()
-	// defer q.m.RUnlock()
-
 	return len(q.q)
 }
