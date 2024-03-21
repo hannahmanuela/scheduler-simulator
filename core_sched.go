@@ -10,24 +10,24 @@ const (
 )
 
 type CoreSched struct {
-	q                   *Queue
-	ticksUnusedLastTick Tftick
-	machineConnSend     chan *Message
-	machineConnRecv     chan *Message
-	currTick            int
-	machineId           Tid
-	coreId              Tid
+	q                        *Queue
+	maxRatioTicksPassedToSla float64
+	machineConnSend          chan *Message
+	machineConnRecv          chan *Message
+	currTick                 int
+	machineId                Tid
+	coreId                   Tid
 }
 
 func newCoreSched(machineConnSend chan *Message, machineConnRecv chan *Message, mid Tid, cid Tid) *CoreSched {
 	sd := &CoreSched{
-		q:                   newQueue(),
-		machineConnSend:     machineConnSend,
-		machineConnRecv:     machineConnRecv,
-		ticksUnusedLastTick: 0,
-		currTick:            0,
-		machineId:           mid,
-		coreId:              cid,
+		q:                        newQueue(),
+		machineConnSend:          machineConnSend,
+		machineConnRecv:          machineConnRecv,
+		maxRatioTicksPassedToSla: 0,
+		currTick:                 0,
+		machineId:                mid,
+		coreId:                   cid,
 	}
 	return sd
 }
@@ -76,6 +76,13 @@ func (cs *CoreSched) procsInRange(sla Tftick) int {
 func (cs *CoreSched) tick() {
 	cs.currTick += 1
 	cs.runProcs()
+
+	for _, p := range cs.q.getQ() {
+		if float64(p.ticksPassed/p.effectiveSla()) > cs.maxRatioTicksPassedToSla {
+			cs.maxRatioTicksPassedToSla = float64(p.ticksPassed / p.effectiveSla())
+		}
+	}
+
 }
 
 type TickBool struct {
@@ -142,8 +149,6 @@ func (cs *CoreSched) runProcs() {
 		}
 		cs.tryGetWork()
 	}
-
-	cs.ticksUnusedLastTick = ticksLeftToGive
 
 	// if VERBOSE_SCHED_STATS {
 	// 	for proc, ticks := range procToTicksMap {
