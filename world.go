@@ -76,7 +76,7 @@ func (w *World) printTickStats() {
 	for _, m := range w.lb.machines {
 		for _, core := range m.sched.coreScheds {
 			toWrite := fmt.Sprintf("%v, %v, %v, %.2f, %.2f\n", w.currTick, m.mid, core.coreId,
-				core.maxRatioTicksPassedToSla, core.memUsage())
+				core.maxRatioTicksPassedToSla(), core.memUsage())
 			logWrite(USAGE, toWrite)
 		}
 	}

@@ -10,24 +10,22 @@ const (
 )
 
 type CoreSched struct {
-	q                        *Queue
-	maxRatioTicksPassedToSla float64
-	machineConnSend          chan *Message
-	machineConnRecv          chan *Message
-	currTick                 int
-	machineId                Tid
-	coreId                   Tid
+	q               *Queue
+	machineConnSend chan *Message
+	machineConnRecv chan *Message
+	currTick        int
+	machineId       Tid
+	coreId          Tid
 }
 
 func newCoreSched(machineConnSend chan *Message, machineConnRecv chan *Message, mid Tid, cid Tid) *CoreSched {
 	sd := &CoreSched{
-		q:                        newQueue(),
-		machineConnSend:          machineConnSend,
-		machineConnRecv:          machineConnRecv,
-		maxRatioTicksPassedToSla: 0,
-		currTick:                 0,
-		machineId:                mid,
-		coreId:                   cid,
+		q:               newQueue(),
+		machineConnSend: machineConnSend,
+		machineConnRecv: machineConnRecv,
+		currTick:        0,
+		machineId:       mid,
+		coreId:          cid,
 	}
 	return sd
 }
@@ -77,12 +75,16 @@ func (cs *CoreSched) tick() {
 	cs.currTick += 1
 	cs.runProcs()
 
+}
+
+func (cs *CoreSched) maxRatioTicksPassedToSla() float64 {
+	max := 0.0
 	for _, p := range cs.q.getQ() {
-		if float64(p.ticksPassed/p.effectiveSla()) > cs.maxRatioTicksPassedToSla {
-			cs.maxRatioTicksPassedToSla = float64(p.ticksPassed / p.effectiveSla())
+		if float64(p.ticksPassed/p.effectiveSla()) > max {
+			max = float64(p.ticksPassed / p.effectiveSla())
 		}
 	}
-
+	return max
 }
 
 type TickBool struct {

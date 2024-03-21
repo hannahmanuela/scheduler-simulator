@@ -59,10 +59,13 @@ func (sd *Sched) tick() {
 		if (p.ticksPassed / p.effectiveSla()) >= PUSH_RATIO_THRESHOLD {
 			coreToUse := sd.getCoreToUse(p)
 			if coreToUse != nil {
+				toWrite := fmt.Sprintf("%v, %v, %v, machine pushing proc to core: %v \n", sd.currTick, sd.machineId, coreToUse.coreId, p.String())
+				logWrite(SCHED, toWrite)
 				coreToUse.q.enq(p)
 				sd.q.remove(p)
 			} else {
-				fmt.Println("wanted to place proc, but no core had the memory for it; we'll try again next tick")
+				toWrite := fmt.Sprintf("%v, %v, machine wanted to push proc to core: %v \n", sd.currTick, sd.machineId, p.String())
+				logWrite(SCHED, toWrite)
 			}
 		}
 	}
@@ -125,8 +128,8 @@ func (sd *Sched) runLBConn() {
 
 func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 
-	// toWrite := fmt.Sprintf("%v, %v, placing proc: %v \n", sd.currTick, sd.machineId, procToPlace.effectiveSla())
-	// logWrite(SCHED, toWrite)
+	toWrite := fmt.Sprintf("%v, %v, placing proc: %v \n", sd.currTick, sd.machineId, procToPlace.effectiveSla())
+	logWrite(SCHED, toWrite)
 
 	minProcsInRange := int(math.Inf(1))
 	maxProcsInRange := 0
@@ -137,11 +140,11 @@ func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 	for _, c := range sd.coreScheds {
 		// core is a contender if has memory for it
 		if (MAX_MEM_PER_CORE - c.memUsed()) > Tmem(procToPlace.procTypeProfile.memUsg.avg+procToPlace.procTypeProfile.memUsg.stdDev) {
-			if c.maxRatioTicksPassedToSla > maxRatioTicksPassedToSla {
-				maxRatioTicksPassedToSla = c.maxRatioTicksPassedToSla
+			if c.maxRatioTicksPassedToSla() > maxRatioTicksPassedToSla {
+				maxRatioTicksPassedToSla = c.maxRatioTicksPassedToSla()
 			}
-			if c.maxRatioTicksPassedToSla < minRatioTicksPassedToSla {
-				minRatioTicksPassedToSla = c.maxRatioTicksPassedToSla
+			if c.maxRatioTicksPassedToSla() < minRatioTicksPassedToSla {
+				minRatioTicksPassedToSla = c.maxRatioTicksPassedToSla()
 			}
 			if c.ticksInQ() > Tftick(maxTicksInQ) {
 				maxTicksInQ = float64(c.ticksInQ())
@@ -167,18 +170,18 @@ func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 			// factors: num procs in range; num ticks in Q; max sla to ticksPassed ratio [for all of them, being smaller is better]
 			// normalized based on above min/max values
 			press := 0.0
-			if maxTicksInQ > 0 {
-				press += (float64(c.ticksInQ()) - minTicksInQ) / (maxTicksInQ - minTicksInQ)
+			// if maxTicksInQ > 0 {
+			// 	press += (float64(c.ticksInQ()) - minTicksInQ) / (maxTicksInQ - minTicksInQ)
+			// }
+			if maxRatioTicksPassedToSla != minRatioTicksPassedToSla {
+				press += (c.maxRatioTicksPassedToSla() - minRatioTicksPassedToSla) / (maxRatioTicksPassedToSla - minRatioTicksPassedToSla)
 			}
-			if maxRatioTicksPassedToSla > 0 {
-				press += (c.maxRatioTicksPassedToSla - minRatioTicksPassedToSla) / (maxRatioTicksPassedToSla - minRatioTicksPassedToSla)
-			}
-			if maxProcsInRange > 0 {
+			if maxProcsInRange != minProcsInRange {
 				press += float64((c.procsInRange(procToPlace.effectiveSla()))-minProcsInRange) / float64(maxProcsInRange-minProcsInRange)
 			}
 			coreToPressure[c] = press
-			// toWrite := fmt.Sprintf("giving core %v pressure val %v \n", c.coreId, press)
-			// logWrite(SCHED, toWrite)
+			toWrite := fmt.Sprintf("giving core %v pressure val %v \n", c.coreId, press)
+			logWrite(SCHED, toWrite)
 		}
 	}
 
