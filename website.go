@@ -9,14 +9,14 @@ const (
 	// fraction of procs generated that are in each category
 	FRACTION_PAGE_STATIC     = 0.6 // 0.5
 	FRACTION_PAGE_DYNAMIC    = 0.35
-	FRACTION_DATA_PROCESS_FG = 0.04 // 10
-	FRACTION_DATA_PROCESS_BG = 0.01 // 05
+	FRACTION_DATA_PROCESS_FG = 0.048 // 10
+	FRACTION_DATA_PROCESS_BG = 0.002 // 05
 
 	// Tick = 100 ms
 	// the max/min value that a sla can have for the diff proc types - slas will have uniform random value in this range
-	PAGE_STATIC_SLA_RANGE_MIN     = 0
+	PAGE_STATIC_SLA_RANGE_MIN     = 0.001 // 0.1 ms
 	PAGE_STATIC_SLA_RANGE_MAX     = 0.5
-	PAGE_DYNAMIC_SLA_RANGE_MIN    = 0
+	PAGE_DYNAMIC_SLA_RANGE_MIN    = 0.001
 	PAGE_DYNAMIC_SLA_RANGE_MAX    = 5
 	DATA_PROCESS_FG_SLA_RANGE_MIN = 3
 	DATA_PROCESS_FG_SLA_RANGE_MAX = 5
@@ -26,7 +26,7 @@ const (
 	// in MB
 	PAGE_STATIC_MEM_USG     = 20
 	PAGE_DYNAMIC_MEM_USG    = 300
-	DATA_PROCESS_FB_MEM_USG = 1000
+	DATA_PROCESS_FG_MEM_USG = 1000
 	DATA_PROCESS_BG_MEM_USG = 10000
 )
 
@@ -38,7 +38,6 @@ const (
 	PAGE_DYNAMIC
 	DATA_PROCESS_FG
 	DATA_PROCESS_BG
-	NUM_PROC_TYPES
 )
 
 func (pt ProcType) String() string {
@@ -60,7 +59,7 @@ func (pt ProcType) getExpectedSlaBuffer() float64 {
 // the amount memory a proc of the given type will use (for now this is static)
 func (pt ProcType) getMemoryUsage() Tmem {
 	// page static, page dynamic, data process fg, data process bg
-	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FB_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
+	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
 }
 
 // type CacheClnt interface {

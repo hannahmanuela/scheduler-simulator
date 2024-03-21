@@ -3,63 +3,68 @@ package slasched
 import (
 	"fmt"
 	"math"
-	"slices"
-
-	"golang.org/x/exp/maps"
+	"math/rand"
+	"sync"
 )
 
-type MachineMsgType int
+type MsgType int
 
 const (
-	PROC_DONE MachineMsgType = iota
-	PROC_KILLED
+	M_LB_PROC_DONE  MsgType = iota // machine -> lb; proc is done
+	LB_M_PLACE_PROC                // lb -> machine; placing proc on machine
+	C_M_NEED_WORK                  // core -> machine; core is out of work
+	C_M_PROC_DONE                  // core -> machine; proc is done
+	M_C_PUSH_PROC                  // machine -> core; proc for core
 )
 
-type CoreMsgType int
-
-const (
-	NEED_WORK      CoreMsgType = iota // msg by core bc it is out of work
-	PUSH_PROC                         // msg by the controller to the core with a proc it should take
-	RETURNING_PROC                    // potentially if proc pushed to core it responds with a proc it is then returning
-	PROC_DONE_CORE
-	PROC_KILLED_CORE
-)
-
-type MachineMessages struct {
-	msgType MachineMsgType
+type Message struct {
+	sender  Tid
+	msgType MsgType
 	proc    *Proc
-}
-
-type CoreMessages struct {
-	msgType CoreMsgType
-	proc    *Proc
+	wg      *sync.WaitGroup
 }
 
 type LoadBalancer struct {
-	machines           []*Machine
-	machinesNotInUse   []*Machine
-	procq              *Queue
-	machineConn        chan *MachineMessages
-	numProcsKilled     int
-	numProcsOverSLA_TN int // true negatives, ie ones who could have been completed in their sla
-	numProcsOverSLA_FN int // fals enegatives, ie ones whose compute time was longer that the sla
-	currTick           int
-	printedThisTick    bool
+	machines         map[Tid]*Machine
+	procq            *Queue
+	machineConnRecv  chan *Message         // listen for messages from machines
+	machineConnSend  map[Tid]chan *Message // send messages to machine
+	currTick         int
+	procTypeProfiles map[ProcType]*ProvProcDistribution
 }
 
-func newLoadBalancer(machines []*Machine, machineConn chan *MachineMessages) *LoadBalancer {
+func newLoadBalancer(machines map[Tid]*Machine, lbSendToMachines map[Tid]chan *Message, lbRecv chan *Message) *LoadBalancer {
 	lb := &LoadBalancer{
-		// start with one machine?
-		// machines:         []*Machine{machines[0]},
-		// machinesNotInUse: machines[1:],
 		machines:         machines,
-		machinesNotInUse: []*Machine{},
 		procq:            &Queue{q: make([]*Proc, 0)},
-		machineConn:      machineConn,
+		machineConnRecv:  lbRecv,
+		machineConnSend:  lbSendToMachines,
 		currTick:         0,
-		numProcsKilled:   0,
-		printedThisTick:  false,
+		procTypeProfiles: make(map[ProcType]*ProvProcDistribution),
 	}
+
+	// hard-coded for now
+	lb.procTypeProfiles[PAGE_STATIC] = &ProvProcDistribution{
+		computeUsed: Distribution{avg: PAGE_STATIC_SLA_RANGE_MAX, count: 0,
+			stdDev: (PAGE_STATIC_SLA_RANGE_MAX - PAGE_STATIC_SLA_RANGE_MIN) / 2.0},
+		memUsg: Distribution{avg: PAGE_STATIC_MEM_USG, count: 0, stdDev: 0},
+	}
+	lb.procTypeProfiles[PAGE_DYNAMIC] = &ProvProcDistribution{
+		computeUsed: Distribution{avg: PAGE_DYNAMIC_SLA_RANGE_MAX, count: 0,
+			stdDev: (PAGE_DYNAMIC_SLA_RANGE_MAX - PAGE_DYNAMIC_SLA_RANGE_MIN) / 2.0},
+		memUsg: Distribution{avg: PAGE_DYNAMIC_MEM_USG, count: 0, stdDev: 0},
+	}
+	lb.procTypeProfiles[DATA_PROCESS_FG] = &ProvProcDistribution{
+		computeUsed: Distribution{avg: DATA_PROCESS_FG_SLA_RANGE_MAX, count: 0,
+			stdDev: (DATA_PROCESS_FG_SLA_RANGE_MAX - DATA_PROCESS_FG_SLA_RANGE_MIN) / 2.0},
+		memUsg: Distribution{avg: DATA_PROCESS_FG_MEM_USG, count: 0, stdDev: 0},
+	}
+	lb.procTypeProfiles[DATA_PROCESS_BG] = &ProvProcDistribution{
+		computeUsed: Distribution{avg: DATA_PROCESS_BG_SLA_RANGE_MAX, count: 0,
+			stdDev: (DATA_PROCESS_BG_SLA_RANGE_MAX - DATA_PROCESS_BG_SLA_RANGE_MIN) / 2.0},
+		memUsg: Distribution{avg: DATA_PROCESS_BG_MEM_USG, count: 0, stdDev: 0},
+	}
+
 	go lb.listenForMachineMessages()
 	return lb
 }
@@ -74,151 +79,89 @@ func (lb *LoadBalancer) MachinesString() string {
 
 func (lb *LoadBalancer) listenForMachineMessages() {
 	for {
-		msg := <-lb.machineConn
+		msg := <-lb.machineConnRecv
 		switch msg.msgType {
-		case PROC_DONE:
+		case M_LB_PROC_DONE:
 			if VERBOSE_LB_STATS {
-				fmt.Printf("done: %v, %v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp), msg.proc.timesReplenished)
+				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp), msg.proc.timesReplenished)
+				logWrite(DONE_PROCS, toWrite)
 			}
-			//  when a proc is done, the ticksPassed on it is updated to be exact, so we don't have to worry about half ticks here
-			if msg.proc.timeLeftOnSLA() < 0 {
-				// proc went over based on sla, but was it over given actual compute?
-				// floats are weird just deal with it
-				if math.Abs(float64(msg.proc.ticksPassed-msg.proc.procInternals.actualComp)) > 0.000001 {
-					// yes, even actual compute was less than ticks passed
-					lb.numProcsOverSLA_TN += 1
-				} else {
-					// no, was in fact impossible to get it done on time (b/c we did the very best we could, ie ticksPassed = actualComp)
-					lb.numProcsOverSLA_FN += 1
-
-				}
+			if _, ok := lb.procTypeProfiles[msg.proc.procType()]; ok {
+				lb.procTypeProfiles[msg.proc.procType()].updateMem(msg.proc.memUsed())
+				lb.procTypeProfiles[msg.proc.procType()].updateCompute(msg.proc.compUsed())
+			} else {
+				lb.procTypeProfiles[msg.proc.procType()] = newProcProcDistribution(msg.proc.memUsed(), msg.proc.compUsed())
 			}
-		case PROC_KILLED:
-			if VERBOSE_LB_STATS {
-				fmt.Printf("killing: %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, float64(msg.proc.procInternals.sla), float64(msg.proc.procInternals.compDone), float64(msg.proc.memUsed()))
-			}
-			lb.numProcsKilled += 1
-			lb.procq.enq(msg.proc)
-			// msg.wg.Done()
 		}
 	}
 }
 
 func (lb *LoadBalancer) placeProcs() {
 	// setup
-	lb.printedThisTick = false
 	lb.currTick += 1
 	p := lb.getProc()
 
 	for p != nil {
 		// place given proc
-		if VERBOSE_LB {
-			fmt.Printf("placing proc %v\n", p)
+
+		// keep profiles on procs, use that
+		// sample machines and see which one might be good
+		var machineToUse *Machine
+		if _, ok := lb.procTypeProfiles[p.procType()]; ok {
+			// if we have profiling information, use it
+			machineToUse = lb.pickMachineGivenProfile(lb.procTypeProfiles[p.procType()])
+		} else {
+			// otherwise just pick a machine
+			machineToUse = lb.machines[Tid(rand.Int()%len(lb.machines))]
 		}
-
-		ticksAhead := lb.getMachineStatsForDeadline(p.timeShouldBeDone)
-		machineWeights := lb.calcluateWeights(ticksAhead)
-		machineToUse := lb.machines[findMaxIndex(machineWeights)]
-
-		// if there is no good option, we add a machine and put it there
-		// if (machineToUse.sched.getTicksAhead(p.timeShouldBeDone) > THRESHOLD_TICKS_AHEAD_MAX || machineToUse.sched.memUsage() > THRESHOLD_MEM_USG_MAX) && len(lb.machinesNotInUse) > 0 {
-		// 	// add a nnew machine
-		// 	// NOTE the process of choosing a machine will get more sophisticated later (for now we cycle, ie append to end and pull from front)
-		// 	machineToUse = lb.machinesNotInUse[0]
-		// 	lb.machinesNotInUse = lb.machinesNotInUse[1:]
-		// 	lb.machines = append(lb.machines, machineToUse)
-		// }
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
-		machineToUse.sched.q.enq(p)
+		p.procTypeProfile = lb.procTypeProfiles[p.procType()]
+		var wg sync.WaitGroup
+		wg.Add(1)
+		lb.machineConnSend[machineToUse.mid] <- &Message{-1, LB_M_PLACE_PROC, p, &wg}
+		wg.Wait()
 		if VERBOSE_LB_STATS {
-			if p.migrated {
-				fmt.Printf("adding: %v, %v, %v, %v, %v, 1\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
-			} else {
-				fmt.Printf("adding: %v, %v, %v, %v, %v, 0\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
-			}
-
+			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
+			logWrite(ADDED_PROCS, toWrite)
 		}
 		p = lb.getProc()
 	}
-
-	// remove a machine if the load is overall pretty low
-	// (should we do this before or after placing this round of procs? after might be a bit overestimating amount of load we are experiencing?
-	// totalTicks, memUsg := lb.getMachineStats()
-	// // decrease if values are low and we have multiple machines
-	// if avg(maps.Values(memUsg)) < THRESHOLD_MEM_USG_MIN && avg(maps.Values(totalTicks)) < THRESHOLD_NUM_TICKS_MIN && len(lb.machines) > 1 {
-	// 	// ah, we might want to be a bit more smart in which machine we remove?
-	// 	toRemove := lb.machines[0]
-	// 	lb.machines = lb.machines[1:]
-	// 	lb.machinesNotInUse = append(lb.machinesNotInUse, toRemove)
-	// 	if VERBOSE_SCHED_STATS {
-	// 		fmt.Printf("machine: 0, %v, %v, %v, %v\n", lb.currTick, toRemove.mid, avg(maps.Values(memUsg)), avg(maps.Values(totalTicks)))
-	// 	}
-	// }
 }
 
-// DIFFERENT SCHEDULING GOALS IN REL TO SIGNALS WE HAVE
+// probably actually want this to be via communication with the machine itself, let it say yes or no?
+// that way we avoid the "gold rush" things, although since this is one by one anyway maybe its fine
+func (lb *LoadBalancer) pickMachineGivenProfile(dist *ProvProcDistribution) *Machine {
 
-// goal 1: don't overload on compute
-// - if a machine has a lot of work that would have to be done before the current one would be able to run, penalize that machine
+	// minTicks := math.Inf(1)
+	minNumProcs := int(math.Inf(1))
+	var machineToUse *Machine
 
-// goal 2: don't place proc on machine where mem is tight
-// - the higher a machine's mem pressure is, the less procs we should place there
-func (lb *LoadBalancer) calcluateWeights(ticksAhead map[*Machine]Tftick) []float64 {
+	maxMemFree := float64(0)
+	var minMemMachine *Machine
 
-	maxTicksAhead := slices.Max(maps.Values(ticksAhead))
-
-	var machineWeights []float64
+	// check if memory fits, and from those machines take the one with the least ticksInQ
 	for _, m := range lb.machines {
-		// memory factor - as a percentage
-		memFree := m.sched.memUsage()
-		weight := memFree
-		// tke into account the amount of ticks a proc would have to wait before it can start to run
-		if maxTicksAhead > 0 {
-			numTicksAhead := ticksAhead[m]
-			diffToMaxTicksAhead := maxTicksAhead - numTicksAhead
-			// as a percentage of the max val
-			normedDiffToMaxNumTicks := float64(diffToMaxTicksAhead) / float64(maxTicksAhead)
-			weight += normedDiffToMaxNumTicks
-			if VERBOSE_LB {
-				fmt.Printf("given that the max ticks ahead is %v, and this machine has %v ticks ahead (diff: %v, normed: %v), gave it weight %v\n", maxTicksAhead, numTicksAhead, diffToMaxTicksAhead, normedDiffToMaxNumTicks, weight)
-			}
-		} else {
-			if VERBOSE_LB {
-				fmt.Printf("no ticks ahead anywhere!\n")
-			}
+		if m.sched.memFree() > (dist.memUsg.avg+dist.memUsg.stdDev) && m.sched.procsInRange(Tftick(dist.computeUsed.avg)) < minNumProcs {
+			// minTicks = m.sched.ticksInQ()
+			minNumProcs = m.sched.procsInRange(Tftick(dist.computeUsed.avg))
+			machineToUse = m
 		}
-		machineWeights = append(machineWeights, weight)
+		if m.sched.memFree() < maxMemFree {
+			maxMemFree = m.sched.memFree()
+			minMemMachine = m
+		}
 	}
 
-	return machineWeights
-}
-
-// returns:
-// totalTicks: number of expected ticks of computation left
-// memUsg: the memory usage of each machine
-// func (lb *LoadBalancer) getMachineStats() (map[*Machine]Tftick, map[*Machine]float64) {
-// 	totalTicks := make(map[*Machine]Tftick, 0)
-// 	memUsg := make(map[*Machine]float64, 0)
-// 	for _, m := range lb.machines {
-// 		totalTicks[m] = m.sched.q.ticksInQueue()
-// 		memUsg[m] = m.sched.memUsage()
-// 	}
-
-// 	return totalTicks, memUsg
-// }
-
-// returns:
-// ticksBeforeSla: the sum of the SLA of all procs that have an earlier deadline than the proc being placed (ie how long the proc would have to wait worst case scenario)
-func (lb *LoadBalancer) getMachineStatsForDeadline(deadline Tftick) map[*Machine]Tftick {
-	ticksAhead := make(map[*Machine]Tftick, 0)
-	for _, m := range lb.machines {
-		ticks := m.sched.getTicksAhead(deadline)
-		ticksAhead[m] = ticks
+	// if memory doesn't fit anywhere, we're fucked I guess? pick machine with least memory used
+	//  TODO: maybe make an LB queue?
+	if machineToUse == nil {
+		fmt.Println("IT DOES'T EVEN FIT ANYWHERE")
+		machineToUse = minMemMachine
 	}
 
-	return ticksAhead
+	return machineToUse
 }
 
 func (lb *LoadBalancer) getProc() *Proc {
