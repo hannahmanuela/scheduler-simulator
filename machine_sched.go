@@ -133,8 +133,6 @@ func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 
 	minProcsInRange := int(math.Inf(1))
 	maxProcsInRange := 0
-	minTicksInQ := math.Inf(0)
-	maxTicksInQ := 0.0
 	minRatioTicksPassedToSla := math.Inf(0)
 	maxRatioTicksPassedToSla := 0.0
 	for _, c := range sd.coreScheds {
@@ -145,12 +143,6 @@ func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 			}
 			if c.maxRatioTicksPassedToSla() < minRatioTicksPassedToSla {
 				minRatioTicksPassedToSla = c.maxRatioTicksPassedToSla()
-			}
-			if c.ticksInQ() > Tftick(maxTicksInQ) {
-				maxTicksInQ = float64(c.ticksInQ())
-			}
-			if c.ticksInQ() < Tftick(minTicksInQ) {
-				minTicksInQ = float64(c.ticksInQ())
 			}
 			if c.procsInRange(procToPlace.effectiveSla()) > maxProcsInRange {
 				maxProcsInRange = c.procsInRange(procToPlace.effectiveSla())
@@ -167,12 +159,9 @@ func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 	for _, c := range sd.coreScheds {
 		// core is a contender if has memory for it
 		if (MAX_MEM_PER_CORE - c.memUsed()) > Tmem(procToPlace.procTypeProfile.memUsg.avg+procToPlace.procTypeProfile.memUsg.stdDev) {
-			// factors: num procs in range; num ticks in Q; max sla to ticksPassed ratio [for all of them, being smaller is better]
+			// factors: num procs in range; max sla to ticksPassed ratio [for both, being smaller is better]
 			// normalized based on above min/max values
 			press := 0.0
-			// if maxTicksInQ > 0 {
-			// 	press += (float64(c.ticksInQ()) - minTicksInQ) / (maxTicksInQ - minTicksInQ)
-			// }
 			if maxRatioTicksPassedToSla != minRatioTicksPassedToSla {
 				press += (c.maxRatioTicksPassedToSla() - minRatioTicksPassedToSla) / (maxRatioTicksPassedToSla - minRatioTicksPassedToSla)
 			}
