@@ -91,6 +91,8 @@ func (cs *CoreSched) tryGetWork() {
 		cs.machineConnSend <- &Message{cs.coreId, C_M_NEED_WORK, nil, nil}
 		msg := <-cs.machineConnRecv
 		if msg.proc != nil {
+			toWrite := fmt.Sprintf("%v, %v, %v, got proc from machine: %v \n", cs.currTick, cs.machineId, cs.coreId, msg.proc.String())
+			logWrite(SCHED, toWrite)
 			cs.q.enq(msg.proc)
 		}
 	}
@@ -99,7 +101,6 @@ func (cs *CoreSched) tryGetWork() {
 // do 1 tick of computation
 // run procs in q, asking for more if we don't have any or run out of them in the middle
 // deq from q then run for an amount of time inversely prop to expectedComputationLeft
-// TODO: the way I ask for work right now is stupid I should batch things?
 func (cs *CoreSched) runProcs() {
 	cs.tryGetWork()
 
@@ -162,50 +163,6 @@ func (cs *CoreSched) runProcs() {
 	// }
 
 }
-
-// func (cs *CoreSched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
-
-// 	procToTicks := make(map[*Proc]Tftick, 0)
-
-// 	// get values that allow us to inert the realtionsip between timeLeftOnSLA and ticks given
-// 	// (because more time left should equal less ticks given)
-// 	// also find out if there are procs over the SLA, and if yes how many
-// 	totalTimeLeft := Tftick(0)
-// 	numberOverSLA := 0
-// 	totalAmountOverSLA := 0.0
-// 	for _, p := range cs.q.getQ() {
-// 		if p.timeLeftOnSLA() < 0 {
-// 			numberOverSLA += 1
-// 			totalAmountOverSLA += math.Abs(float64(p.timeLeftOnSLA()))
-// 		} else {
-// 			totalTimeLeft += p.timeLeftOnSLA()
-// 		}
-// 	}
-// 	relativeNeedsSum := Tftick(0)
-// 	for _, p := range cs.q.getQ() {
-// 		if p.timeLeftOnSLA() > 0 {
-// 			relativeNeedsSum += totalTimeLeft / p.timeLeftOnSLA()
-// 		}
-// 	}
-
-// 	ticksGiven := Tftick(0)
-// 	for _, currProc := range cs.q.getQ() {
-// 		allocatedTicks := ((totalTimeLeft / currProc.timeLeftOnSLA()) / relativeNeedsSum) * ticksLeftToGive
-// 		if numberOverSLA > 0 {
-// 			// ~ p a n i c ~
-// 			// go into emergency mode where the tick is only split among the procs that are over, proportionally to how late they are
-// 			if currProc.timeLeftOnSLA() < 0 {
-// 				allocatedTicks = Tftick(float64(ticksLeftToGive) * math.Abs(float64(currProc.timeLeftOnSLA())) / totalAmountOverSLA)
-// 			} else {
-// 				allocatedTicks = 0
-// 			}
-// 		}
-// 		procToTicks[currProc] = allocatedTicks
-// 		ticksGiven += allocatedTicks
-// 	}
-
-// 	return procToTicks
-// }
 
 func (cs *CoreSched) allocTicksToProc(ticksLeftToGive Tftick, procToRun *Proc) Tftick {
 

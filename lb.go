@@ -155,6 +155,7 @@ func (lb *LoadBalancer) pickMachineGivenProfile(dist *ProvProcDistribution) *Mac
 	}
 
 	// if memory doesn't fit anywhere, we're fucked I guess? pick machine with least memory used
+	//  TODO: maybe make an LB queue?
 	if machineToUse == nil {
 		fmt.Println("IT DOES'T EVEN FIT ANYWHERE")
 		machineToUse = minMemMachine

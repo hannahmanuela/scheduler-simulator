@@ -2,15 +2,14 @@ package slasched
 
 import (
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 )
 
-const (
-	BUCKETS_INIT_SIZE = 1
-	BUCKETS_BASE      = 4
-)
+// const (
+// 	BUCKETS_INIT_SIZE = 100
+// 	BUCKETS_BASE      = 5
+// )
 
 type Ttick int
 type Tmem int
@@ -66,8 +65,19 @@ func sampleNormal(mu, sigma float64) float64 {
 // eg if we are looking at SLAs in an increment size of 2 and this is given 1.5, it will return 0 (since 1.5 would be in the 0-2 range)
 func getRangeBottomFromSLA(sla Tftick) float64 {
 
-	bucketIndex := math.Ceil(math.Log(float64(sla)/BUCKETS_INIT_SIZE) / math.Log(BUCKETS_BASE))
-	lowerBound := math.Pow(BUCKETS_BASE, bucketIndex-1) * BUCKETS_INIT_SIZE
+	// bucketIndex := math.Ceil(math.Log(float64(sla)/BUCKETS_INIT_SIZE) / math.Log(BUCKETS_BASE))
+	// lowerBound := math.Pow(BUCKETS_BASE, bucketIndex-1) * BUCKETS_INIT_SIZE
+	lowerBound := 0.0
+
+	if sla <= Tftick(1) {
+		lowerBound = 0
+	} else if sla <= Tftick(5) {
+		lowerBound = 1
+	} else if sla <= Tftick(10) {
+		lowerBound = 5
+	} else {
+		lowerBound = 10
+	}
 
 	return lowerBound
 }

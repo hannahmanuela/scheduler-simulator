@@ -73,16 +73,23 @@ func (sd *Sched) runLBConn() {
 				minVal := int(math.Inf(1))
 				var coreToUse *CoreSched
 				for _, c := range sd.coreScheds {
-					// core is a contender if has min procs in range and has memory for it
-					if c.procsInRange(msg.proc.effectiveSla()) < minVal &&
-						((MAX_MEM_PER_CORE - c.memUsed()) < Tmem(msg.proc.procTypeProfile.memUsg.avg+msg.proc.procTypeProfile.memUsg.stdDev)) {
-						minVal = c.procsInRange(msg.proc.effectiveSla())
-						coreToUse = c
+					// core is a contender if has memory for it
+					if (MAX_MEM_PER_CORE - c.memUsed()) > Tmem(msg.proc.procTypeProfile.memUsg.avg+msg.proc.procTypeProfile.memUsg.stdDev) {
+						// want core with min procs in range or empty Q
+						if (c.procsInRange(msg.proc.effectiveSla()) < minVal) ||
+							(c.procsInRange(msg.proc.effectiveSla()) == minVal && c.ticksInQ() == 0) {
+							minVal = c.procsInRange(msg.proc.effectiveSla())
+							coreToUse = c
+						}
 					}
 				}
 				// is this safe? -> yes, because I only add in between ticks, not while they're running
 				if coreToUse != nil {
+					toWrite := fmt.Sprintf("%v, %v, %v, machine pushing proc to core: %v \n", sd.currTick, sd.machineId, coreToUse.coreId, msg.proc.String())
+					logWrite(SCHED, toWrite)
 					sd.coreScheds[coreToUse.coreId].q.enq(msg.proc)
+					toWrite = fmt.Sprintf("new Q:  %v\n", sd.coreScheds[coreToUse.coreId].q.String())
+					logWrite(SCHED, toWrite)
 				} else {
 					sd.q.enq(msg.proc)
 				}
@@ -105,6 +112,8 @@ func (sd *Sched) runCoreConn() {
 			// if global q has work that fits, steal that
 			if p := sd.q.deq(); p != nil {
 				if (p.procTypeProfile.memUsg.avg + p.procTypeProfile.memUsg.stdDev) < float64(memFree) {
+					toWrite := fmt.Sprintf("%v, %v, %v, machine giving proc from own q: %v \n", sd.currTick, sd.machineId, msg.sender, p.String())
+					logWrite(SCHED, toWrite)
 					sd.coreConnSend[msg.sender] <- &Message{sd.machineId, M_C_PUSH_PROC, p, nil}
 					continue
 				} else {
@@ -124,6 +133,10 @@ func (sd *Sched) runCoreConn() {
 			}
 			if coreWithMaxWork != nil {
 				procToSteal = coreWithMaxWork.q.workSteal(memFree)
+			}
+			if procToSteal != nil {
+				toWrite := fmt.Sprintf("%v, %v, %v, machine giving proc from other cores q: %v \n", sd.currTick, sd.machineId, msg.sender, procToSteal.String())
+				logWrite(SCHED, toWrite)
 			}
 			sd.coreConnSend[msg.sender] <- &Message{sd.machineId, M_C_PUSH_PROC, procToSteal, nil}
 		case C_M_PROC_DONE:

@@ -21,10 +21,10 @@ type Proc struct {
 
 func (p *Proc) String() string {
 	return p.procInternals.String() +
-		", deadline: " + p.timeShouldBeDone.String() +
+		// ", deadline: " + p.timeShouldBeDone.String() +
 		", ticks passed: " + p.ticksPassed.String() +
-		", times replenished: " + strconv.Itoa(p.timesReplenished) +
-		", procTypeProfile: " + p.procTypeProfile.String()
+		", times replenished: " + strconv.Itoa(p.timesReplenished)
+	// ", procTypeProfile: " + p.procTypeProfile.String()
 }
 
 func newProvProc(currTick Ttick, privProc *ProcInternals) *Proc {
@@ -93,8 +93,7 @@ type ProcInternals struct {
 }
 
 func (p *ProcInternals) String() string {
-	return fmt.Sprintf("{type %v, sla %v actualComp %v compDone %v memUsed %d}", p.procType, p.sla,
-		p.actualComp, p.compDone, p.memUsed())
+	return fmt.Sprintf("sla %v", p.sla)
 }
 
 func (p *ProcInternals) memUsed() Tmem {

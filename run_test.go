@@ -18,11 +18,11 @@ const (
 // 			fmt.Println(currVal)
 // 			lastVal = currVal
 // 		}
-// 		currTest += 0.001
+// 		currTest += 0.0001
 // 	}
 // }
 
-func TestSanityCheck(t *testing.T) {
+func TestRunWorld(t *testing.T) {
 	numMachines := 2
 	numCores := 4
 	emptyFiles()
