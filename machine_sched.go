@@ -6,6 +6,7 @@ import (
 )
 
 const (
+	// ooh make this be based on ratio between time spent waiting and sla? (eg if I've waited for more then 1/3 of the sla, just push me)
 	SLA_PUSH_THRESHOLD = 1 // 1 tick = 100 ms ==> 5 ms (see website.go)
 )
 
@@ -58,6 +59,15 @@ func (sd *Sched) printAllProcs() {
 	}
 	for _, core := range sd.coreScheds {
 		core.printAllProcs()
+	}
+}
+
+func (sd *Sched) tickAllProcs() {
+	for _, p := range sd.q.getQ() {
+		p.ticksPassed += 1
+	}
+	for _, core := range sd.coreScheds {
+		core.tickAllProcs()
 	}
 }
 

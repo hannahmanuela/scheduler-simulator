@@ -67,6 +67,12 @@ func (w *World) printAllProcs() {
 	}
 }
 
+func (w *World) tickAllProcs() {
+	for _, m := range w.machines {
+		m.sched.tickAllProcs()
+	}
+}
+
 func (w *World) printTickStats() {
 	for _, m := range w.lb.machines {
 		for _, core := range m.sched.coreScheds {
@@ -91,6 +97,7 @@ func (w *World) Tick(numProcs int) {
 	if VERBOSE_MACHINE_USAGE_STATS {
 		w.printTickStats()
 	}
+	w.tickAllProcs()
 }
 
 func (w *World) Run(nTick int) {

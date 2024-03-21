@@ -76,9 +76,6 @@ func (cs *CoreSched) procsInRange(sla Tftick) int {
 func (cs *CoreSched) tick() {
 	cs.currTick += 1
 	cs.runProcs()
-	for _, currProc := range cs.q.getQ() {
-		currProc.ticksPassed += 1
-	}
 }
 
 type TickBool struct {
@@ -194,5 +191,11 @@ func (cs *CoreSched) printAllProcs() {
 		toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", cs.currTick, cs.machineId, cs.coreId,
 			float64(p.procInternals.sla), float64(p.procInternals.actualComp), float64(p.compUsed()))
 		logWrite(CURR_PROCS, toWrite)
+	}
+}
+
+func (cs *CoreSched) tickAllProcs() {
+	for _, p := range cs.q.getQ() {
+		p.ticksPassed += 1
 	}
 }
