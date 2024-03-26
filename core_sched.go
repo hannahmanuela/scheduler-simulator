@@ -5,8 +5,10 @@ import (
 )
 
 const (
-	THRESHOLD_QLEN       = 1
+	THRESHOLD_TICKS_IN_Q = 2
 	TICK_SCHED_THRESHOLD = 0.00001 // given that 1 tick = 100ms (see website.go)
+
+	MIN_SCHED_QUANT = 0.001
 )
 
 type CoreSched struct {
@@ -93,7 +95,7 @@ type TickBool struct {
 }
 
 func (cs *CoreSched) tryGetWork() {
-	if cs.q.qlen() < THRESHOLD_QLEN {
+	if cs.ticksInQ() < THRESHOLD_TICKS_IN_Q {
 		cs.machineConnSend <- &Message{cs.coreId, C_M_NEED_WORK, nil, nil}
 		msg := <-cs.machineConnRecv
 		if msg.proc != nil {
@@ -118,38 +120,41 @@ func (cs *CoreSched) runProcs() {
 
 	for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && cs.q.qlen() > 0 {
 
-		// get proc to run, which will be the one at the head of the q (earliest deadline first)
-		procToRun := cs.q.deq()
-		ticksToGive := cs.allocTicksToProc(ticksLeftToGive, procToRun)
-		ticksUsed, done := procToRun.runTillOutOrDone(ticksToGive)
-		ticksLeftToGive -= ticksUsed
-		toWrite := fmt.Sprintf("%v, %v, %v running proc %v, gave %v ticks, used %v ticks\n", cs.currTick, cs.machineId, cs.coreId, procToRun.String(), ticksToGive.String(), ticksUsed.String())
-		logWrite(SCHED, toWrite)
+		ticksPerProc := cs.allocTicksToProcs(ticksLeftToGive)
+		newQ := []*Proc{}
 
-		// add ticks used to the tick map
-		if val, ok := procToTicksMap[procToRun]; ok {
-			val.tick += ticksUsed
-			val.done = done
-			procToTicksMap[procToRun] = val
-		} else {
-			procToTicksMap[procToRun] = TickBool{ticksUsed, done}
-		}
+		for _, procToRun := range cs.q.getQ() {
+			ticksToGive := ticksPerProc[procToRun]
+			ticksUsed, done := procToRun.runTillOutOrDone(ticksToGive)
+			ticksLeftToGive -= ticksUsed
+			toWrite := fmt.Sprintf("%v, %v, %v running proc %v, gave %v ticks, used %v ticks\n", cs.currTick, cs.machineId, cs.coreId, procToRun.String(), ticksToGive.String(), ticksUsed.String())
+			logWrite(SCHED, toWrite)
 
-		if !done {
-			// check if the memroy used by the proc sent us over the edge (and if yes, kill as needed)
-			if cs.memUsed() > MAX_MEM_PER_CORE {
-				fmt.Println("--> OUT OF MEMORY")
-				fmt.Printf("q: %v\n", cs.q.String())
+			// add ticks used to the tick map
+			if val, ok := procToTicksMap[procToRun]; ok {
+				val.tick += ticksUsed
+				val.done = done
+				procToTicksMap[procToRun] = val
+			} else {
+				procToTicksMap[procToRun] = TickBool{ticksUsed, done}
 			}
-			// add proc back into queue
-			cs.q.enq(procToRun)
-		} else {
-			// if the proc is done, update the ticksPassed to be exact for metrics etc
-			procToRun.ticksPassed = procToRun.ticksPassed + (1 - ticksLeftToGive)
-			// don't need to wait if we are just telling it a proc is done
-			cs.machineConnSend <- &Message{cs.coreId, C_M_PROC_DONE, procToRun, nil}
+
+			if !done {
+				// check if the memroy used by the proc sent us over the edge (and if yes, kill as needed)
+				if cs.memUsed() > MAX_MEM_PER_CORE {
+					fmt.Println("--> OUT OF MEMORY")
+					fmt.Printf("q: %v\n", cs.q.String())
+				}
+				// add proc back into queue
+				newQ = append(newQ, procToRun)
+			} else {
+				// if the proc is done, update the ticksPassed to be exact for metrics etc
+				procToRun.ticksPassed = procToRun.ticksPassed + (1 - ticksLeftToGive)
+				// don't need to wait if we are just telling it a proc is done
+				cs.machineConnSend <- &Message{cs.coreId, C_M_PROC_DONE, procToRun, nil}
+			}
 		}
-		cs.tryGetWork()
+		cs.q.q = newQ
 	}
 
 	// if VERBOSE_SCHED_STATS {
@@ -168,29 +173,34 @@ func (cs *CoreSched) runProcs() {
 
 }
 
-func (cs *CoreSched) allocTicksToProc(ticksLeftToGive Tftick, procToRun *Proc) Tftick {
+func (cs *CoreSched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {
 
 	// get values that allow us to inert the realtionsip between expectedCompLeft and ticks given
 	// (because more time left should equal less ticks given)
-	// TODO: is this the metric we want? or rather time left on sla?
-	slaSum := procToRun.effectiveSla()
+	procToTicks := make(map[*Proc]Tftick, 0)
+
+	totalTimeLeft := Tftick(0)
 	for _, p := range cs.q.getQ() {
-		slaSum += p.effectiveSla()
+		totalTimeLeft += max(p.timeLeftOnSLA(), 0.00001)
 	}
-	relativeNeedsSum := Tftick(slaSum / procToRun.effectiveSla())
+
+	relativeNeedsSum := Tftick(0)
 	for _, p := range cs.q.getQ() {
 		if p.effectiveSla() > 0 {
-			relativeNeedsSum += slaSum / p.effectiveSla()
+			relativeNeedsSum += totalTimeLeft / max(p.timeLeftOnSLA(), 0.00001)
 		}
 	}
 
-	allocatedTicks := ((slaSum / procToRun.effectiveSla()) / relativeNeedsSum) * ticksLeftToGive
-	if allocatedTicks < 0 {
-		fmt.Printf("ERROR -- allocated negative ticks. totalTimeLeft: %v, procToRun.expectedCompLeft() %v, relativeNeedsSum %v\n",
-			slaSum, procToRun.effectiveSla(), relativeNeedsSum)
+	ticksGiven := Tftick(0)
+	for _, currProc := range cs.q.getQ() {
+		allocatedTicks := ((totalTimeLeft / max(currProc.timeLeftOnSLA(), 0.00001)) / relativeNeedsSum) * ticksLeftToGive
+		// toWrite := fmt.Sprintf("%v, %v, %v allocating to proc %v, gave %v ticks, because of %v totalTimeLeft and %v ratio btw total and procs timeleft \n", cs.currTick, cs.machineId, cs.coreId, currProc.String(), allocatedTicks, totalTimeLeft, max(currProc.timeLeftOnSLA(), 0.00001))
+		// logWrite(SCHED, toWrite)
+		procToTicks[currProc] = allocatedTicks
+		ticksGiven += allocatedTicks
 	}
 
-	return allocatedTicks
+	return procToTicks
 }
 
 func (cs *CoreSched) printAllProcs() {

@@ -8,8 +8,10 @@ import (
 const (
 	MAX_MEM_PER_CORE = 11000 // the amount of memory every core will have, in MB
 
-	TICKS_WAIT_LOAD_CHANGES = 10
-	INITIAL_LOAD            = 1
+	TICKS_WAIT_LOAD_CHANGES = 100
+	INITIAL_LOAD            = 4
+	THRESHOLD_RATIO_MIN     = 0.1 // min max ratio below which we add load
+	THRESHOLD_RATIO_MAX     = 0.5 // min max ratio above which we reduce load
 
 	VERBOSE_LB_STATS            = true
 	VERBOSE_SCHED_STATS         = true
@@ -63,10 +65,10 @@ func (w *World) minMaxRatioTicksPassedToSla() float64 {
 }
 
 func (w *World) evalLoad() {
-	if w.minMaxRatioTicksPassedToSla() < 0.1 && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
+	if w.minMaxRatioTicksPassedToSla() < THRESHOLD_RATIO_MIN && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
 		w.numProcsToGen += 1
 		w.lastChangedLoad = w.currTick
-	} else if w.minMaxRatioTicksPassedToSla() > 0.5 && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
+	} else if w.minMaxRatioTicksPassedToSla() > THRESHOLD_RATIO_MAX && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
 		w.numProcsToGen -= 1
 		w.lastChangedLoad = w.currTick
 	}
@@ -131,6 +133,6 @@ func (w *World) Tick(numProcs int) {
 func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
 		w.evalLoad()
-		w.Tick(4)
+		w.Tick(w.numProcsToGen)
 	}
 }
