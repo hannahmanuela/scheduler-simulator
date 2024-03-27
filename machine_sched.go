@@ -55,6 +55,7 @@ func (sd *Sched) tick() {
 	sd.currTick += 1
 
 	// push procs onto core if they have waited for long enough
+	newSdQ := []*Proc{}
 	for _, p := range sd.q.getQ() {
 		if (p.ticksPassed / p.effectiveSla()) >= PUSH_RATIO_THRESHOLD {
 			coreToUse := sd.getCoreToUse(p)
@@ -62,13 +63,16 @@ func (sd *Sched) tick() {
 				toWrite := fmt.Sprintf("%v, %v, %v, machine pushing proc to core: %v \n", sd.currTick, sd.machineId, coreToUse.coreId, p.String())
 				logWrite(SCHED, toWrite)
 				coreToUse.q.enq(p)
-				sd.q.remove(p)
 			} else {
 				toWrite := fmt.Sprintf("%v, %v, machine wanted to push proc to core: %v \n", sd.currTick, sd.machineId, p.String())
 				logWrite(SCHED, toWrite)
+				newSdQ = append(newSdQ, p)
 			}
+		} else {
+			newSdQ = append(newSdQ, p)
 		}
 	}
+	sd.q.q = newSdQ
 
 	for _, cs := range sd.coreScheds {
 		cs.tick()
@@ -90,6 +94,10 @@ func (sd *Sched) tickAllProcs() {
 	for _, p := range sd.q.getQ() {
 		p.ticksPassed += 1
 	}
+	for _, core := range sd.coreScheds {
+		core.tryGetWork()
+	}
+
 	for _, core := range sd.coreScheds {
 		core.tickAllProcs()
 	}
@@ -126,10 +134,7 @@ func (sd *Sched) runLBConn() {
 
 }
 
-func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
-
-	toWrite := fmt.Sprintf("%v, %v, placing proc: %v \n", sd.currTick, sd.machineId, procToPlace.effectiveSla())
-	logWrite(SCHED, toWrite)
+func (sd *Sched) getCorePressures(procToPlace *Proc) map[Tid]float64 {
 
 	minProcsInRange := int(math.Inf(1))
 	maxProcsInRange := 0
@@ -155,7 +160,7 @@ func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 	// toWrite = fmt.Sprintf("minProcsInRange: %v, maxProcsInRange: %v, minTicksInQ: %v, maxTicksInQ: %v, minRatioSlaToTicksPassed: %v, maxRatioSlaToTicksPassed: %v \n", minProcsInRange, maxProcsInRange, minTicksInQ, maxTicksInQ, minRatioSlaToTicksPassed, maxRatioSlaToTicksPassed)
 	// logWrite(SCHED, toWrite)
 
-	coreToPressure := make(map[*CoreSched]float64, 0)
+	coreToPressure := make(map[Tid]float64, 0)
 	for _, c := range sd.coreScheds {
 		// core is a contender if has memory for it
 		if (MAX_MEM_PER_CORE - c.memUsed()) > Tmem(procToPlace.procTypeProfile.memUsg.avg+procToPlace.procTypeProfile.memUsg.stdDev) {
@@ -168,13 +173,25 @@ func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 			if maxProcsInRange != minProcsInRange {
 				press += float64((c.procsInRange(procToPlace.effectiveSla()))-minProcsInRange) / float64(maxProcsInRange-minProcsInRange)
 			}
-			coreToPressure[c] = press
-			toWrite := fmt.Sprintf("giving core %v pressure val %v \n", c.coreId, press)
-			logWrite(SCHED, toWrite)
+			coreToPressure[c.coreId] = press
+			if VERBOSE_PRESSURE_VALS {
+				toWrite := fmt.Sprintf("giving core %v pressure val %v; given min ratio %v, max ratio %v, min procs %v, max procs %v \n",
+					c.coreId, press, maxRatioTicksPassedToSla, minRatioTicksPassedToSla, minProcsInRange, maxProcsInRange)
+				logWrite(SCHED, toWrite)
+			}
 		}
 	}
+	return coreToPressure
+}
 
-	var coreToUse *CoreSched
+func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
+
+	toWrite := fmt.Sprintf("%v, %v, placing proc: %v \n", sd.currTick, sd.machineId, procToPlace.effectiveSla())
+	logWrite(SCHED, toWrite)
+
+	coreToPressure := sd.getCorePressures(procToPlace)
+
+	var coreToUse Tid
 	minPressure := math.Inf(1)
 	for core, press := range coreToPressure {
 		if press < minPressure {
@@ -183,7 +200,7 @@ func (sd *Sched) getCoreToUse(procToPlace *Proc) *CoreSched {
 		}
 	}
 
-	return coreToUse
+	return sd.coreScheds[coreToUse]
 }
 
 func (sd *Sched) runCoreConn() {
@@ -206,6 +223,7 @@ func (sd *Sched) runCoreConn() {
 			}
 
 			// otherwise look for another core that might have work
+			// only steal if dst core has lower pressure metrics?
 			var procToSteal *Proc
 			var coreWithMaxWork *CoreSched
 			maxTicks := Tftick(0)
@@ -219,8 +237,13 @@ func (sd *Sched) runCoreConn() {
 				procToSteal = coreWithMaxWork.q.workSteal(memFree)
 			}
 			if procToSteal != nil {
-				toWrite := fmt.Sprintf("%v, %v, %v, machine giving proc from other cores q: %v \n", sd.currTick, sd.machineId, msg.sender, procToSteal.String())
-				logWrite(SCHED, toWrite)
+				corePressures := sd.getCorePressures(procToSteal)
+				if corePressures[msg.sender] > corePressures[coreWithMaxWork.coreId] {
+					procToSteal = nil
+				} else {
+					toWrite := fmt.Sprintf("%v, %v, %v, machine giving proc from other cores q: %v \n", sd.currTick, sd.machineId, msg.sender, procToSteal.String())
+					logWrite(SCHED, toWrite)
+				}
 			}
 			sd.coreConnSend[msg.sender] <- &Message{sd.machineId, M_C_PUSH_PROC, procToSteal, nil}
 		case C_M_PROC_DONE:

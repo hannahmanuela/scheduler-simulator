@@ -5,10 +5,10 @@ import (
 )
 
 const (
-	THRESHOLD_TICKS_IN_Q = 2
-	TICK_SCHED_THRESHOLD = 0.00001 // given that 1 tick = 100ms (see website.go)
+	THRESHOLD_TICKS_IN_Q = 4
+	// WORK_STEAL_RATIO_THRESHOLD = 0.7
 
-	MIN_SCHED_QUANT = 0.001
+	TICK_SCHED_THRESHOLD = 0.00001 // given that 1 tick = 100ms (see website.go)
 )
 
 type CoreSched struct {
@@ -110,7 +110,12 @@ func (cs *CoreSched) tryGetWork() {
 // run procs in q, asking for more if we don't have any or run out of them in the middle
 // deq from q then run for an amount of time inversely prop to expectedComputationLeft
 func (cs *CoreSched) runProcs() {
-	cs.tryGetWork()
+
+	if VERBOSE_MACHINE_USAGE_STATS {
+		toWrite := fmt.Sprintf("%v, %v, %v, %.2f, %.2f, %v, %v", cs.currTick, cs.machineId, cs.coreId,
+			cs.maxRatioTicksPassedToSla(), cs.memUsage(), cs.q.qlen(), cs.ticksInQ()) //, cs.q.String()
+		logWrite(USAGE, toWrite)
+	}
 
 	ticksLeftToGive := Tftick(1)
 	procToTicksMap := make(map[*Proc]TickBool, 0)
@@ -157,6 +162,11 @@ func (cs *CoreSched) runProcs() {
 		cs.q.q = newQ
 	}
 
+	if VERBOSE_MACHINE_USAGE_STATS {
+		toWrite := fmt.Sprintf(", %v\n", ticksLeftToGive)
+		logWrite(USAGE, toWrite)
+	}
+
 	// if VERBOSE_SCHED_STATS {
 	// 	for proc, ticks := range procToTicksMap {
 	// 		if ticks.done {
@@ -181,22 +191,26 @@ func (cs *CoreSched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick 
 
 	totalTimeLeft := Tftick(0)
 	for _, p := range cs.q.getQ() {
-		totalTimeLeft += max(p.timeLeftOnSLA(), 0.00001)
+		totalTimeLeft += p.effectiveSla()
+		// totalTimeLeft += p.expectedCompLeft()
+
 	}
 
 	relativeNeedsSum := Tftick(0)
 	for _, p := range cs.q.getQ() {
 		if p.effectiveSla() > 0 {
-			relativeNeedsSum += totalTimeLeft / max(p.timeLeftOnSLA(), 0.00001)
+			relativeNeedsSum += totalTimeLeft / p.effectiveSla()
+			// relativeNeedsSum += totalTimeLeft / p.expectedCompLeft()
 		}
 	}
 
 	ticksGiven := Tftick(0)
-	for _, currProc := range cs.q.getQ() {
-		allocatedTicks := ((totalTimeLeft / max(currProc.timeLeftOnSLA(), 0.00001)) / relativeNeedsSum) * ticksLeftToGive
+	for _, p := range cs.q.getQ() {
+		allocatedTicks := ((totalTimeLeft / p.effectiveSla()) / relativeNeedsSum) * ticksLeftToGive
+		// allocatedTicks := ((totalTimeLeft / p.expectedCompLeft()) / relativeNeedsSum) * ticksLeftToGive
 		// toWrite := fmt.Sprintf("%v, %v, %v allocating to proc %v, gave %v ticks, because of %v totalTimeLeft and %v ratio btw total and procs timeleft \n", cs.currTick, cs.machineId, cs.coreId, currProc.String(), allocatedTicks, totalTimeLeft, max(currProc.timeLeftOnSLA(), 0.00001))
 		// logWrite(SCHED, toWrite)
-		procToTicks[currProc] = allocatedTicks
+		procToTicks[p] = allocatedTicks
 		ticksGiven += allocatedTicks
 	}
 

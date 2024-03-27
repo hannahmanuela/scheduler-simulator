@@ -1,7 +1,6 @@
 package slasched
 
 import (
-	"fmt"
 	"math"
 )
 
@@ -17,6 +16,7 @@ const (
 	VERBOSE_SCHED_STATS         = true
 	VERBOSE_WORLD_STATS         = true
 	VERBOSE_MACHINE_USAGE_STATS = true
+	VERBOSE_PRESSURE_VALS       = true
 )
 
 type World struct {
@@ -103,16 +103,6 @@ func (w *World) tickAllProcs() {
 	}
 }
 
-func (w *World) printTickStats() {
-	for _, m := range w.lb.machines {
-		for _, core := range m.sched.coreScheds {
-			toWrite := fmt.Sprintf("%v, %v, %v, %.2f, %.2f, %v\n", w.currTick, m.mid, core.coreId,
-				core.maxRatioTicksPassedToSla(), core.memUsage(), core.q.String())
-			logWrite(USAGE, toWrite)
-		}
-	}
-}
-
 func (w *World) Tick(numProcs int) {
 	w.currTick += 1
 	if VERBOSE_LB_STATS {
@@ -124,15 +114,12 @@ func (w *World) Tick(numProcs int) {
 	w.lb.placeProcs()
 	// runs each machine for a tick
 	w.compute()
-	if VERBOSE_MACHINE_USAGE_STATS {
-		w.printTickStats()
-	}
 	w.tickAllProcs()
 }
 
 func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
 		w.evalLoad()
-		w.Tick(w.numProcsToGen)
+		w.Tick(5)
 	}
 }

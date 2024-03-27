@@ -54,7 +54,7 @@ func (q *Queue) workSteal(maxMem Tmem) *Proc {
 	}
 
 	// for i := len(q.q) - 1; i >= 0; i-- {
-	// TODO: for now, don't steal procs under the threshold b/c maybe core running that proc just hasn't run yet
+	// for now, don't steal procs under the threshold b/c the placement of that was kinda thought through to begin with
 	for i := 0; i < len(q.q); i++ {
 		if q.q[i].effectiveSla() > PUSH_SLA_THRESHOLD && Tmem(q.q[i].procTypeProfile.memUsg.avg) < maxMem {
 			procSelected := q.q[i]

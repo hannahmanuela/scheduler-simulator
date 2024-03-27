@@ -178,8 +178,10 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 				press += float64((m.sched.procsInRange(procToPlace.effectiveSla()))-minProcsInRange) / float64(maxProcsInRange-minProcsInRange)
 			}
 			machineToPressure[m] = press
-			toWrite := fmt.Sprintf("giving machine %v pressure val %v \n", m.mid, press)
-			logWrite(SCHED, toWrite)
+			if VERBOSE_PRESSURE_VALS {
+				toWrite := fmt.Sprintf("giving machine %v pressure val %v \n", m.mid, press)
+				logWrite(SCHED, toWrite)
+			}
 		}
 	}
 
