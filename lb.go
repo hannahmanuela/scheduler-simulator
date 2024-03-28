@@ -147,11 +147,11 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 	for _, m := range lb.machines {
 		// core is a contender if has memory for it
 		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
-			if m.sched.minMaxRatioTicksPassedToSla() > maxMaxRatioTicksPassedToSla {
-				maxMaxRatioTicksPassedToSla = m.sched.minMaxRatioTicksPassedToSla()
+			if m.sched.maxRatioTicksPassedToSla() > maxMaxRatioTicksPassedToSla {
+				maxMaxRatioTicksPassedToSla = m.sched.maxRatioTicksPassedToSla()
 			}
-			if m.sched.minMaxRatioTicksPassedToSla() < minMaxRatioTicksPassedToSla {
-				minMaxRatioTicksPassedToSla = m.sched.minMaxRatioTicksPassedToSla()
+			if m.sched.maxRatioTicksPassedToSla() < minMaxRatioTicksPassedToSla {
+				minMaxRatioTicksPassedToSla = m.sched.maxRatioTicksPassedToSla()
 			}
 			if m.sched.procsInRange(procToPlace.effectiveSla()) > maxProcsInRange {
 				maxProcsInRange = m.sched.procsInRange(procToPlace.effectiveSla())
@@ -171,15 +171,16 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 			// factors: num procs in range; min max sla to ticksPassed ratio [for both, being smaller is better]
 			// normalized based on above min/max values
 			press := 0.0
-			if maxMaxRatioTicksPassedToSla != minMaxRatioTicksPassedToSla {
-				press += (m.sched.minMaxRatioTicksPassedToSla() - minMaxRatioTicksPassedToSla) / (maxMaxRatioTicksPassedToSla - minMaxRatioTicksPassedToSla)
-			}
+			// if maxMaxRatioTicksPassedToSla != minMaxRatioTicksPassedToSla {
+			// 	press += (m.sched.maxRatioTicksPassedToSla() - minMaxRatioTicksPassedToSla) / (maxMaxRatioTicksPassedToSla - minMaxRatioTicksPassedToSla)
+			// }
 			if maxProcsInRange != minProcsInRange {
 				press += float64((m.sched.procsInRange(procToPlace.effectiveSla()))-minProcsInRange) / float64(maxProcsInRange-minProcsInRange)
 			}
 			machineToPressure[m] = press
 			if VERBOSE_PRESSURE_VALS {
-				toWrite := fmt.Sprintf("giving machine %v pressure val %v \n", m.mid, press)
+				toWrite := fmt.Sprintf("giving machine %v pressure val %v, with a maxRatio of %v and procsInRange of %v \n",
+					m.mid, press, m.sched.maxRatioTicksPassedToSla(), m.sched.procsInRange(procToPlace.effectiveSla()))
 				logWrite(SCHED, toWrite)
 			}
 		}

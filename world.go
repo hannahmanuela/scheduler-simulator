@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	MAX_MEM_PER_CORE = 11000 // the amount of memory every core will have, in MB
+	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
 
 	TICKS_WAIT_LOAD_CHANGES = 100
 	INITIAL_LOAD            = 4
@@ -57,8 +57,8 @@ func (w *World) String() string {
 func (w *World) minMaxRatioTicksPassedToSla() float64 {
 	minVal := math.Inf(1)
 	for _, m := range w.machines {
-		if m.sched.minMaxRatioTicksPassedToSla() < minVal {
-			minVal = m.sched.minMaxRatioTicksPassedToSla()
+		if m.sched.maxRatioTicksPassedToSla() < minVal {
+			minVal = m.sched.maxRatioTicksPassedToSla()
 		}
 	}
 	return minVal
