@@ -6,16 +6,14 @@ import (
 )
 
 const (
-	PUSH_SLA_THRESHOLD             = 2   // 1 tick = 100 ms ==> 5 ms (see website.go)
-	PUSH_RATIO_THRESHOLD           = 0.3 // if a proc has waited in the machine's q for longer than this percentage of its SLA, push it to a core
-	MULTIPLIER_PULL_WORK_THRESHOLD = 2   // multiple of numCores for which is the sctiveQ has less expected ticks than that it will actively remove work from holdQ
+	PUSH_SLA_THRESHOLD   = 2   // 1 tick = 100 ms ==> 5 ms (see website.go)
+	PUSH_RATIO_THRESHOLD = 0.3 // if a proc has waited in the machine's q for longer than this percentage of its SLA, push it to a core
 
 	TICK_SCHED_THRESHOLD = 0.00001 // amount of ticks after which I stop scheduling; given that 1 tick = 100ms (see website.go)
 )
 
 type Sched struct {
 	machineId  Tid
-	numCores   int
 	holdQ      *Queue
 	activeQ    *Queue
 	lbConnSend chan *Message // channel to send messages to LB
@@ -23,10 +21,9 @@ type Sched struct {
 	currTick   int
 }
 
-func newSched(lbConnSend chan *Message, lbConnRecv chan *Message, mid Tid, numCores int) *Sched {
+func newSched(lbConnSend chan *Message, lbConnRecv chan *Message, mid Tid) *Sched {
 	sd := &Sched{
 		machineId:  mid,
-		numCores:   numCores,
 		holdQ:      newQueue(),
 		activeQ:    newQueue(),
 		lbConnSend: lbConnSend,
@@ -54,16 +51,6 @@ func (sd *Sched) tick() {
 		}
 	}
 	sd.holdQ.q = newHoldQ
-
-	// if there are less than 1.2*numCores ticks of work in activeQ, steal work from holdQ
-	for sd.ticksInActiveQ() < MULTIPLIER_PULL_WORK_THRESHOLD*float64(sd.numCores) {
-		procToMove := sd.holdQ.deq()
-		if procToMove != nil {
-			sd.activeQ.enq(procToMove)
-		} else {
-			break
-		}
-	}
 
 	sd.simulateRunProcs()
 }
@@ -167,8 +154,7 @@ func (sd *Sched) simulateRunProcs() {
 		logWrite(USAGE, toWrite)
 	}
 
-	ticksLeftToGive := Tftick(sd.numCores)
-	coreToTicksIn := make(map[int]Tftick)
+	ticksLeftToGive := Tftick(1)
 
 	toWrite := fmt.Sprintf("%v, %v, curr q: %v \n", sd.currTick, sd.machineId, sd.activeQ.String())
 	logWrite(SCHED, toWrite)
@@ -195,15 +181,18 @@ func (sd *Sched) simulateRunProcs() {
 				newQ = append(newQ, procToRun)
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
-				// dividing up so that it only counts the ticks run on the core as if it had been placed on a core
-				// (eg 1.5 ticks => .5 ticks passed, since the first tick would have been on a diff core)
-				ticksIn := sd.getTicksIn(&coreToTicksIn, ticksUsed)
-				procToRun.ticksPassed = procToRun.ticksPassed + ticksIn
+				procToRun.ticksPassed = procToRun.ticksPassed + (1 - ticksLeftToGive)
 				// don't need to wait if we are just telling it a proc is done
 				sd.lbConnSend <- &Message{sd.machineId, M_LB_PROC_DONE, procToRun, nil}
 			}
 		}
 		sd.activeQ.q = newQ
+
+		// if activeQ empty, steal from holdQ if possible
+		if sd.activeQ.qlen() == 0 && sd.holdQ.qlen() > 0 {
+			procToMove := sd.holdQ.deq()
+			sd.activeQ.enq(procToMove)
+		}
 	}
 
 	// this is dumb but make accounting for util easier
@@ -214,24 +203,6 @@ func (sd *Sched) simulateRunProcs() {
 		toWrite := fmt.Sprintf(", %v\n", float64(math.Copysign(float64(ticksLeftToGive), 1)))
 		logWrite(USAGE, toWrite)
 	}
-}
-
-func (sd *Sched) getTicksIn(coreToTicksIn *map[int]Tftick, ticksJustUsed Tftick) Tftick {
-	if len(*coreToTicksIn) < sd.numCores {
-		(*coreToTicksIn)[len(*coreToTicksIn)] = ticksJustUsed
-		return ticksJustUsed
-	}
-
-	minVal := Tftick(math.Inf(1))
-	minCore := 0
-	for coreNum, ticksUsed := range *coreToTicksIn {
-		if ticksUsed < minVal {
-			minVal = ticksUsed
-			minCore = coreNum
-		}
-	}
-	(*coreToTicksIn)[minCore] += ticksJustUsed
-	return minVal + ticksJustUsed
 }
 
 func (sd *Sched) allocTicksToProcs(ticksLeftToGive Tftick) map[*Proc]Tftick {

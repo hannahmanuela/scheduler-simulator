@@ -110,7 +110,6 @@ func (lb *LoadBalancer) placeProcs() {
 		if _, ok := lb.procTypeProfiles[p.procType()]; ok {
 			// if we have profiling information, use it
 			machineToUse = lb.pickMachineGivenProfile(p)
-
 		} else {
 			// otherwise just pick a machine
 			machineToUse = lb.machines[Tid(rand.Int()%len(lb.machines))]
@@ -144,8 +143,10 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 	maxProcsInRange := 0
 	minMaxRatioTicksPassedToSla := math.Inf(0)
 	maxMaxRatioTicksPassedToSla := 0.0
+	minTicksInQ := math.Inf(0)
+	maxTicksInQ := 0.0
 	for _, m := range lb.machines {
-		// core is a contender if has memory for it
+		// machine is a contender if has memory for it
 		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
 			if m.sched.maxRatioTicksPassedToSla() > maxMaxRatioTicksPassedToSla {
 				maxMaxRatioTicksPassedToSla = m.sched.maxRatioTicksPassedToSla()
@@ -159,6 +160,12 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 			if m.sched.procsInRange(procToPlace.effectiveSla()) < minProcsInRange {
 				minProcsInRange = m.sched.procsInRange(procToPlace.effectiveSla())
 			}
+			if m.sched.ticksInQ() > maxTicksInQ {
+				maxTicksInQ = m.sched.ticksInQ()
+			}
+			if m.sched.ticksInQ() < minTicksInQ {
+				minTicksInQ = m.sched.ticksInQ()
+			}
 		}
 	}
 	// toWrite = fmt.Sprintf("minProcsInRange: %v, maxProcsInRange: %v, minTicksInQ: %v, maxTicksInQ: %v, minRatioSlaToTicksPassed: %v, maxRatioSlaToTicksPassed: %v \n", minProcsInRange, maxProcsInRange, minTicksInQ, maxTicksInQ, minRatioSlaToTicksPassed, maxRatioSlaToTicksPassed)
@@ -166,7 +173,7 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 
 	machineToPressure := make(map[*Machine]float64, 0)
 	for _, m := range lb.machines {
-		// core is a contender if has memory for it
+		// machine is a contender if has memory for it
 		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
 			// factors: num procs in range; min max sla to ticksPassed ratio [for both, being smaller is better]
 			// normalized based on above min/max values
@@ -176,15 +183,23 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 			// }
 			if maxProcsInRange != minProcsInRange {
 				press += float64((m.sched.procsInRange(procToPlace.effectiveSla()))-minProcsInRange) / float64(maxProcsInRange-minProcsInRange)
+			} else {
+				press += m.sched.ticksInQ()
 			}
+			// if maxTicksInQ != minTicksInQ {
+			// 	press += ((m.sched.ticksInQ()) - minTicksInQ) / (maxTicksInQ - minTicksInQ)
+			// }
 			machineToPressure[m] = press
 			if VERBOSE_PRESSURE_VALS {
-				toWrite := fmt.Sprintf("giving machine %v pressure val %v, with a maxRatio of %v and procsInRange of %v \n",
-					m.mid, press, m.sched.maxRatioTicksPassedToSla(), m.sched.procsInRange(procToPlace.effectiveSla()))
+				toWrite := fmt.Sprintf("giving machine %v pressure val %v, with a maxRatio of %v, procsInRange of %v, and tikcsInQ of %v \n",
+					m.mid, press, m.sched.maxRatioTicksPassedToSla(), m.sched.procsInRange(procToPlace.effectiveSla()), m.sched.ticksInQ())
 				logWrite(SCHED, toWrite)
 			}
 		}
 	}
+
+	// TODO: what if no machines are contenders because no one has the memory for the new proc?
+	// have a q on the lb?
 
 	var machineToUse *Machine
 	minPressure := math.Inf(1)

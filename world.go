@@ -28,7 +28,7 @@ type World struct {
 	app             Website
 }
 
-func newWorld(numMachines int, numCores int) *World {
+func newWorld(numMachines int) *World {
 	w := &World{
 		machines:        map[Tid]*Machine{},
 		numProcsToGen:   INITIAL_LOAD,
@@ -40,7 +40,7 @@ func newWorld(numMachines int, numCores int) *World {
 		mid := Tid(i)
 		chanMacheineToLB := make(chan *Message)
 		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
-		w.machines[Tid(i)] = newMachine(mid, numCores, lbMachineConn, chanMacheineToLB)
+		w.machines[Tid(i)] = newMachine(mid, lbMachineConn, chanMacheineToLB)
 	}
 	w.lb = newLoadBalancer(w.machines, machineToLBConns, lbMachineConn)
 	return w

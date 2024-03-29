@@ -9,8 +9,8 @@ const (
 	// fraction of procs generated that are in each category
 	FRACTION_PAGE_STATIC     = 0.6 // 0.5
 	FRACTION_PAGE_DYNAMIC    = 0.35
-	FRACTION_DATA_PROCESS_FG = 0.048 // 10
-	FRACTION_DATA_PROCESS_BG = 0.002 // 05
+	FRACTION_DATA_PROCESS_FG = 0.047 // 10
+	FRACTION_DATA_PROCESS_BG = 0.003 // 05
 
 	// Tick = 100 ms
 	// the max/min value that a sla can have for the diff proc types - slas will have uniform random value in this range
@@ -61,11 +61,6 @@ func (pt ProcType) getMemoryUsage() Tmem {
 	// page static, page dynamic, data process fg, data process bg
 	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
 }
-
-// type CacheClnt interface {
-// 	put(k string, val string)
-// 	get(k string) string
-// }
 
 type Website interface {
 	genLoad(nProcs int) []*ProcInternals

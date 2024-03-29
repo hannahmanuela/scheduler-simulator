@@ -10,10 +10,9 @@ const (
 )
 
 func TestRunWorld(t *testing.T) {
-	numMachines := 2
-	numCores := 4
+	numMachines := 8
 	emptyFiles()
-	w := newWorld(numMachines, numCores)
+	w := newWorld(numMachines)
 	w.app = newSimpleWebsite()
 	// wait for channels to set up, etc
 	time.Sleep(100 * time.Millisecond)
