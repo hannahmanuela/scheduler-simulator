@@ -120,6 +120,6 @@ func (w *World) Tick(numProcs int) {
 func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
 		w.evalLoad()
-		w.Tick(5)
+		w.Tick(4)
 	}
 }

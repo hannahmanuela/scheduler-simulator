@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	PUSH_SLA_THRESHOLD   = 2   // 1 tick = 100 ms ==> 5 ms (see website.go)
-	PUSH_RATIO_THRESHOLD = 0.3 // if a proc has waited in the machine's q for longer than this percentage of its SLA, push it to a core
+	PUSH_SLA_THRESHOLD     = 2   // 1 tick = 100 ms ==> 5 ms (see website.go)
+	PUSH_RATIO_THRESHOLD   = 0.3 // if a proc has waited in the machine's q for longer than this percentage of its SLA, push it to a core
+	ACTIVEQ_PUSH_THRESHOLD = 0.5 // if the active q has less ticks than this in it, push new procs into the active q right away
 
 	TICK_SCHED_THRESHOLD = 0.00001 // amount of ticks after which I stop scheduling; given that 1 tick = 100ms (see website.go)
 )
@@ -81,7 +82,7 @@ func (sd *Sched) runLBConn() {
 		msg := <-sd.lbConnRecv
 		switch msg.msgType {
 		case LB_M_PLACE_PROC:
-			if msg.proc.effectiveSla() < PUSH_SLA_THRESHOLD {
+			if msg.proc.effectiveSla() < PUSH_SLA_THRESHOLD || sd.expectedCompInActiveQ() < ACTIVEQ_PUSH_THRESHOLD {
 				sd.activeQ.enq(msg.proc)
 			} else {
 				sd.holdQ.enq(msg.proc)
@@ -116,10 +117,19 @@ func (sd *Sched) ticksInQ() float64 {
 	return float64(totalTicks)
 }
 
-func (sd *Sched) ticksInActiveQ() float64 {
+func (sd *Sched) expectedCompInQ() float64 {
+	totalTicks := Tftick(0)
+	for _, p := range append(sd.holdQ.getQ(), sd.activeQ.getQ()...) {
+		totalTicks += p.profilingExpectedCompLeft()
+	}
+	return float64(totalTicks)
+}
+
+// expected based on profiling info
+func (sd *Sched) expectedCompInActiveQ() float64 {
 	totalTicks := Tftick(0)
 	for _, p := range sd.activeQ.getQ() {
-		totalTicks += p.effectiveSla()
+		totalTicks += p.profilingExpectedCompLeft()
 	}
 	return float64(totalTicks)
 }
@@ -156,7 +166,7 @@ func (sd *Sched) simulateRunProcs() {
 
 	ticksLeftToGive := Tftick(1)
 
-	toWrite := fmt.Sprintf("%v, %v, curr q: %v \n", sd.currTick, sd.machineId, sd.activeQ.String())
+	toWrite := fmt.Sprintf("%v, %v, curr q ACTIVE: %v, curr q HOLD: %v \n", sd.currTick, sd.machineId, sd.activeQ.String(), sd.holdQ.String())
 	logWrite(SCHED, toWrite)
 
 	for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && sd.activeQ.qlen() > 0 {

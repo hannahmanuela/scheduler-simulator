@@ -47,8 +47,9 @@ func (p *Proc) timeLeftOnSLA() Tftick {
 	return p.effectiveSla() - p.ticksPassed
 }
 
-func (p *Proc) expectedCompLeft() Tftick {
-	return p.effectiveSla() - p.procInternals.compDone
+// based on profiling info
+func (p *Proc) profilingExpectedCompLeft() Tftick {
+	return Tftick(p.procTypeProfile.computeUsed.avg+p.procTypeProfile.computeUsed.stdDev) - (p.procInternals.compDone)
 }
 
 func (p *Proc) memUsed() Tmem {

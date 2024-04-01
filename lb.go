@@ -143,8 +143,8 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 	maxProcsInRange := 0
 	minMaxRatioTicksPassedToSla := math.Inf(0)
 	maxMaxRatioTicksPassedToSla := 0.0
-	minTicksInQ := math.Inf(0)
-	maxTicksInQ := 0.0
+	minExpectedCompInQ := math.Inf(0)
+	maxExpectedCompInQ := 0.0
 	for _, m := range lb.machines {
 		// machine is a contender if has memory for it
 		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
@@ -160,11 +160,11 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 			if m.sched.procsInRange(procToPlace.effectiveSla()) < minProcsInRange {
 				minProcsInRange = m.sched.procsInRange(procToPlace.effectiveSla())
 			}
-			if m.sched.ticksInQ() > maxTicksInQ {
-				maxTicksInQ = m.sched.ticksInQ()
+			if m.sched.expectedCompInQ() > maxExpectedCompInQ {
+				maxExpectedCompInQ = m.sched.expectedCompInQ()
 			}
-			if m.sched.ticksInQ() < minTicksInQ {
-				minTicksInQ = m.sched.ticksInQ()
+			if m.sched.expectedCompInQ() < minExpectedCompInQ {
+				minExpectedCompInQ = m.sched.expectedCompInQ()
 			}
 		}
 	}
@@ -177,18 +177,17 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
 			// factors: num procs in range; min max sla to ticksPassed ratio [for both, being smaller is better]
 			// normalized based on above min/max values
-			press := 0.0
-			// if maxMaxRatioTicksPassedToSla != minMaxRatioTicksPassedToSla {
-			// 	press += (m.sched.maxRatioTicksPassedToSla() - minMaxRatioTicksPassedToSla) / (maxMaxRatioTicksPassedToSla - minMaxRatioTicksPassedToSla)
-			// }
-			if maxProcsInRange != minProcsInRange {
-				press += float64((m.sched.procsInRange(procToPlace.effectiveSla()))-minProcsInRange) / float64(maxProcsInRange-minProcsInRange)
-			} else {
-				press += m.sched.ticksInQ()
+
+			// TODO: do this by rounds of excluding?
+			press := math.Inf(1)
+			if m.sched.procsInRange(procToPlace.effectiveSla()) == minProcsInRange {
+				if maxExpectedCompInQ != minExpectedCompInQ {
+					press = float64((m.sched.expectedCompInQ())-minExpectedCompInQ) / float64(maxExpectedCompInQ-minExpectedCompInQ)
+				} else {
+					// case where they all have exactly the same procs in range and ticks in q
+					press = 0
+				}
 			}
-			// if maxTicksInQ != minTicksInQ {
-			// 	press += ((m.sched.ticksInQ()) - minTicksInQ) / (maxTicksInQ - minTicksInQ)
-			// }
 			machineToPressure[m] = press
 			if VERBOSE_PRESSURE_VALS {
 				toWrite := fmt.Sprintf("giving machine %v pressure val %v, with a maxRatio of %v, procsInRange of %v, and tikcsInQ of %v \n",
