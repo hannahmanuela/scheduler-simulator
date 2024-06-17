@@ -24,7 +24,7 @@ type World struct {
 	numProcsToGen   int
 	lastChangedLoad int
 	machines        map[Tid]*Machine
-	lb              *LoadBalancer
+	lb              *GlobalSched
 	app             Website
 }
 

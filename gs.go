@@ -24,7 +24,7 @@ type Message struct {
 	wg      *sync.WaitGroup
 }
 
-type LoadBalancer struct {
+type GlobalSched struct {
 	machines         map[Tid]*Machine
 	procq            *Queue
 	machineConnRecv  chan *Message         // listen for messages from machines
@@ -33,8 +33,8 @@ type LoadBalancer struct {
 	procTypeProfiles map[ProcType]*ProvProcDistribution
 }
 
-func newLoadBalancer(machines map[Tid]*Machine, lbSendToMachines map[Tid]chan *Message, lbRecv chan *Message) *LoadBalancer {
-	lb := &LoadBalancer{
+func newLoadBalancer(machines map[Tid]*Machine, lbSendToMachines map[Tid]chan *Message, lbRecv chan *Message) *GlobalSched {
+	lb := &GlobalSched{
 		machines:         machines,
 		procq:            &Queue{q: make([]*Proc, 0)},
 		machineConnRecv:  lbRecv,
@@ -69,15 +69,15 @@ func newLoadBalancer(machines map[Tid]*Machine, lbSendToMachines map[Tid]chan *M
 	return lb
 }
 
-func (lb *LoadBalancer) MachinesString() string {
+func (gs *GlobalSched) MachinesString() string {
 	str := "machines: \n"
-	for _, m := range lb.machines {
+	for _, m := range gs.machines {
 		str += "   " + m.String()
 	}
 	return str
 }
 
-func (lb *LoadBalancer) listenForMachineMessages() {
+func (lb *GlobalSched) listenForMachineMessages() {
 	for {
 		msg := <-lb.machineConnRecv
 		switch msg.msgType {
@@ -96,7 +96,7 @@ func (lb *LoadBalancer) listenForMachineMessages() {
 	}
 }
 
-func (lb *LoadBalancer) placeProcs() {
+func (lb *GlobalSched) placeProcs() {
 	// setup
 	lb.currTick += 1
 	p := lb.getProc()
@@ -132,7 +132,7 @@ func (lb *LoadBalancer) placeProcs() {
 
 // probably actually want this to be via communication with the machine itself, let it say yes or no?
 // that way we avoid the "gold rush" things, although since this is one by one anyway maybe its fine
-func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
+func (lb *GlobalSched) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 
 	profile := lb.procTypeProfiles[procToPlace.procType()]
 
@@ -212,10 +212,10 @@ func (lb *LoadBalancer) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 	return machineToUse
 }
 
-func (lb *LoadBalancer) getProc() *Proc {
+func (lb *GlobalSched) getProc() *Proc {
 	return lb.procq.deq()
 }
 
-func (lb *LoadBalancer) putProc(proc *Proc) {
+func (lb *GlobalSched) putProc(proc *Proc) {
 	lb.procq.enq(proc)
 }
