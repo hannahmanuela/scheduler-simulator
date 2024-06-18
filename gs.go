@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"sync"
 )
 
@@ -199,6 +200,10 @@ func (lb *GlobalSched) pickMachineGivenProfile(procToPlace *Proc) *Machine {
 
 	// TODO: what if no machines are contenders because no one has the memory for the new proc?
 	// have a q on the lb?
+	if len(machineToPressure) == 0 {
+		fmt.Println("EVERYONE OOM")
+		os.Exit(0)
+	}
 
 	var machineToUse *Machine
 	minPressure := math.Inf(1)

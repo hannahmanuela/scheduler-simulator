@@ -6,15 +6,16 @@ import (
 )
 
 const (
-	NTICK = 1000
+	NTICK            = 1000
+	NMACHINES        = 10
+	NPROCSGENPERTICK = 5
 )
 
 func TestRunWorld(t *testing.T) {
-	numMachines := 8
 	emptyFiles()
-	w := newWorld(numMachines)
+	w := newWorld(NMACHINES)
 	w.app = newSimpleWebsite()
 	// wait for channels to set up, etc
 	time.Sleep(100 * time.Millisecond)
-	w.Run(NTICK)
+	w.Run(NTICK, NPROCSGENPERTICK)
 }

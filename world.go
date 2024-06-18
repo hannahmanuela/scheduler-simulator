@@ -117,9 +117,9 @@ func (w *World) Tick(numProcs int) {
 	w.tickAllProcs()
 }
 
-func (w *World) Run(nTick int) {
+func (w *World) Run(nTick int, nProcsPerTick int) {
 	for i := 0; i < nTick; i++ {
 		w.evalLoad()
-		w.Tick(4)
+		w.Tick(nProcsPerTick)
 	}
 }

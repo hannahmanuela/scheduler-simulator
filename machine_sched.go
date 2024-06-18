@@ -135,7 +135,7 @@ func (sd *Sched) simulateRunProcs() {
 
 	if VERBOSE_MACHINE_USAGE_STATS {
 		toWrite := fmt.Sprintf("%v, %v, %.2f, %.2f, %v, %v", sd.currTick, sd.machineId,
-			sd.maxRatioTicksPassedToSla(), sd.memUsage(), sd.activeQ.qlen(), sd.ticksInQ()) //, cs.q.String()
+			sd.maxRatioTicksPassedToSla(), sd.memUsage(), sd.activeQ.qlen(), sd.ticksInQ())
 		logWrite(USAGE, toWrite)
 	}
 
@@ -148,10 +148,9 @@ func (sd *Sched) simulateRunProcs() {
 
 		procToRun := sd.activeQ.deq()
 		ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftToGive)
-		ticksLeftToGive -= ticksUsed
-
 		toWrite := fmt.Sprintf("%v, %v, running proc %v, gave %v ticks, used %v ticks\n", sd.currTick, sd.machineId, procToRun.String(), ticksLeftToGive.String(), ticksUsed.String())
 		logWrite(SCHED, toWrite)
+		ticksLeftToGive -= ticksUsed
 
 		if !done {
 			// check if the memroy used by the proc sent us over the edge (and if yes, kill as needed)

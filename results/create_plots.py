@@ -13,7 +13,7 @@ args = parser.parse_args()
 procs_added = pd.read_csv("procs_added.txt", index_col=None, names=["tick", "machineID", "procType", "sla", "actualComp", "migrated"])
 procs_current = pd.read_csv("procs_current.txt", index_col=None, names=["tick", "machineID", "isActive", "sla", "actualComp", "compDone"])
 procs_done = pd.read_csv("procs_done.txt", index_col=None, names=["tick", "machineID", "procType", "sla", "ticksPassed", "actualComp"])
-procs_killed = pd.read_csv("procs_killed.txt", index_col=None, names=["tick", "machineID", "sla", "compDone", "memUsed"])
+# procs_killed = pd.read_csv("procs_killed.txt", index_col=None, names=["tick", "machineID", "sla", "compDone", "memUsed"])
 
 util_metrics = pd.read_csv("usage.txt", index_col=None, names=["tick", "machineID", "maxTicksPassedToSlaRatio", "memUsage", "qlen", "ticksInQ", "ticksLeftOver"])
 
