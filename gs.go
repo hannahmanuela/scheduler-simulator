@@ -46,23 +46,23 @@ func newLoadBalancer(machines map[Tid]*Machine, lbSendToMachines map[Tid]chan *M
 
 	// hard-coded for now
 	lb.procTypeProfiles[PAGE_STATIC] = &ProvProcDistribution{
-		computeUsed: Distribution{avg: PAGE_STATIC_SLA_RANGE_MAX, count: 0,
-			stdDev: (PAGE_STATIC_SLA_RANGE_MAX - PAGE_STATIC_SLA_RANGE_MIN) / 2.0},
+		computeUsed: Distribution{avg: float64(PAGE_STATIC_SLA) - PAGE_STATIC.getExpectedSlaBuffer()*float64(PAGE_STATIC_SLA), count: 0,
+			stdDev: PAGE_STATIC.getExpectedProcDeviationVariance()},
 		memUsg: Distribution{avg: PAGE_STATIC_MEM_USG, count: 0, stdDev: 0},
 	}
 	lb.procTypeProfiles[PAGE_DYNAMIC] = &ProvProcDistribution{
-		computeUsed: Distribution{avg: PAGE_DYNAMIC_SLA_RANGE_MAX, count: 0,
-			stdDev: (PAGE_DYNAMIC_SLA_RANGE_MAX - PAGE_DYNAMIC_SLA_RANGE_MIN) / 2.0},
+		computeUsed: Distribution{avg: float64(PAGE_DYNAMIC_SLA) - PAGE_DYNAMIC.getExpectedSlaBuffer()*float64(PAGE_DYNAMIC_SLA), count: 0,
+			stdDev: PAGE_DYNAMIC.getExpectedProcDeviationVariance()},
 		memUsg: Distribution{avg: PAGE_DYNAMIC_MEM_USG, count: 0, stdDev: 0},
 	}
 	lb.procTypeProfiles[DATA_PROCESS_FG] = &ProvProcDistribution{
-		computeUsed: Distribution{avg: DATA_PROCESS_FG_SLA_RANGE_MAX, count: 0,
-			stdDev: (DATA_PROCESS_FG_SLA_RANGE_MAX - DATA_PROCESS_FG_SLA_RANGE_MIN) / 2.0},
+		computeUsed: Distribution{avg: float64(DATA_PROCESS_FG_SLA) - DATA_PROCESS_FG.getExpectedSlaBuffer()*float64(DATA_PROCESS_FG_SLA), count: 0,
+			stdDev: DATA_PROCESS_FG.getExpectedProcDeviationVariance()},
 		memUsg: Distribution{avg: DATA_PROCESS_FG_MEM_USG, count: 0, stdDev: 0},
 	}
 	lb.procTypeProfiles[DATA_PROCESS_BG] = &ProvProcDistribution{
-		computeUsed: Distribution{avg: DATA_PROCESS_BG_SLA_RANGE_MAX, count: 0,
-			stdDev: (DATA_PROCESS_BG_SLA_RANGE_MAX - DATA_PROCESS_BG_SLA_RANGE_MIN) / 2.0},
+		computeUsed: Distribution{avg: float64(DATA_PROCESS_BG_SLA) - DATA_PROCESS_BG.getExpectedSlaBuffer()*float64(DATA_PROCESS_BG_SLA), count: 0,
+			stdDev: DATA_PROCESS_BG.getExpectedProcDeviationVariance()},
 		memUsg: Distribution{avg: DATA_PROCESS_BG_MEM_USG, count: 0, stdDev: 0},
 	}
 

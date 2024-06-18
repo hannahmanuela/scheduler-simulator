@@ -88,7 +88,7 @@ func newPrivProc(sla Tftick, procType ProcType) *ProcInternals {
 
 	// get actual comp from a normal distribution, assuming the sla left a buffer
 	slaWithoutBuffer := float64(sla) - procType.getExpectedSlaBuffer()*float64(sla)
-	actualComp := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance(slaWithoutBuffer)))
+	actualComp := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance()))
 	actualComp = min(sla, actualComp)
 	if actualComp < 0 {
 		actualComp = Tftick(0.3)

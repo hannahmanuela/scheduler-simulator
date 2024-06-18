@@ -12,18 +12,14 @@ const (
 	FRACTION_DATA_PROCESS_FG = 0.047 // 10
 	FRACTION_DATA_PROCESS_BG = 0.003 // 05
 
-	// Tick = 100 ms
-	// the max/min value that a sla can have for the diff proc types - slas will have uniform random value in this range
-	PAGE_STATIC_SLA_RANGE_MIN     = 0.001 // 0.1 ms
-	PAGE_STATIC_SLA_RANGE_MAX     = 0.5
-	PAGE_DYNAMIC_SLA_RANGE_MIN    = 0.001
-	PAGE_DYNAMIC_SLA_RANGE_MAX    = 5
-	DATA_PROCESS_FG_SLA_RANGE_MIN = 3
-	DATA_PROCESS_FG_SLA_RANGE_MAX = 5
-	DATA_PROCESS_BG_SLA_RANGE_MIN = 2
-	DATA_PROCESS_BG_SLA_RANGE_MAX = 50
+	// Tick = 5 ms
+	// slas for diff proc types
+	PAGE_STATIC_SLA     = 1    // 5 ms
+	PAGE_DYNAMIC_SLA    = 4    // 20 ms
+	DATA_PROCESS_FG_SLA = 100  // 500 ms
+	DATA_PROCESS_BG_SLA = 1000 // 5 s
 
-	// in MB
+	// mem usage, in MB
 	PAGE_STATIC_MEM_USG     = 20
 	PAGE_DYNAMIC_MEM_USG    = 300
 	DATA_PROCESS_FG_MEM_USG = 1000
@@ -44,16 +40,17 @@ func (pt ProcType) String() string {
 	return []string{"page static", "page dynamic", "data process fg", "data process bg"}[pt]
 }
 
-// variance of procs actual runtime to "expected" runtime (sla - sla * expected buffer)
-func (pt ProcType) getExpectedProcDeviationVariance(slaWithoutBuffer float64) float64 {
-	// page static, page dynamic, data process fg, data process bg
-	return []float64{0.1, 0.1, 0.2, 0.5}[pt] * slaWithoutBuffer
+// returns std dev (sigma)
+// this is used as the sigma in getting the actual runtime
+func (pt ProcType) getExpectedProcDeviationVariance() float64 {
+	// page static: 0.5ms, page dynamic: 2ms, data process fg: 10ms, data process bg: 500ms
+	return []float64{0.1, 0.4, 2, 100}[pt]
 }
 
 // exected buffer between declared sla and average compute necessary, as a fraction of the sla
 func (pt ProcType) getExpectedSlaBuffer() float64 {
-	// page static, page dynamic, data process fg, data process bg
-	return []float64{0.05, 0.05, 0.1, 0.3}[pt]
+	// page static: 1ms, page dynamic: 4ms, data process fg: 50ms, data process bg: 3.5s
+	return []float64{0.2, 0.2, 0.1, 0.7}[pt]
 }
 
 // the amount memory a proc of the given type will use (for now this is static)
@@ -123,8 +120,7 @@ func (website *SimpleWebsite) genNumberOfProcs(totalNumProcs int) (int, int, int
 func (website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procSLA := Tftick(rand.Float64()*(PAGE_STATIC_SLA_RANGE_MAX-PAGE_DYNAMIC_SLA_RANGE_MIN)) + PAGE_STATIC_SLA_RANGE_MIN
-		procs[i] = newPrivProc(procSLA, PAGE_STATIC)
+		procs[i] = newPrivProc(PAGE_STATIC_SLA, PAGE_STATIC)
 		// fmt.Printf("created new static page proc: %v\n", procs[i])
 	}
 	return procs
@@ -133,8 +129,7 @@ func (website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals 
 func (website *SimpleWebsite) genPageDynamicProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procSLA := Tftick(rand.Float64()*(PAGE_DYNAMIC_SLA_RANGE_MAX-PAGE_DYNAMIC_SLA_RANGE_MIN)) + PAGE_DYNAMIC_SLA_RANGE_MIN
-		procs[i] = newPrivProc(procSLA, PAGE_DYNAMIC)
+		procs[i] = newPrivProc(PAGE_DYNAMIC_SLA, PAGE_DYNAMIC)
 	}
 	return procs
 }
@@ -142,8 +137,7 @@ func (website *SimpleWebsite) genPageDynamicProcs(numProcs int) []*ProcInternals
 func (website *SimpleWebsite) genDataProcessFgProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procSLA := Tftick(rand.Float64()*(DATA_PROCESS_FG_SLA_RANGE_MAX-DATA_PROCESS_FG_SLA_RANGE_MIN)) + DATA_PROCESS_FG_SLA_RANGE_MIN
-		procs[i] = newPrivProc(procSLA, DATA_PROCESS_FG)
+		procs[i] = newPrivProc(DATA_PROCESS_FG_SLA, DATA_PROCESS_FG)
 	}
 	return procs
 }
@@ -151,8 +145,7 @@ func (website *SimpleWebsite) genDataProcessFgProcs(numProcs int) []*ProcInterna
 func (website *SimpleWebsite) genDataProcessBgProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procSLA := Tftick(rand.Float64()*(DATA_PROCESS_BG_SLA_RANGE_MAX-DATA_PROCESS_BG_SLA_RANGE_MIN)) + DATA_PROCESS_BG_SLA_RANGE_MIN
-		procs[i] = newPrivProc(procSLA, DATA_PROCESS_BG)
+		procs[i] = newPrivProc(DATA_PROCESS_BG_SLA, DATA_PROCESS_BG)
 	}
 	return procs
 }
