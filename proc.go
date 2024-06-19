@@ -2,6 +2,8 @@ package slasched
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -35,8 +37,8 @@ func newProvProc(currTick int, privProc *ProcInternals) *Proc {
 
 // runs proc for the number of ticks passed or until the proc is done,
 // returning whether the proc is done and how many ticks were run, as well as whether the proc finished or was forcefully terminated for going over
-func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
-	return p.procInternals.runTillOutOrDone(toRun)
+func (p *Proc) runTillOutOrDone(toRun Tftick, currFtick Tftick) (Tftick, bool) {
+	return p.procInternals.runTillOutOrDone(toRun, p.ticksPassed+currFtick)
 }
 
 func (p *Proc) effectiveSla() Tftick {
@@ -70,10 +72,13 @@ func (p *Proc) procType() ProcType {
 
 // this is the internal view of a proc, ie what the client of the provider would create/run
 type ProcInternals struct {
-	sla        Tftick
-	compDone   Tftick
-	actualComp Tftick
-	procType   ProcType
+	sla             Tftick
+	compDone        Tftick
+	actualComp      Tftick
+	ioNeeded        Tftick
+	ioDone          Tftick
+	nextUnblockedAt Tftick
+	procType        ProcType
 }
 
 func (p *ProcInternals) String() string {
@@ -84,32 +89,60 @@ func (p *ProcInternals) memUsed() Tmem {
 	return p.procType.getMemoryUsage()
 }
 
-func newPrivProc(sla Tftick, procType ProcType) *ProcInternals {
+func newPrivProc(sla Tftick, ioNeeded Tftick, procType ProcType) *ProcInternals {
 
 	// get actual comp from a normal distribution, assuming the sla left a buffer
-	slaWithoutBuffer := float64(sla) - procType.getExpectedSlaBuffer()*float64(sla)
+	slaWithoutIo := sla - ioNeeded
+	slaWithoutBuffer := float64(slaWithoutIo) - procType.getExpectedSlaBuffer()*float64(slaWithoutIo)
 	actualComp := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance()))
-	actualComp = min(sla, actualComp)
+	actualComp = min(sla-ioNeeded, actualComp)
 	if actualComp < 0 {
-		actualComp = Tftick(0.3)
+		actualComp = Tftick(0.1)
 	}
 
-	return &ProcInternals{sla, 0, actualComp, procType}
+	return &ProcInternals{sla, 0, actualComp, ioNeeded, Tftick(0), Tftick(0), procType}
 }
 
-func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
+func (p *ProcInternals) runTillOutOrDone(toRun Tftick, currTick Tftick) (Tftick, bool) {
 
 	workLeft := p.actualComp - p.compDone
 
+	r := rand.Float64()
+	r2 := rand.Float64()
+	r3 := rand.Float64()
+
 	if workLeft <= toRun {
-		p.compDone = p.actualComp
-		return workLeft, true
+		// if haven't used all the blocking, do so now
+		if p.ioDone < p.ioNeeded {
+			compUsed := Tftick(r2 * float64(workLeft))
+			p.compDone += compUsed
+			ioAdded := p.ioNeeded - p.ioDone
+			// account for it now already
+			p.ioDone += ioAdded
+
+			p.nextUnblockedAt = currTick + compUsed + Tftick(ioAdded)
+
+			return Tftick(r2 * float64(toRun)), false
+		} else {
+			p.compDone = p.actualComp
+			return workLeft, true
+		}
 	} else {
+		// randomly block (rn 30% of the time)
+		if (p.ioDone < p.ioNeeded) && r < 0.3 {
+			compUsed := Tftick(r2 * float64(toRun))
+			p.compDone += compUsed
+			ioAdded := math.Min(float64(p.ioNeeded-p.ioDone), r3*float64(p.ioNeeded))
+			// account for it now already
+			p.ioDone += Tftick(ioAdded)
+
+			p.nextUnblockedAt = currTick + compUsed + Tftick(ioAdded)
+
+			return Tftick(r2 * float64(toRun)), false
+		}
+
+		// we are not blocking, but also the ticks given is not enough to be done
 		p.compDone += toRun
-		// memUsage := rand.Int()%(PROC_MEM_CHANGE_MAX-PROC_MEM_CHANGE_MIN) + PROC_MEM_CHANGE_MIN
-		// p.memUsed += Tmem(memUsage)
-		// enforcing 0 <= memUsed <= MAX_MEM
-		// p.memUsed = Tmem(math.Min(math.Max(float64(p.memUsed), 0), MAX_MEM))
 		return toRun, false
 	}
 }
