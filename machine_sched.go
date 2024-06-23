@@ -177,6 +177,7 @@ func (sd *Sched) simulateRunProcs() {
 	}
 
 	ticksLeftToGive := Tftick(1)
+	unusedTicks := Tftick(0)
 
 	toWrite := fmt.Sprintf("%v, %v, curr q ACTIVE: %v, curr q BLOCKED: %v \n", sd.currTick, sd.machineId, sd.activeQ.String(), sd.blockedQ.String())
 	logWrite(SCHED, toWrite)
@@ -191,6 +192,7 @@ func (sd *Sched) simulateRunProcs() {
 			toWrite := fmt.Sprintf("%v, %v, skipping time because everyone blocked, w/ ticksLeft %v \n", sd.currTick, sd.machineId, ticksLeftToGive)
 			logWrite(SCHED, toWrite)
 			ticksLeftToGive -= 0.1
+			unusedTicks += 0.1
 			continue
 		} else {
 			procToRun = sd.activeQ.deq()
@@ -234,7 +236,7 @@ func (sd *Sched) simulateRunProcs() {
 		ticksLeftToGive = 0
 	}
 	if VERBOSE_MACHINE_USAGE_STATS {
-		toWrite := fmt.Sprintf(", %v\n", float64(math.Copysign(float64(ticksLeftToGive), 1)))
+		toWrite := fmt.Sprintf(", %v\n", float64(math.Copysign(float64(ticksLeftToGive+unusedTicks), 1)))
 		logWrite(USAGE, toWrite)
 	}
 }
