@@ -125,7 +125,7 @@ func (website *SimpleWebsite) genNumberOfProcs(totalNumProcs int) (int, int, int
 func (website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(PAGE_STATIC_SLA, PAGE_STATIC_IO, PAGE_STATIC)
+		procs[i] = newPrivProc(PAGE_STATIC_SLA, PAGE_STATIC_IO, PAGE_STATIC_MEM_USG, PAGE_STATIC)
 		// fmt.Printf("created new static page proc: %v\n", procs[i])
 	}
 	return procs
@@ -134,7 +134,7 @@ func (website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals 
 func (website *SimpleWebsite) genPageDynamicProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(PAGE_DYNAMIC_SLA, PAGE_DYNAMIC_IO, PAGE_DYNAMIC)
+		procs[i] = newPrivProc(PAGE_DYNAMIC_SLA, PAGE_DYNAMIC_IO, PAGE_DYNAMIC_MEM_USG, PAGE_DYNAMIC)
 	}
 	return procs
 }
@@ -142,7 +142,7 @@ func (website *SimpleWebsite) genPageDynamicProcs(numProcs int) []*ProcInternals
 func (website *SimpleWebsite) genDataProcessFgProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(DATA_PROCESS_FG_SLA, DATA_PROCESS_FG_IO, DATA_PROCESS_FG)
+		procs[i] = newPrivProc(DATA_PROCESS_FG_SLA, DATA_PROCESS_FG_IO, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_FG)
 	}
 	return procs
 }
@@ -150,7 +150,7 @@ func (website *SimpleWebsite) genDataProcessFgProcs(numProcs int) []*ProcInterna
 func (website *SimpleWebsite) genDataProcessBgProcs(numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(DATA_PROCESS_BG_SLA, DATA_PROCESS_BG_IO, DATA_PROCESS_BG)
+		procs[i] = newPrivProc(DATA_PROCESS_BG_SLA, DATA_PROCESS_BG_IO, DATA_PROCESS_BG_MEM_USG, DATA_PROCESS_BG)
 	}
 	return procs
 }

@@ -12,11 +12,12 @@ import (
 
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
-	machineId        Tid
-	ticksPassed      Tftick
-	timeShouldBeDone Tftick
-	procInternals    *ProcInternals
-	procTypeProfile  *ProvProcDistribution
+	machineId       Tid
+	ticksPassed     Tftick
+	deadline        Tftick
+	expectedMem     Tmem
+	procInternals   *ProcInternals
+	procTypeProfile *ProvProcDistribution
 }
 
 func (p *Proc) String() string {
@@ -28,30 +29,22 @@ func (p *Proc) String() string {
 
 func newProvProc(currTick int, privProc *ProcInternals) *Proc {
 	return &Proc{
-		machineId:        -1,
-		ticksPassed:      0,
-		timeShouldBeDone: privProc.sla + Tftick(currTick),
-		procInternals:    privProc,
+		machineId:     -1,
+		ticksPassed:   0,
+		expectedMem:   privProc.expectedMem,
+		deadline:      privProc.sla + Tftick(currTick),
+		procInternals: privProc,
 	}
 }
 
 // runs proc for the number of ticks passed or until the proc is done,
-// returning whether the proc is done and how many ticks were run, as well as whether the proc finished or was forcefully terminated for going over
+// returning whether the proc is done and how many ticks were run
 func (p *Proc) runTillOutOrDone(toRun Tftick, currFtick Tftick) (Tftick, bool) {
 	return p.procInternals.runTillOutOrDone(toRun, p.ticksPassed+currFtick)
 }
 
-func (p *Proc) effectiveSla() Tftick {
+func (p *Proc) getSla() Tftick {
 	return p.procInternals.sla
-}
-
-func (p *Proc) timeLeftOnSLA() Tftick {
-	return p.effectiveSla() - p.ticksPassed
-}
-
-// based on profiling info
-func (p *Proc) profilingExpectedCompLeft() Tftick {
-	return Tftick(p.procTypeProfile.computeUsed.avg+p.procTypeProfile.computeUsed.stdDev) - (p.procInternals.compDone)
 }
 
 func (p *Proc) memUsed() Tmem {
@@ -60,6 +53,10 @@ func (p *Proc) memUsed() Tmem {
 
 func (p *Proc) compUsed() Tftick {
 	return p.procInternals.compDone
+}
+
+func (p *Proc) expectedTimeLeft() Tftick {
+	return p.procInternals.expectedTime - (p.procInternals.compDone + p.procInternals.ioDone)
 }
 
 func (p *Proc) procType() ProcType {
@@ -73,6 +70,8 @@ func (p *Proc) procType() ProcType {
 // this is the internal view of a proc, ie what the client of the provider would create/run
 type ProcInternals struct {
 	sla             Tftick
+	expectedTime    Tftick
+	expectedMem     Tmem
 	compDone        Tftick
 	actualComp      Tftick
 	ioNeeded        Tftick
@@ -89,18 +88,31 @@ func (p *ProcInternals) memUsed() Tmem {
 	return p.procType.getMemoryUsage()
 }
 
-func newPrivProc(sla Tftick, ioNeeded Tftick, procType ProcType) *ProcInternals {
+func newPrivProc(sla Tftick, ioNeeded Tftick, expectedMem Tmem, procType ProcType) *ProcInternals {
 
 	// get actual comp from a normal distribution, assuming the sla left a buffer
-	slaWithoutIo := sla - ioNeeded
-	slaWithoutBuffer := float64(slaWithoutIo) - procType.getExpectedSlaBuffer()*float64(slaWithoutIo)
-	actualComp := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance()))
-	actualComp = min(sla-ioNeeded, actualComp)
+	slaWithoutBuffer := float64(sla) - procType.getExpectedSlaBuffer()*float64(sla)
+	totalTime := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance()))
+	totalTime = min(sla, totalTime)
+	actualComp := totalTime - ioNeeded
 	if actualComp < 0 {
 		actualComp = Tftick(0.1)
 	}
 
-	return &ProcInternals{sla, 0, actualComp, ioNeeded, Tftick(0), Tftick(0), procType}
+	// for now: expected time = avg + std dev
+	expectedTime := (float64(sla) - procType.getExpectedSlaBuffer()*float64(sla))
+
+	return &ProcInternals{
+		sla:             sla,
+		compDone:        0,
+		expectedTime:    Tftick(expectedTime),
+		expectedMem:     expectedMem,
+		actualComp:      actualComp,
+		ioNeeded:        ioNeeded,
+		ioDone:          Tftick(0),
+		nextUnblockedAt: Tftick(0),
+		procType:        procType,
+	}
 }
 
 func (p *ProcInternals) runTillOutOrDone(toRun Tftick, currTick Tftick) (Tftick, bool) {

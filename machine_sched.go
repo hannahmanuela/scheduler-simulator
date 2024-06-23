@@ -3,6 +3,7 @@ package slasched
 import (
 	"fmt"
 	"math"
+	"sort"
 )
 
 const (
@@ -89,33 +90,51 @@ func (sd *Sched) memUsage() float64 {
 func (sd *Sched) ticksInQ() float64 {
 	totalTicks := Tftick(0)
 	for _, p := range append(sd.activeQ.getQ(), sd.blockedQ.getQ()...) {
-		totalTicks += p.effectiveSla()
+		totalTicks += p.getSla()
 	}
 	return float64(totalTicks)
 }
 
-func (sd *Sched) expectedCompInQ() float64 {
-	totalTicks := Tftick(0)
-	for _, p := range append(sd.activeQ.getQ(), sd.blockedQ.getQ()...) {
-		totalTicks += p.profilingExpectedCompLeft()
-	}
-	return float64(totalTicks)
-}
+// checks if a proc can fit:
+// a) if it has enough slack to accomodate procs with a lower deadline, and
+// b) if procs with a larger deadline have enough slack to accomodate it
+func (sd *Sched) okToPlace(newProc *Proc) bool {
 
-// expected based on profiling info
-func (sd *Sched) expectedCompInActiveQ() float64 {
-	totalTicks := Tftick(0)
-	for _, p := range append(sd.activeQ.getQ(), sd.blockedQ.getQ()...) {
-		totalTicks += p.profilingExpectedCompLeft()
+	// fmt.Printf("--- running okToPlace: %v, %v \n", sd.currTick, sd.machineId)
+
+	fullList := append(sd.activeQ.getQ(), sd.blockedQ.getQ()...)
+	fullList = append(fullList, newProc)
+	sort.Slice(fullList, func(i, j int) bool {
+		return fullList[i].deadline < fullList[j].deadline
+	})
+
+	runningWaitTime := Tftick(0)
+
+	for _, p := range fullList {
+		// make sure that the current proc is able to wait for all the prvious procs
+		pSlack := p.getSla() - p.expectedTimeLeft()
+
+		// fmt.Printf("%v, %v: running wait time: %v curr proc deadline: %v, curr proc sla: %v, expectedCompLeft: %v, slack: %v\n",
+		// 	sd.currTick, sd.machineId, runningWaitTime, p.deadline, p.getSla(), p.expectedTimeLeft(), pSlack)
+
+		if pSlack-runningWaitTime < 0.0 {
+			// fmt.Println("returning false")
+			return false
+		}
+		// add current proc to runningWaitTime
+		runningWaitTime += p.expectedTimeLeft()
 	}
-	return float64(totalTicks)
+
+	// fmt.Println("returning true")
+	return true
+
 }
 
 func (sd *Sched) procsInRange(sla Tftick) int {
 	slaBottom := getRangeBottomFromSLA(sla)
 	numProcs := 0
 	for _, p := range append(sd.activeQ.getQ(), sd.blockedQ.getQ()...) {
-		if getRangeBottomFromSLA(p.effectiveSla()) == slaBottom {
+		if getRangeBottomFromSLA(p.getSla()) == slaBottom {
 			numProcs += 1
 		}
 	}
@@ -125,8 +144,8 @@ func (sd *Sched) procsInRange(sla Tftick) int {
 func (sd *Sched) maxRatioTicksPassedToSla() float64 {
 	max := 0.0
 	for _, p := range append(sd.activeQ.getQ(), sd.blockedQ.getQ()...) {
-		if float64(p.ticksPassed/p.effectiveSla()) > max {
-			max = float64(p.ticksPassed / p.effectiveSla())
+		if float64(p.ticksPassed/p.getSla()) > max {
+			max = float64(p.ticksPassed / p.getSla())
 		}
 	}
 	return max

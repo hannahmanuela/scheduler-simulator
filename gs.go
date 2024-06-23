@@ -3,7 +3,6 @@ package slasched
 import (
 	"fmt"
 	"math"
-	"math/rand"
 	"os"
 	"sync"
 )
@@ -105,16 +104,7 @@ func (lb *GlobalSched) placeProcs() {
 	for p != nil {
 		// place given proc
 
-		// keep profiles on procs, use that
-		// sample machines and see which one might be good
-		var machineToUse *Machine
-		if _, ok := lb.procTypeProfiles[p.procType()]; ok {
-			// if we have profiling information, use it
-			machineToUse = lb.pickMachineGivenProfile(p)
-		} else {
-			// otherwise just pick a machine
-			machineToUse = lb.machines[Tid(rand.Int()%len(lb.machines))]
-		}
+		machineToUse := lb.pickMachine(p)
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
@@ -131,86 +121,35 @@ func (lb *GlobalSched) placeProcs() {
 	}
 }
 
-// probably actually want this to be via communication with the machine itself, let it say yes or no?
-// that way we avoid the "gold rush" things, although since this is one by one anyway maybe its fine
-func (lb *GlobalSched) pickMachineGivenProfile(procToPlace *Proc) *Machine {
+// admission control:
+// 1. will the machine be able to handle the proc? (in terms of cpu time as well as memory)
+// 2. among those that are, which one has the lowest load?
+func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
-	profile := lb.procTypeProfiles[procToPlace.procType()]
+	var machineToUse *Machine
+	contenderMachines := make([]*Machine, 0)
 
-	toWrite := fmt.Sprintf("%v, LB placing proc: %v \n", lb.currTick, procToPlace.effectiveSla())
+	for _, m := range lb.machines {
+		// TODO: is this how we want to do it? (asking every time); makes it so we can't reuse the probes...
+		if m.sched.memFree() > float64(procToPlace.expectedMem) && m.sched.okToPlace(procToPlace) {
+			contenderMachines = append(contenderMachines, m)
+		}
+	}
+
+	toWrite := fmt.Sprintf("%v, LB placing proc: %v, there are %v contender machines \n", lb.currTick, procToPlace.String(), len(contenderMachines))
 	logWrite(SCHED, toWrite)
 
-	minProcsInRange := int(math.Inf(1))
-	maxProcsInRange := 0
-	minMaxRatioTicksPassedToSla := math.Inf(0)
-	maxMaxRatioTicksPassedToSla := 0.0
-	minExpectedCompInQ := math.Inf(0)
-	maxExpectedCompInQ := 0.0
-	for _, m := range lb.machines {
-		// machine is a contender if has memory for it
-		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
-			if m.sched.maxRatioTicksPassedToSla() > maxMaxRatioTicksPassedToSla {
-				maxMaxRatioTicksPassedToSla = m.sched.maxRatioTicksPassedToSla()
-			}
-			if m.sched.maxRatioTicksPassedToSla() < minMaxRatioTicksPassedToSla {
-				minMaxRatioTicksPassedToSla = m.sched.maxRatioTicksPassedToSla()
-			}
-			if m.sched.procsInRange(procToPlace.effectiveSla()) > maxProcsInRange {
-				maxProcsInRange = m.sched.procsInRange(procToPlace.effectiveSla())
-			}
-			if m.sched.procsInRange(procToPlace.effectiveSla()) < minProcsInRange {
-				minProcsInRange = m.sched.procsInRange(procToPlace.effectiveSla())
-			}
-			if m.sched.expectedCompInQ() > maxExpectedCompInQ {
-				maxExpectedCompInQ = m.sched.expectedCompInQ()
-			}
-			if m.sched.expectedCompInQ() < minExpectedCompInQ {
-				minExpectedCompInQ = m.sched.expectedCompInQ()
-			}
-		}
-	}
-	// toWrite = fmt.Sprintf("minProcsInRange: %v, maxProcsInRange: %v, minTicksInQ: %v, maxTicksInQ: %v, minRatioSlaToTicksPassed: %v, maxRatioSlaToTicksPassed: %v \n", minProcsInRange, maxProcsInRange, minTicksInQ, maxTicksInQ, minRatioSlaToTicksPassed, maxRatioSlaToTicksPassed)
-	// logWrite(SCHED, toWrite)
+	if len(contenderMachines) == 0 {
+		fmt.Println("DOESN'T FIT ANYWHERE :((")
 
-	machineToPressure := make(map[*Machine]float64, 0)
-	for _, m := range lb.machines {
-		// machine is a contender if has memory for it
-		if m.sched.memFree() > profile.memUsg.avg+profile.memUsg.stdDev {
-			// factors: num procs in range; min max sla to ticksPassed ratio [for both, being smaller is better]
-			// normalized based on above min/max values
-
-			// TODO: do this by rounds of excluding?
-			press := math.Inf(1)
-			if m.sched.procsInRange(procToPlace.effectiveSla()) == minProcsInRange {
-				if maxExpectedCompInQ != minExpectedCompInQ {
-					press = float64((m.sched.expectedCompInQ())-minExpectedCompInQ) / float64(maxExpectedCompInQ-minExpectedCompInQ)
-				} else {
-					// case where they all have exactly the same procs in range and ticks in q
-					press = 0
-				}
-			}
-			machineToPressure[m] = press
-			if VERBOSE_PRESSURE_VALS {
-				toWrite := fmt.Sprintf("giving machine %v pressure val %v, with a maxRatio of %v, procsInRange of %v, and tikcsInQ of %v \n",
-					m.mid, press, m.sched.maxRatioTicksPassedToSla(), m.sched.procsInRange(procToPlace.effectiveSla()), m.sched.ticksInQ())
-				logWrite(SCHED, toWrite)
-			}
-		}
-	}
-
-	// TODO: what if no machines are contenders because no one has the memory for the new proc?
-	// have a q on the lb?
-	if len(machineToPressure) == 0 {
-		fmt.Println("EVERYONE OOM")
 		os.Exit(0)
 	}
 
-	var machineToUse *Machine
-	minPressure := math.Inf(1)
-	for machine, press := range machineToPressure {
-		if press < minPressure {
-			machineToUse = machine
-			minPressure = press
+	minVal := math.Inf(0)
+	for _, m := range contenderMachines {
+		if m.sched.maxRatioTicksPassedToSla() < minVal {
+			machineToUse = m
+			minVal = m.sched.maxRatioTicksPassedToSla()
 		}
 	}
 
