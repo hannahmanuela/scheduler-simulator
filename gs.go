@@ -3,7 +3,6 @@ package slasched
 import (
 	"fmt"
 	"math"
-	"os"
 	"sync"
 )
 
@@ -101,10 +100,18 @@ func (lb *GlobalSched) placeProcs() {
 	lb.currTick += 1
 	p := lb.getProc()
 
+	toReQ := make([]*Proc, 0)
+
 	for p != nil {
 		// place given proc
 
 		machineToUse := lb.pickMachine(p)
+
+		if machineToUse == nil {
+			toReQ = append(toReQ, p)
+			p = lb.getProc()
+			continue
+		}
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
@@ -118,6 +125,11 @@ func (lb *GlobalSched) placeProcs() {
 			logWrite(ADDED_PROCS, toWrite)
 		}
 		p = lb.getProc()
+	}
+
+	for _, p := range toReQ {
+		p.ticksPassed += 1
+		lb.putProc(p)
 	}
 }
 
@@ -140,9 +152,8 @@ func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	logWrite(SCHED, toWrite)
 
 	if len(contenderMachines) == 0 {
-		fmt.Println("DOESN'T FIT ANYWHERE :((")
-
-		os.Exit(0)
+		fmt.Printf("%v: DOESN'T FIT ANYWHERE :(( -- re-enqing: %v \n", lb.currTick, procToPlace)
+		return nil
 	}
 
 	minVal := math.Inf(0)

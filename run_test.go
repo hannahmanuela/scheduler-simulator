@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	N_TICK               = 20
-	N_MACHINES           = 4
-	N_PROCS_GEN_PER_TICK = 2
+	N_TICK               = 500
+	N_MACHINES           = 10
+	N_PROCS_GEN_PER_TICK = 4
 )
 
 func TestRunWorld(t *testing.T) {
