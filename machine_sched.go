@@ -12,15 +12,17 @@ const (
 
 type Sched struct {
 	machineId  Tid
+	numCores   int
 	activeQ    *Queue
 	lbConnSend chan *Message // channel to send messages to LB
 	lbConnRecv chan *Message // channel this machine recevies messages on from the LB
 	currTick   Tftick
 }
 
-func newSched(lbConnSend chan *Message, lbConnRecv chan *Message, mid Tid) *Sched {
+func newSched(numCores int, lbConnSend chan *Message, lbConnRecv chan *Message, mid Tid) *Sched {
 	sd := &Sched{
 		machineId:  mid,
+		numCores:   numCores,
 		activeQ:    newQueue(),
 		lbConnSend: lbConnSend,
 		lbConnRecv: lbConnRecv,
@@ -90,24 +92,36 @@ func (sd *Sched) okToPlace(newProc *Proc) bool {
 		return fullList[i].deadline < fullList[j].deadline
 	})
 
-	runningWaitTime := Tftick(0)
-
-	for _, p := range fullList {
-		// make sure that the current proc is able to wait for all the prvious procs
-		pSlack := p.getSlack(sd.currTick)
-
-		// fmt.Printf("%v, %v: running wait time: %v curr proc deadline: %v, curr proc sla: %v, expectedCompLeft: %v, slack: %v\n",
-		// 	sd.currTick, sd.machineId, runningWaitTime, p.deadline, p.getSla(), p.expectedTimeLeft(), pSlack)
-
-		if pSlack-runningWaitTime < 0.0 {
-			// fmt.Println("returning false")
-			return false
-		}
-		// add current proc to runningWaitTime
-		runningWaitTime += p.getExpectedCompLeft()
+	coreToRunningWaitTime := make(map[int]Tftick)
+	for i := 0; i < sd.numCores; i++ {
+		coreToRunningWaitTime[i] = Tftick(0)
 	}
 
-	// fmt.Println("returning true")
+	getAddMinRunningWaitTime := func(toAdd Tftick) Tftick {
+		minVal := Tftick(math.MaxFloat64)
+		minCore := -1
+		for i := 0; i < sd.numCores; i++ {
+			if coreToRunningWaitTime[i] < minVal {
+				minVal = coreToRunningWaitTime[i]
+				minCore = i
+			}
+		}
+		// ofstream sched_file;
+		// sched_file.open("../sched.txt", std::ios_base::app);
+		// sched_file << "adding ceil " << to_add << " to core " << min_core << ", whose waiting time is thus now " << cores_to_running_waiting_time.at(min_core) + to_add << endl;
+		// sched_file.close();
+		coreToRunningWaitTime[minCore] += toAdd
+		return minVal
+	}
+
+	for _, p := range fullList {
+
+		waitTime := getAddMinRunningWaitTime(p.getExpectedCompLeft())
+		if p.getSlack(sd.currTick)-waitTime < 0.0 {
+			return false
+		}
+	}
+
 	return true
 
 }
@@ -120,46 +134,64 @@ func (sd *Sched) simulateRunProcs() {
 		logWrite(USAGE, toWrite)
 	}
 
-	ticksLeftToGive := Tftick(1)
-	unusedTicks := Tftick(0)
+	totalTicksLeftToGive := Tftick(sd.numCores)
+	ticksLeftPerCore := make(map[int]Tftick, 0)
+	for i := 0; i < sd.numCores; i++ {
+		ticksLeftPerCore[i] = Tftick(1)
+	}
 
 	toWrite := fmt.Sprintf("%v, %v, curr q ACTIVE: %v \n", int(sd.currTick), sd.machineId, sd.activeQ.String())
 	logWrite(SCHED, toWrite)
 
-	for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && sd.activeQ.qlen() > 0 {
+	var toReq []*Proc
+	for totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && sd.activeQ.qlen() > 0 {
 
-		procToRun := sd.activeQ.deq()
+		for currCore := 0; currCore < sd.numCores; currCore++ {
+			procToRun := sd.activeQ.deq()
 
-		ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftToGive)
-
-		toWrite := fmt.Sprintf("%v, %v, running proc %v, gave %v ticks, used %v ticks\n", sd.currTick, sd.machineId, procToRun.String(), ticksLeftToGive.String(), ticksUsed.String())
-		logWrite(SCHED, toWrite)
-
-		ticksLeftToGive -= ticksUsed
-
-		if !done {
-			// check if the memroy used by the proc sent us over the edge (and if yes, kill as needed)
-			if sd.memUsed() > MAX_MEM_PER_MACHINE {
-				fmt.Printf("--> OUT OF MEMORY ON MACHINE %v\n ", sd.machineId)
-				fmt.Printf("q: %v\n", sd.activeQ.String())
+			if procToRun == nil {
+				break
 			}
-			// add proc back into queue
-			sd.activeQ.enq(procToRun)
-		} else {
-			// if the proc is done, update the ticksPassed to be exact for metrics etc
-			procToRun.timeDone = sd.currTick + (1 - ticksLeftToGive)
-			// don't need to wait if we are just telling it a proc is done
-			sd.lbConnSend <- &Message{sd.machineId, M_LB_PROC_DONE, procToRun, nil}
+
+			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
+
+			toWrite := fmt.Sprintf("%v, %v, %v, running proc %v, gave %v ticks, used %v ticks\n", sd.currTick, sd.machineId, currCore, procToRun.String(), ticksLeftPerCore[currCore].String(), ticksUsed.String())
+			logWrite(SCHED, toWrite)
+
+			ticksLeftPerCore[currCore] -= ticksUsed
+			totalTicksLeftToGive -= ticksUsed
+
+			if !done {
+				// check if the memroy used by the proc sent us over the edge (and if yes, kill as needed)
+				if sd.memUsed() > MAX_MEM_PER_MACHINE {
+					fmt.Printf("--> OUT OF MEMORY ON MACHINE %v\n ", sd.machineId)
+					fmt.Printf("q: %v\n", sd.activeQ.String())
+				}
+				// add proc back into queue (a temporary one, b/c once a proc has run on one core it shouldn't be allowed to get time on another core also,
+				// and since there is no blocking/waking during a tick we know it wouldn't magically become the one to run again later so can just wait till the end of the tick)
+				toReq = append(toReq, procToRun)
+			} else {
+				// if the proc is done, update the ticksPassed to be exact for metrics etc
+				procToRun.timeDone = sd.currTick + (1 - ticksLeftPerCore[currCore])
+				// don't need to wait if we are just telling it a proc is done
+				sd.lbConnSend <- &Message{sd.machineId, M_LB_PROC_DONE, procToRun, nil}
+			}
+
 		}
 
 	}
 
+	// procs that have been run can now be re-added to the q
+	for _, p := range toReq {
+		sd.activeQ.enq(p)
+	}
+
 	// this is dumb but make accounting for util easier
-	if ticksLeftToGive < 0.00002 {
-		ticksLeftToGive = 0
+	if totalTicksLeftToGive < 0.00002 {
+		totalTicksLeftToGive = 0
 	}
 	if VERBOSE_MACHINE_USAGE_STATS {
-		toWrite := fmt.Sprintf(", %v\n", float64(math.Copysign(float64(ticksLeftToGive+unusedTicks), 1)))
+		toWrite := fmt.Sprintf(", %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)))
 		logWrite(USAGE, toWrite)
 	}
 }

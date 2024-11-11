@@ -19,9 +19,9 @@ type Proc struct {
 }
 
 func (p *Proc) String() string {
-	return p.procInternals.String()
-	// ", deadline: " + p.timeShouldBeDone.String() +
-	// ", ticks passed: " + p.ticksPassed.String()
+	return p.procInternals.String() +
+		", deadline: " + p.deadline.String() +
+		", time started: " + p.timeStarted.String()
 }
 
 func newProvProc(currTick Tftick, privProc *ProcInternals) *Proc {

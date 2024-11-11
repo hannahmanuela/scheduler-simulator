@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	N_TICK               = 500
+	N_TICK               = 100
 	N_MACHINES           = 10
 	N_PROCS_GEN_PER_TICK = 4
 )

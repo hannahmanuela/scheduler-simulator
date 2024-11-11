@@ -1,7 +1,8 @@
 package slasched
 
 const (
-	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
+	MAX_MEM_PER_MACHINE   = 32000 // the amount of memory every core will have, in MB
+	NUM_CORES_PER_MACHINE = 12
 
 	TICKS_WAIT_LOAD_CHANGES = 100
 	INITIAL_LOAD            = 4
@@ -36,7 +37,7 @@ func newWorld(numMachines int) *World {
 		mid := Tid(i)
 		chanMacheineToLB := make(chan *Message)
 		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
-		w.machines[Tid(i)] = newMachine(mid, lbMachineConn, chanMacheineToLB)
+		w.machines[Tid(i)] = newMachine(mid, NUM_CORES_PER_MACHINE, lbMachineConn, chanMacheineToLB)
 	}
 	w.lb = newLoadBalancer(w.machines, machineToLBConns, lbMachineConn)
 	return w
