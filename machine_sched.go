@@ -144,6 +144,8 @@ func (sd *Sched) simulateRunProcs() {
 	logWrite(SCHED, toWrite)
 
 	var toReq []*Proc
+	// TODO: switch the loop order? oh but then maybe a proc will be processed later that actually would have been in parallel
+	// I should work through some examples
 	for totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && sd.activeQ.qlen() > 0 {
 
 		for currCore := 0; currCore < sd.numCores; currCore++ {
