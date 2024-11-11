@@ -2,7 +2,6 @@ package slasched
 
 import (
 	"fmt"
-	"math"
 	"sync"
 )
 
@@ -24,44 +23,20 @@ type Message struct {
 }
 
 type GlobalSched struct {
-	machines         map[Tid]*Machine
-	procq            *Queue
-	machineConnRecv  chan *Message         // listen for messages from machines
-	machineConnSend  map[Tid]chan *Message // send messages to machine
-	currTick         int
-	procTypeProfiles map[ProcType]*ProvProcDistribution
+	machines        map[Tid]*Machine
+	procq           *Queue
+	machineConnRecv chan *Message         // listen for messages from machines
+	machineConnSend map[Tid]chan *Message // send messages to machine
+	currTick        int
 }
 
 func newLoadBalancer(machines map[Tid]*Machine, lbSendToMachines map[Tid]chan *Message, lbRecv chan *Message) *GlobalSched {
 	lb := &GlobalSched{
-		machines:         machines,
-		procq:            &Queue{q: make([]*Proc, 0)},
-		machineConnRecv:  lbRecv,
-		machineConnSend:  lbSendToMachines,
-		currTick:         0,
-		procTypeProfiles: make(map[ProcType]*ProvProcDistribution),
-	}
-
-	// hard-coded for now
-	lb.procTypeProfiles[PAGE_STATIC] = &ProvProcDistribution{
-		computeUsed: Distribution{avg: float64(PAGE_STATIC_SLA) - PAGE_STATIC.getExpectedSlaBuffer()*float64(PAGE_STATIC_SLA), count: 0,
-			stdDev: PAGE_STATIC.getExpectedProcDeviationVariance()},
-		memUsg: Distribution{avg: PAGE_STATIC_MEM_USG, count: 0, stdDev: 0},
-	}
-	lb.procTypeProfiles[PAGE_DYNAMIC] = &ProvProcDistribution{
-		computeUsed: Distribution{avg: float64(PAGE_DYNAMIC_SLA) - PAGE_DYNAMIC.getExpectedSlaBuffer()*float64(PAGE_DYNAMIC_SLA), count: 0,
-			stdDev: PAGE_DYNAMIC.getExpectedProcDeviationVariance()},
-		memUsg: Distribution{avg: PAGE_DYNAMIC_MEM_USG, count: 0, stdDev: 0},
-	}
-	lb.procTypeProfiles[DATA_PROCESS_FG] = &ProvProcDistribution{
-		computeUsed: Distribution{avg: float64(DATA_PROCESS_FG_SLA) - DATA_PROCESS_FG.getExpectedSlaBuffer()*float64(DATA_PROCESS_FG_SLA), count: 0,
-			stdDev: DATA_PROCESS_FG.getExpectedProcDeviationVariance()},
-		memUsg: Distribution{avg: DATA_PROCESS_FG_MEM_USG, count: 0, stdDev: 0},
-	}
-	lb.procTypeProfiles[DATA_PROCESS_BG] = &ProvProcDistribution{
-		computeUsed: Distribution{avg: float64(DATA_PROCESS_BG_SLA) - DATA_PROCESS_BG.getExpectedSlaBuffer()*float64(DATA_PROCESS_BG_SLA), count: 0,
-			stdDev: DATA_PROCESS_BG.getExpectedProcDeviationVariance()},
-		memUsg: Distribution{avg: DATA_PROCESS_BG_MEM_USG, count: 0, stdDev: 0},
+		machines:        machines,
+		procq:           &Queue{q: make([]*Proc, 0)},
+		machineConnRecv: lbRecv,
+		machineConnSend: lbSendToMachines,
+		currTick:        0,
 	}
 
 	go lb.listenForMachineMessages()
@@ -82,14 +57,8 @@ func (lb *GlobalSched) listenForMachineMessages() {
 		switch msg.msgType {
 		case M_LB_PROC_DONE:
 			if VERBOSE_LB_STATS {
-				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.procInternals.sla), float64(msg.proc.ticksPassed), float64(msg.proc.procInternals.actualComp))
+				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", lb.currTick, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.deadline), float64(msg.proc.timeDone-msg.proc.timeStarted), float64(msg.proc.procInternals.actualComp))
 				logWrite(DONE_PROCS, toWrite)
-			}
-			if _, ok := lb.procTypeProfiles[msg.proc.procType()]; ok {
-				lb.procTypeProfiles[msg.proc.procType()].updateMem(msg.proc.memUsed())
-				lb.procTypeProfiles[msg.proc.procType()].updateCompute(msg.proc.compUsed())
-			} else {
-				lb.procTypeProfiles[msg.proc.procType()] = newProcProcDistribution(msg.proc.memUsed(), msg.proc.compUsed())
 			}
 		}
 	}
@@ -115,20 +84,18 @@ func (lb *GlobalSched) placeProcs() {
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
-		p.procTypeProfile = lb.procTypeProfiles[p.procType()]
 		var wg sync.WaitGroup
 		wg.Add(1)
 		lb.machineConnSend[machineToUse.mid] <- &Message{-1, LB_M_PLACE_PROC, p, &wg}
 		wg.Wait()
 		if VERBOSE_LB_STATS {
-			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.sla), float64(p.procInternals.actualComp))
+			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", lb.currTick, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
 			logWrite(ADDED_PROCS, toWrite)
 		}
 		p = lb.getProc()
 	}
 
 	for _, p := range toReQ {
-		p.ticksPassed += 1
 		lb.putProc(p)
 	}
 }
@@ -143,7 +110,7 @@ func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
 	for _, m := range lb.machines {
 		// TODO: is this how we want to do it? (asking every time); makes it so we can't reuse the probes...
-		if m.sched.memFree() > float64(procToPlace.expectedMem) && m.sched.okToPlace(procToPlace) {
+		if m.sched.okToPlace(procToPlace) {
 			contenderMachines = append(contenderMachines, m)
 		}
 	}
@@ -156,13 +123,8 @@ func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 		return nil
 	}
 
-	minVal := math.Inf(0)
-	for _, m := range contenderMachines {
-		if m.sched.maxRatioTicksPassedToSla() < minVal {
-			machineToUse = m
-			minVal = m.sched.maxRatioTicksPassedToSla()
-		}
-	}
+	// TODO: this is stupid
+	machineToUse = contenderMachines[len(contenderMachines)/2]
 
 	return machineToUse
 }

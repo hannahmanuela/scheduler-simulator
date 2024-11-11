@@ -2,8 +2,6 @@ package slasched
 
 import (
 	"fmt"
-	"math"
-	"math/rand"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -12,39 +10,58 @@ import (
 
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
-	machineId       Tid
-	ticksPassed     Tftick
-	deadline        Tftick
-	expectedMem     Tmem
-	procInternals   *ProcInternals
-	procTypeProfile *ProvProcDistribution
+	machineId     Tid
+	timeStarted   Tftick
+	timeDone      Tftick
+	deadline      Tftick
+	maxComp       Tftick
+	procInternals *ProcInternals
 }
 
 func (p *Proc) String() string {
-	return p.procInternals.String() +
-		// ", deadline: " + p.timeShouldBeDone.String() +
-		", ticks passed: " + p.ticksPassed.String()
-	// ", procTypeProfile: " + p.procTypeProfile.String()
+	return p.procInternals.String()
+	// ", deadline: " + p.timeShouldBeDone.String() +
+	// ", ticks passed: " + p.ticksPassed.String()
 }
 
-func newProvProc(currTick int, privProc *ProcInternals) *Proc {
+func newProvProc(currTick Tftick, privProc *ProcInternals) *Proc {
 	return &Proc{
 		machineId:     -1,
-		ticksPassed:   0,
-		expectedMem:   privProc.expectedMem,
-		deadline:      privProc.sla + Tftick(currTick),
+		timeStarted:   currTick,
+		timeDone:      0,
+		deadline:      privProc.deadline,
+		maxComp:       privProc.maxComp,
 		procInternals: privProc,
 	}
 }
 
 // runs proc for the number of ticks passed or until the proc is done,
 // returning whether the proc is done and how many ticks were run
-func (p *Proc) runTillOutOrDone(toRun Tftick, currFtick Tftick) (Tftick, bool) {
-	return p.procInternals.runTillOutOrDone(toRun, p.ticksPassed+currFtick)
+func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
+	return p.procInternals.runTillOutOrDone(toRun)
 }
 
-func (p *Proc) getSla() Tftick {
-	return p.procInternals.sla
+// returns the deadline (in absolute terms)
+func (p *Proc) getDeadline() Tftick {
+	return p.deadline
+}
+
+// returns the deadline (relative, offset by time started)
+func (p *Proc) getRelDeadline() Tftick {
+	return p.timeStarted + p.deadline
+}
+
+func (p *Proc) getSlack(currTime Tftick) Tftick {
+	ogSlack := p.deadline - p.maxComp
+	return ogSlack - p.waitTime(currTime)
+}
+
+func (p *Proc) waitTime(currTime Tftick) Tftick {
+	return (currTime - p.timeStarted) + p.compUsed()
+}
+
+func (p *Proc) getExpectedCompLeft() Tftick {
+	return p.maxComp - p.compUsed()
 }
 
 func (p *Proc) memUsed() Tmem {
@@ -53,10 +70,6 @@ func (p *Proc) memUsed() Tmem {
 
 func (p *Proc) compUsed() Tftick {
 	return p.procInternals.compDone
-}
-
-func (p *Proc) expectedTimeLeft() Tftick {
-	return p.procInternals.expectedTime - (p.procInternals.compDone + p.procInternals.ioDone)
 }
 
 func (p *Proc) procType() ProcType {
@@ -69,91 +82,43 @@ func (p *Proc) procType() ProcType {
 
 // this is the internal view of a proc, ie what the client of the provider would create/run
 type ProcInternals struct {
-	sla             Tftick
-	expectedTime    Tftick
-	expectedMem     Tmem
-	compDone        Tftick
-	actualComp      Tftick
-	ioNeeded        Tftick
-	ioDone          Tftick
-	nextUnblockedAt Tftick
-	procType        ProcType
+	deadline   Tftick
+	maxComp    Tftick
+	compDone   Tftick
+	actualComp Tftick
+	procType   ProcType
 }
 
 func (p *ProcInternals) String() string {
-	return fmt.Sprintf("sla %v", p.sla)
+	return fmt.Sprintf("compDone %v", p.compDone)
 }
 
 func (p *ProcInternals) memUsed() Tmem {
 	return p.procType.getMemoryUsage()
 }
 
-func newPrivProc(sla Tftick, ioNeeded Tftick, expectedMem Tmem, procType ProcType) *ProcInternals {
+func newPrivProc(sla Tftick, maxComp Tftick, procType ProcType) *ProcInternals {
 
 	// get actual comp from a normal distribution, assuming the sla left a buffer
 	slaWithoutBuffer := float64(sla) - procType.getExpectedSlaBuffer()*float64(sla)
-	totalTime := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance()))
-	totalTime = min(sla, totalTime)
-	actualComp := totalTime - ioNeeded
+	actualComp := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance()))
 	if actualComp < 0 {
-		actualComp = Tftick(0.1)
+		actualComp = Tftick(0.3)
+	} else if actualComp > maxComp {
+		actualComp = maxComp
 	}
 
-	// for now: expected time = avg + std dev
-	expectedTime := (float64(sla) - procType.getExpectedSlaBuffer()*float64(sla))
-
-	return &ProcInternals{
-		sla:             sla,
-		compDone:        0,
-		expectedTime:    Tftick(expectedTime),
-		expectedMem:     expectedMem,
-		actualComp:      actualComp,
-		ioNeeded:        ioNeeded,
-		ioDone:          Tftick(0),
-		nextUnblockedAt: Tftick(0),
-		procType:        procType,
-	}
+	return &ProcInternals{sla, maxComp, 0, actualComp, procType}
 }
 
-func (p *ProcInternals) runTillOutOrDone(toRun Tftick, currTick Tftick) (Tftick, bool) {
+func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 
 	workLeft := p.actualComp - p.compDone
 
-	r := rand.Float64()
-	r2 := rand.Float64()
-	r3 := rand.Float64()
-
 	if workLeft <= toRun {
-		// if haven't used all the blocking, do so now
-		if p.ioDone < p.ioNeeded {
-			compUsed := Tftick(r2 * float64(workLeft))
-			p.compDone += compUsed
-			ioAdded := p.ioNeeded - p.ioDone
-			// account for it now already
-			p.ioDone += ioAdded
-
-			p.nextUnblockedAt = currTick + compUsed + Tftick(ioAdded)
-
-			return Tftick(r2 * float64(toRun)), false
-		} else {
-			p.compDone = p.actualComp
-			return workLeft, true
-		}
+		p.compDone = p.actualComp
+		return workLeft, true
 	} else {
-		// randomly block (rn 30% of the time)
-		if (p.ioDone < p.ioNeeded) && r < 0.3 {
-			compUsed := Tftick(r2 * float64(toRun))
-			p.compDone += compUsed
-			ioAdded := math.Min(float64(p.ioNeeded-p.ioDone), r3*float64(p.ioNeeded))
-			// account for it now already
-			p.ioDone += Tftick(ioAdded)
-
-			p.nextUnblockedAt = currTick + compUsed + Tftick(ioAdded)
-
-			return Tftick(r2 * float64(toRun)), false
-		}
-
-		// we are not blocking, but also the ticks given is not enough to be done
 		p.compDone += toRun
 		return toRun, false
 	}

@@ -1,9 +1,5 @@
 package slasched
 
-import (
-	"math"
-)
-
 const (
 	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
 
@@ -20,7 +16,7 @@ const (
 )
 
 type World struct {
-	currTick        int
+	currTick        Tftick
 	numProcsToGen   int
 	lastChangedLoad int
 	machines        map[Tid]*Machine
@@ -54,26 +50,6 @@ func (w *World) String() string {
 	return str
 }
 
-func (w *World) minMaxRatioTicksPassedToSla() float64 {
-	minVal := math.Inf(1)
-	for _, m := range w.machines {
-		if m.sched.maxRatioTicksPassedToSla() < minVal {
-			minVal = m.sched.maxRatioTicksPassedToSla()
-		}
-	}
-	return minVal
-}
-
-func (w *World) evalLoad() {
-	if w.minMaxRatioTicksPassedToSla() < THRESHOLD_RATIO_MIN && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
-		w.numProcsToGen += 1
-		w.lastChangedLoad = w.currTick
-	} else if w.minMaxRatioTicksPassedToSla() > THRESHOLD_RATIO_MAX && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
-		w.numProcsToGen -= 1
-		w.lastChangedLoad = w.currTick
-	}
-}
-
 func (w *World) genLoad(nProcs int) int {
 	userProcs := w.app.genLoad(nProcs)
 	sumTicksAdded := Tftick(0)
@@ -97,12 +73,6 @@ func (w *World) printAllProcs() {
 	}
 }
 
-func (w *World) tickAllProcs() {
-	for _, m := range w.machines {
-		m.sched.tickAllProcs()
-	}
-}
-
 func (w *World) Tick(numProcs int) {
 	w.currTick += 1
 	if VERBOSE_LB_STATS {
@@ -114,12 +84,10 @@ func (w *World) Tick(numProcs int) {
 	w.lb.placeProcs()
 	// runs each machine for a tick
 	w.compute()
-	w.tickAllProcs()
 }
 
 func (w *World) Run(nTick int, nProcsPerTick int) {
 	for i := 0; i < nTick; i++ {
-		w.evalLoad()
 		w.Tick(nProcsPerTick)
 	}
 }
