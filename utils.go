@@ -6,14 +6,7 @@ import (
 	"os"
 )
 
-// const (
-// 	BUCKETS_INIT_SIZE = 100
-// 	BUCKETS_BASE      = 5
-// )
-
-type Ttick int
 type Tmem int
-
 type Tftick float64
 
 func (f Tftick) String() string {
@@ -69,10 +62,10 @@ func getRangeBottomFromSLA(sla Tftick) float64 {
 	// lowerBound := math.Pow(BUCKETS_BASE, bucketIndex-1) * BUCKETS_INIT_SIZE
 	lowerBound := 0.0
 
-	if sla <= Tftick(1) {
+	if sla <= Tftick(2) {
 		lowerBound = 0
 	} else if sla <= Tftick(5) {
-		lowerBound = 1
+		lowerBound = 2
 	} else if sla <= Tftick(10) {
 		lowerBound = 5
 	} else {

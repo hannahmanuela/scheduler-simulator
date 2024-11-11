@@ -1,35 +1,46 @@
 package slasched
 
 import (
-	"fmt"
+	"math"
 )
 
 const (
-	MAX_MEM_PER_CORE = 11000 // the amount of memory every core will have, in MB
+	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
+
+	TICKS_WAIT_LOAD_CHANGES = 100
+	INITIAL_LOAD            = 4
+	THRESHOLD_RATIO_MIN     = 0.1 // min max ratio below which we add load
+	THRESHOLD_RATIO_MAX     = 0.5 // min max ratio above which we reduce load
 
 	VERBOSE_LB_STATS            = true
 	VERBOSE_SCHED_STATS         = true
 	VERBOSE_WORLD_STATS         = true
 	VERBOSE_MACHINE_USAGE_STATS = true
+	VERBOSE_PRESSURE_VALS       = true
 )
 
 type World struct {
-	currTick Ttick
-	machines map[Tid]*Machine
-	lb       *LoadBalancer
-	app      Website
+	currTick        int
+	numProcsToGen   int
+	lastChangedLoad int
+	machines        map[Tid]*Machine
+	lb              *GlobalSched
+	app             Website
 }
 
-func newWorld(numMachines int, numCores int) *World {
-	w := &World{}
-	w.machines = map[Tid]*Machine{}
+func newWorld(numMachines int) *World {
+	w := &World{
+		machines:        map[Tid]*Machine{},
+		numProcsToGen:   INITIAL_LOAD,
+		lastChangedLoad: 0,
+	}
 	lbMachineConn := make(chan *Message) // channel all machines send on to lb
 	machineToLBConns := map[Tid]chan *Message{}
 	for i := 0; i < numMachines; i++ {
 		mid := Tid(i)
 		chanMacheineToLB := make(chan *Message)
 		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
-		w.machines[Tid(i)] = newMachine(mid, numCores, lbMachineConn, chanMacheineToLB)
+		w.machines[Tid(i)] = newMachine(mid, lbMachineConn, chanMacheineToLB)
 	}
 	w.lb = newLoadBalancer(w.machines, machineToLBConns, lbMachineConn)
 	return w
@@ -41,6 +52,26 @@ func (w *World) String() string {
 		str += "   " + m.String()
 	}
 	return str
+}
+
+func (w *World) minMaxRatioTicksPassedToSla() float64 {
+	minVal := math.Inf(1)
+	for _, m := range w.machines {
+		if m.sched.maxRatioTicksPassedToSla() < minVal {
+			minVal = m.sched.maxRatioTicksPassedToSla()
+		}
+	}
+	return minVal
+}
+
+func (w *World) evalLoad() {
+	if w.minMaxRatioTicksPassedToSla() < THRESHOLD_RATIO_MIN && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
+		w.numProcsToGen += 1
+		w.lastChangedLoad = w.currTick
+	} else if w.minMaxRatioTicksPassedToSla() > THRESHOLD_RATIO_MAX && w.currTick-w.lastChangedLoad > TICKS_WAIT_LOAD_CHANGES {
+		w.numProcsToGen -= 1
+		w.lastChangedLoad = w.currTick
+	}
 }
 
 func (w *World) genLoad(nProcs int) int {
@@ -72,16 +103,6 @@ func (w *World) tickAllProcs() {
 	}
 }
 
-func (w *World) printTickStats() {
-	for _, m := range w.lb.machines {
-		for _, core := range m.sched.coreScheds {
-			toWrite := fmt.Sprintf("%v, %v, %v, %.2f, %.2f\n", w.currTick, m.mid, core.coreId,
-				core.maxRatioTicksPassedToSla(), core.memUsage())
-			logWrite(USAGE, toWrite)
-		}
-	}
-}
-
 func (w *World) Tick(numProcs int) {
 	w.currTick += 1
 	if VERBOSE_LB_STATS {
@@ -93,14 +114,12 @@ func (w *World) Tick(numProcs int) {
 	w.lb.placeProcs()
 	// runs each machine for a tick
 	w.compute()
-	if VERBOSE_MACHINE_USAGE_STATS {
-		w.printTickStats()
-	}
 	w.tickAllProcs()
 }
 
-func (w *World) Run(nTick int) {
+func (w *World) Run(nTick int, nProcsPerTick int) {
 	for i := 0; i < nTick; i++ {
-		w.Tick(6)
+		w.evalLoad()
+		w.Tick(nProcsPerTick)
 	}
 }

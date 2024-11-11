@@ -6,29 +6,16 @@ import (
 )
 
 const (
-	NTICK = 1000
+	N_TICK               = 500
+	N_MACHINES           = 10
+	N_PROCS_GEN_PER_TICK = 4
 )
 
-// func TestBucketRange(t *testing.T) {
-// 	lastVal := 0.0
-// 	currTest := 0.001
-// 	for currTest < 50 {
-// 		currVal := getRangeBottomFromSLA(Tftick(currTest))
-// 		if currVal != lastVal {
-// 			fmt.Println(currVal)
-// 			lastVal = currVal
-// 		}
-// 		currTest += 0.0001
-// 	}
-// }
-
 func TestRunWorld(t *testing.T) {
-	numMachines := 2
-	numCores := 4
 	emptyFiles()
-	w := newWorld(numMachines, numCores)
+	w := newWorld(N_MACHINES)
 	w.app = newSimpleWebsite()
 	// wait for channels to set up, etc
 	time.Sleep(100 * time.Millisecond)
-	w.Run(NTICK)
+	w.Run(N_TICK, N_PROCS_GEN_PER_TICK)
 }
