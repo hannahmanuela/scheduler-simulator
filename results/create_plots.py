@@ -127,21 +127,21 @@ plt.legend()
 # ==============================================================================================================
 # utilization
 # ==============================================================================================================
-plt.figure(figsize=(15,6))
-plt.scatter(ticks_left["tick"], ticks_left["max"], label="max")
-plt.plot(ticks_left["tick"], ticks_left["max"])
+# plt.figure(figsize=(15,6))
+# plt.scatter(ticks_left["tick"], ticks_left["max"], label="max")
+# plt.plot(ticks_left["tick"], ticks_left["max"])
 
-plt.scatter(ticks_left["tick"], ticks_left["min"], color='lightblue', label="min")
-plt.plot(ticks_left["tick"], ticks_left["min"], color='lightblue')
+# plt.scatter(ticks_left["tick"], ticks_left["min"], color='lightblue', label="min")
+# plt.plot(ticks_left["tick"], ticks_left["min"], color='lightblue')
 
-plt.scatter(ticks_left["tick"], ticks_left["mean"], color='darkblue', label="mean")
-plt.plot(ticks_left["tick"], ticks_left["mean"], color='darkblue')
+# plt.scatter(ticks_left["tick"], ticks_left["mean"], color='darkblue', label="mean")
+# plt.plot(ticks_left["tick"], ticks_left["mean"], color='darkblue')
 
-plt.title('Ticks left over over time')
-plt.xlabel('Tick')
-plt.ylabel('Ticks left over')
-plt.grid(True)
-plt.legend()
+# plt.title('Ticks left over over time')
+# plt.xlabel('Tick')
+# plt.ylabel('Ticks left over')
+# plt.grid(True)
+# plt.legend()
 
 
 # ==============================================================================================================

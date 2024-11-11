@@ -72,10 +72,6 @@ func (p *Proc) compUsed() Tftick {
 	return p.procInternals.compDone
 }
 
-func (p *Proc) procType() ProcType {
-	return p.procInternals.procType
-}
-
 // ------------------------------------------------------------------------------------------------
 // CLIENTS PROC STRUCT
 // ------------------------------------------------------------------------------------------------

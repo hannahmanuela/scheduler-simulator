@@ -35,15 +35,14 @@ func (sd *Sched) String() string {
 }
 
 func (sd *Sched) tick() {
-	sd.currTick += 1
-
 	sd.simulateRunProcs()
+	sd.currTick += 1
 }
 
 func (sd *Sched) printAllProcs() {
 
 	for _, p := range sd.activeQ.getQ() {
-		toWrite := fmt.Sprintf("%v, %v, 1, %v, %v, %v\n", sd.currTick, sd.machineId,
+		toWrite := fmt.Sprintf("%v, %v, 1, %v, %v, %v\n", int(sd.currTick), sd.machineId,
 			float64(p.deadline), float64(p.procInternals.actualComp), float64(p.compUsed()))
 		logWrite(CURR_PROCS, toWrite)
 	}
@@ -117,20 +116,19 @@ func (sd *Sched) okToPlace(newProc *Proc) bool {
 func (sd *Sched) simulateRunProcs() {
 
 	if VERBOSE_MACHINE_USAGE_STATS {
-		toWrite := fmt.Sprintf("%v, %v,  %.2f, %v", sd.currTick, sd.machineId, sd.memUsage(), sd.activeQ.qlen())
+		toWrite := fmt.Sprintf("%v, %v,  %.2f, %v", int(sd.currTick), sd.machineId, sd.memUsage(), sd.activeQ.qlen())
 		logWrite(USAGE, toWrite)
 	}
 
 	ticksLeftToGive := Tftick(1)
 	unusedTicks := Tftick(0)
 
-	toWrite := fmt.Sprintf("%v, %v, curr q ACTIVE: %v \n", sd.currTick, sd.machineId, sd.activeQ.String())
+	toWrite := fmt.Sprintf("%v, %v, curr q ACTIVE: %v \n", int(sd.currTick), sd.machineId, sd.activeQ.String())
 	logWrite(SCHED, toWrite)
 
 	for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && sd.activeQ.qlen() > 0 {
 
-		var procToRun *Proc
-		procToRun = sd.activeQ.deq()
+		procToRun := sd.activeQ.deq()
 
 		ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftToGive)
 
@@ -149,7 +147,7 @@ func (sd *Sched) simulateRunProcs() {
 			sd.activeQ.enq(procToRun)
 		} else {
 			// if the proc is done, update the ticksPassed to be exact for metrics etc
-			procToRun.timeDone = (sd.currTick - procToRun.timeStarted) + (1 - ticksLeftToGive)
+			procToRun.timeDone = sd.currTick + (1 - ticksLeftToGive)
 			// don't need to wait if we are just telling it a proc is done
 			sd.lbConnSend <- &Message{sd.machineId, M_LB_PROC_DONE, procToRun, nil}
 		}

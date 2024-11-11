@@ -74,7 +74,6 @@ func (w *World) printAllProcs() {
 }
 
 func (w *World) Tick(numProcs int) {
-	w.currTick += 1
 	if VERBOSE_LB_STATS {
 		w.printAllProcs()
 	}
@@ -84,6 +83,7 @@ func (w *World) Tick(numProcs int) {
 	w.lb.placeProcs()
 	// runs each machine for a tick
 	w.compute()
+	w.currTick += 1
 }
 
 func (w *World) Run(nTick int, nProcsPerTick int) {
