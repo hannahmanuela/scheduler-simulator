@@ -1,5 +1,7 @@
 package slasched
 
+import "math"
+
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {
 	q []*Proc
@@ -59,4 +61,47 @@ func (q *Queue) deq() *Proc {
 
 func (q *Queue) qlen() int {
 	return len(q.q)
+}
+
+func (q *Queue) getHOLSlack(currTime Tftick, numCores int) Tftick {
+
+	if len(q.q) < numCores {
+		return Tftick(math.MaxFloat64)
+	}
+
+	runningSlack := make(map[int]Tftick)
+	headSlack := make(map[int]Tftick)
+
+	for c := 0; c < numCores; c++ {
+		runningSlack[c] = Tftick(0)
+		headSlack[c] = q.q[c].getSlack(currTime)
+	}
+
+	getAddMinRunningWaitTime := func(toAdd Tftick) Tftick {
+		minVal := Tftick(math.MaxFloat64)
+		minCore := -1
+		for i := 0; i < numCores; i++ {
+			if runningSlack[i] < minVal {
+				minVal = runningSlack[i]
+				minCore = i
+			}
+		}
+		runningSlack[minCore] += toAdd
+		return minVal
+	}
+
+	for _, p := range q.q {
+		getAddMinRunningWaitTime(p.getSlack(currTime))
+	}
+
+	minSlack := Tftick(math.MaxFloat64)
+	for i, totalS := range runningSlack {
+		headS := headSlack[i]
+		holSlack := Tftick(math.Min(float64(headS), float64(totalS)))
+		if holSlack < minSlack {
+			minSlack = holSlack
+		}
+	}
+
+	return minSlack
 }

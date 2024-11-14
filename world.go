@@ -4,6 +4,8 @@ const (
 	MAX_MEM_PER_MACHINE   = 32000 // the amount of memory every core will have, in MB
 	NUM_CORES_PER_MACHINE = 12
 
+	IDLE_HEAP_THRESHOLD = 2
+
 	TICKS_WAIT_LOAD_CHANGES = 100
 	INITIAL_LOAD            = 4
 	THRESHOLD_RATIO_MIN     = 0.1 // min max ratio below which we add load
@@ -33,13 +35,16 @@ func newWorld(numMachines int) *World {
 	}
 	lbMachineConn := make(chan *Message) // channel all machines send on to lb
 	machineToLBConns := map[Tid]chan *Message{}
+	idleHeap := &IdleHeap{
+		heap: &MinHeap{},
+	}
 	for i := 0; i < numMachines; i++ {
 		mid := Tid(i)
 		chanMacheineToLB := make(chan *Message)
 		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
-		w.machines[Tid(i)] = newMachine(mid, NUM_CORES_PER_MACHINE, lbMachineConn, chanMacheineToLB)
+		w.machines[Tid(i)] = newMachine(mid, idleHeap, NUM_CORES_PER_MACHINE, lbMachineConn, chanMacheineToLB)
 	}
-	w.lb = newLoadBalancer(w.machines, machineToLBConns, lbMachineConn)
+	w.lb = newLoadBalancer(w.machines, idleHeap, machineToLBConns, lbMachineConn)
 	return w
 }
 

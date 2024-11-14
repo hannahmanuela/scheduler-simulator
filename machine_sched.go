@@ -14,16 +14,18 @@ type Sched struct {
 	machineId  Tid
 	numCores   int
 	activeQ    *Queue
+	idleHeap   *IdleHeap
 	lbConnSend chan *Message // channel to send messages to LB
 	lbConnRecv chan *Message // channel this machine recevies messages on from the LB
 	currTick   Tftick
 }
 
-func newSched(numCores int, lbConnSend chan *Message, lbConnRecv chan *Message, mid Tid) *Sched {
+func newSched(numCores int, idleHeap *IdleHeap, lbConnSend chan *Message, lbConnRecv chan *Message, mid Tid) *Sched {
 	sd := &Sched{
 		machineId:  mid,
 		numCores:   numCores,
 		activeQ:    newQueue(),
+		idleHeap:   idleHeap,
 		lbConnSend: lbConnSend,
 		lbConnRecv: lbConnRecv,
 		currTick:   0,
@@ -106,10 +108,6 @@ func (sd *Sched) okToPlace(newProc *Proc) bool {
 				minCore = i
 			}
 		}
-		// ofstream sched_file;
-		// sched_file.open("../sched.txt", std::ios_base::app);
-		// sched_file << "adding ceil " << to_add << " to core " << min_core << ", whose waiting time is thus now " << cores_to_running_waiting_time.at(min_core) + to_add << endl;
-		// sched_file.close();
 		coreToRunningWaitTime[minCore] += toAdd
 		return minVal
 	}
@@ -184,6 +182,21 @@ func (sd *Sched) simulateRunProcs() {
 	// procs that have been run can now be re-added to the q
 	for _, p := range toReq {
 		sd.activeQ.enq(p)
+	}
+
+	if sd.activeQ.getHOLSlack(sd.currTick+1, sd.numCores) > IDLE_HEAP_THRESHOLD {
+
+		// also if it is already in the heap, then replace it with the new value
+		if contains(sd.idleHeap.heap, sd.machineId) {
+			remove(sd.idleHeap.heap, sd.machineId)
+		}
+		sd.idleHeap.lock.Lock()
+		toPush := TIdleMachine{
+			compIdleFor: sd.activeQ.getHOLSlack(sd.currTick+1, sd.numCores),
+			machineId:   sd.machineId,
+		}
+		sd.idleHeap.heap.Push(toPush)
+		sd.idleHeap.lock.Unlock()
 	}
 
 	// this is dumb but make accounting for util easier

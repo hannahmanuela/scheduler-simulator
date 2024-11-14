@@ -1,6 +1,7 @@
 package slasched
 
 import (
+	"container/heap"
 	"fmt"
 	"math/rand"
 	"os"
@@ -47,6 +48,24 @@ func emptyFiles() {
 		os.Truncate(t.fileName(), 0)
 	}
 
+}
+
+func contains(h *MinHeap, value Tid) bool {
+	for _, v := range *h {
+		if v.machineId == value {
+			return true
+		}
+	}
+	return false
+}
+
+func remove(h *MinHeap, toRemove Tid) {
+	for i := 0; i < h.Len(); i++ {
+		if (*h)[i].machineId == toRemove {
+			heap.Remove(h, i)
+			break
+		}
+	}
 }
 
 func sampleNormal(mu, sigma float64) float64 {
