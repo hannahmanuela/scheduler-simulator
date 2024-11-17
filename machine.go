@@ -8,9 +8,8 @@ type Ttickmap map[Tid]Tftick
 type Tprocmap map[Tid]int
 
 type Machine struct {
-	mid      Tid
-	numCores int
-	sched    *Sched
+	mid   Tid
+	sched *Sched
 }
 
 func newMachine(mid Tid, idleHeap *IdleHeap, numCores int, lbConnSend chan *Message, lbConnRecv chan *Message) *Machine {

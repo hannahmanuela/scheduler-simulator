@@ -1,8 +1,7 @@
 package slasched
 
 const (
-	MAX_MEM_PER_MACHINE   = 32000 // the amount of memory every core will have, in MB
-	NUM_CORES_PER_MACHINE = 12
+	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
 
 	IDLE_HEAP_THRESHOLD = 2
 
@@ -27,7 +26,7 @@ type World struct {
 	app             Website
 }
 
-func newWorld(numMachines int) *World {
+func newWorld(numMachines int, numCores int) *World {
 	w := &World{
 		machines:        map[Tid]*Machine{},
 		numProcsToGen:   INITIAL_LOAD,
@@ -42,7 +41,7 @@ func newWorld(numMachines int) *World {
 		mid := Tid(i)
 		chanMacheineToLB := make(chan *Message)
 		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
-		w.machines[Tid(i)] = newMachine(mid, idleHeap, NUM_CORES_PER_MACHINE, lbMachineConn, chanMacheineToLB)
+		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, lbMachineConn, chanMacheineToLB)
 	}
 	w.lb = newLoadBalancer(w.machines, idleHeap, machineToLBConns, lbMachineConn)
 	return w

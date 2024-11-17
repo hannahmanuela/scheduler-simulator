@@ -6,14 +6,15 @@ import (
 )
 
 const (
-	N_TICK               = 100
+	N_TICK               = 1000
 	N_MACHINES           = 10
-	N_PROCS_GEN_PER_TICK = 4
+	N_CORES_PER_MACHINE  = 8
+	N_PROCS_GEN_PER_TICK = 30
 )
 
 func TestRunWorld(t *testing.T) {
 	emptyFiles()
-	w := newWorld(N_MACHINES)
+	w := newWorld(N_MACHINES, N_CORES_PER_MACHINE)
 	w.app = newSimpleWebsite()
 	// wait for channels to set up, etc
 	time.Sleep(100 * time.Millisecond)

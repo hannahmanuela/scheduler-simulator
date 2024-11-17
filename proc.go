@@ -41,11 +41,6 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 	return p.procInternals.runTillOutOrDone(toRun)
 }
 
-// returns the deadline (in absolute terms)
-func (p *Proc) getDeadline() Tftick {
-	return p.deadline
-}
-
 // returns the deadline (relative, offset by time started)
 func (p *Proc) getRelDeadline() Tftick {
 	return p.timeStarted + p.deadline

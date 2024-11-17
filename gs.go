@@ -23,9 +23,14 @@ type Message struct {
 	wg      *sync.WaitGroup
 }
 
+type TmachineCoreId struct {
+	machineId Tid
+	coreNum   int
+}
+
 type TIdleMachine struct {
-	compIdleFor Tftick // The key used for sorting.
-	machineId   Tid    // The value associated with the key.
+	compIdleFor   Tftick
+	machineCoreId TmachineCoreId
 }
 type MinHeap []TIdleMachine
 
@@ -122,8 +127,8 @@ func (lb *GlobalSched) placeProcs() {
 		machineToUse := lb.pickMachine(p)
 
 		if machineToUse == nil {
-			toReQ = append(toReQ, p)
-			p = lb.getProc()
+			// toReQ = append(toReQ, p)
+			// p = lb.getProc()
 			continue
 		}
 
@@ -154,10 +159,10 @@ func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	machine, found := popNextLarger(lb.idleMachines.heap, procToPlace.maxComp)
 	lb.idleMachines.lock.Unlock()
 	if found {
-		toWrite := fmt.Sprintf("%v, LB placing proc: %v, found an idle machine %d with %.2f comp avail \n", lb.currTick, procToPlace.String(), machine.machineId, float64(machine.compIdleFor))
+		toWrite := fmt.Sprintf("%v, LB placing proc: %v, found an idle machine %d with %.2f comp avail \n", lb.currTick, procToPlace.String(), machine.machineCoreId, float64(machine.compIdleFor))
 		logWrite(SCHED, toWrite)
 
-		return lb.machines[machine.machineId]
+		return lb.machines[machine.machineCoreId.machineId]
 	}
 
 	// if no idle machine, use power of k choices (for now k = number of machines :D )
@@ -174,7 +179,8 @@ func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	logWrite(SCHED, toWrite)
 
 	if len(contenderMachines) == 0 {
-		fmt.Printf("%v: DOESN'T FIT ANYWHERE :(( -- re-enqing: %v \n", lb.currTick, procToPlace)
+		toWrite := fmt.Sprintf("%v: DOESN'T FIT ANYWHERE :(( -- skipping: %v \n", lb.currTick, procToPlace)
+		logWrite(SCHED, toWrite)
 		return nil
 	}
 

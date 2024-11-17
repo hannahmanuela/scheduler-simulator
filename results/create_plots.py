@@ -15,7 +15,7 @@ procs_current = pd.read_csv("procs_current.txt", index_col=None, names=["tick", 
 procs_done = pd.read_csv("procs_done.txt", index_col=None, names=["tick", "machineID", "procType", "sla", "ticksPassed", "actualComp"])
 # procs_killed = pd.read_csv("procs_killed.txt", index_col=None, names=["tick", "machineID", "sla", "compDone", "memUsed"])
 
-util_metrics = pd.read_csv("usage.txt", index_col=None, names=["tick", "machineID", "memUsage", "qlen", "ticksLeftOver"])
+util_metrics = pd.read_csv("usage.txt", index_col=None, names=["tick", "machineID", "qlen", "ticksLeftOver"])
 
 
 

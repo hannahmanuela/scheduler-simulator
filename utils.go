@@ -50,18 +50,18 @@ func emptyFiles() {
 
 }
 
-func contains(h *MinHeap, value Tid) bool {
+func contains(h *MinHeap, value TmachineCoreId) bool {
 	for _, v := range *h {
-		if v.machineId == value {
+		if v.machineCoreId == value {
 			return true
 		}
 	}
 	return false
 }
 
-func remove(h *MinHeap, toRemove Tid) {
+func remove(h *MinHeap, toRemove TmachineCoreId) {
 	for i := 0; i < h.Len(); i++ {
-		if (*h)[i].machineId == toRemove {
+		if (*h)[i].machineCoreId == toRemove {
 			heap.Remove(h, i)
 			break
 		}
@@ -70,26 +70,4 @@ func remove(h *MinHeap, toRemove Tid) {
 
 func sampleNormal(mu, sigma float64) float64 {
 	return rand.NormFloat64()*float64(sigma) + float64(mu)
-}
-
-// returns the bottom value of the SLA range in which the passed SLA is
-// this is helpful for creating the histogram mapping number of procs in the scheduler to SLA slices
-// eg if we are looking at SLAs in an increment size of 2 and this is given 1.5, it will return 0 (since 1.5 would be in the 0-2 range)
-func getRangeBottomFromSLA(sla Tftick) float64 {
-
-	// bucketIndex := math.Ceil(math.Log(float64(sla)/BUCKETS_INIT_SIZE) / math.Log(BUCKETS_BASE))
-	// lowerBound := math.Pow(BUCKETS_BASE, bucketIndex-1) * BUCKETS_INIT_SIZE
-	lowerBound := 0.0
-
-	if sla <= Tftick(2) {
-		lowerBound = 0
-	} else if sla <= Tftick(5) {
-		lowerBound = 2
-	} else if sla <= Tftick(10) {
-		lowerBound = 5
-	} else {
-		lowerBound = 10
-	}
-
-	return lowerBound
 }
