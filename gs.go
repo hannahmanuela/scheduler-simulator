@@ -6,26 +6,9 @@ import (
 	"sync"
 )
 
-type MsgType int
-
-const (
-	M_LB_PROC_DONE  MsgType = iota // machine -> lb; proc is done
-	LB_M_PLACE_PROC                // lb -> machine; placing proc on machine
-	C_M_NEED_WORK                  // core -> machine; core is out of work
-	C_M_PROC_DONE                  // core -> machine; proc is done
-	M_C_PUSH_PROC                  // machine -> core; proc for core
-)
-
-type Message struct {
-	sender  Tid
-	msgType MsgType
-	proc    *Proc
-	wg      *sync.WaitGroup
-}
-
 type TmachineCoreId struct {
 	machineId Tid
-	coreNum   int
+	coreId    Tid
 }
 
 type TIdleMachine struct {
@@ -71,25 +54,20 @@ type IdleHeap struct {
 }
 
 type GlobalSched struct {
-	machines        map[Tid]*Machine
-	idleMachines    *IdleHeap
-	procq           *Queue
-	machineConnRecv chan *Message         // listen for messages from machines
-	machineConnSend map[Tid]chan *Message // send messages to machine
-	currTickPtr     *Tftick
+	machines     map[Tid]*Machine
+	idleMachines *IdleHeap
+	procq        *Queue
+	currTickPtr  *Tftick
 }
 
-func newLoadBalancer(machines map[Tid]*Machine, currTickPtr *Tftick, idleHeap *IdleHeap, lbSendToMachines map[Tid]chan *Message, lbRecv chan *Message) *GlobalSched {
+func newLoadBalancer(machines map[Tid]*Machine, currTickPtr *Tftick, idleHeap *IdleHeap) *GlobalSched {
 	lb := &GlobalSched{
-		machines:        machines,
-		idleMachines:    idleHeap,
-		procq:           &Queue{q: make([]*Proc, 0)},
-		machineConnRecv: lbRecv,
-		machineConnSend: lbSendToMachines,
-		currTickPtr:     currTickPtr,
+		machines:     machines,
+		idleMachines: idleHeap,
+		procq:        &Queue{q: make([]*Proc, 0)},
+		currTickPtr:  currTickPtr,
 	}
 
-	go lb.listenForMachineMessages()
 	return lb
 }
 
@@ -101,19 +79,6 @@ func (gs *GlobalSched) MachinesString() string {
 	return str
 }
 
-func (lb *GlobalSched) listenForMachineMessages() {
-	for {
-		msg := <-lb.machineConnRecv
-		switch msg.msgType {
-		case M_LB_PROC_DONE:
-			if VERBOSE_LB_STATS {
-				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", *lb.currTickPtr, msg.proc.machineId, msg.proc.procInternals.procType, float64(msg.proc.deadline), float64(msg.proc.timeDone-msg.proc.timeStarted), float64(msg.proc.procInternals.actualComp))
-				logWrite(DONE_PROCS, toWrite)
-			}
-		}
-	}
-}
-
 func (lb *GlobalSched) placeProcs() {
 	// setup
 	p := lb.getProc()
@@ -123,7 +88,7 @@ func (lb *GlobalSched) placeProcs() {
 	for p != nil {
 		// place given proc
 
-		machineToUse := lb.pickMachine(p)
+		machineToUse, coreToUse := lb.pickMachine(p)
 
 		if machineToUse == nil {
 			// toReQ = append(toReQ, p)
@@ -133,12 +98,9 @@ func (lb *GlobalSched) placeProcs() {
 
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
-		var wg sync.WaitGroup
-		wg.Add(1)
-		lb.machineConnSend[machineToUse.mid] <- &Message{-1, LB_M_PLACE_PROC, p, &wg}
-		wg.Wait()
+		machineToUse.sched.placeProc(p, coreToUse)
 		if VERBOSE_LB_STATS {
-			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", *lb.currTickPtr, machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
+			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*lb.currTickPtr), machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
 			logWrite(ADDED_PROCS, toWrite)
 		}
 		p = lb.getProc()
@@ -152,7 +114,7 @@ func (lb *GlobalSched) placeProcs() {
 // admission control:
 // 1. first look for machines that simply currently have the space (using interval tree of immediately available compute)
 // 2. if there are none, do the ok to place call on all machines? on some machines? just random would be the closest to strictly following what they do...
-func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
+func (lb *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 
 	lb.idleMachines.lock.Lock()
 	machine, found := popNextLarger(lb.idleMachines.heap, procToPlace.maxComp)
@@ -161,16 +123,15 @@ func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 		toWrite := fmt.Sprintf("%v, LB placing proc: %v, found an idle machine %d with %.2f comp avail \n", int(*lb.currTickPtr), procToPlace.String(), machine.machineCoreId, float64(machine.compIdleFor))
 		logWrite(SCHED, toWrite)
 
-		return lb.machines[machine.machineCoreId.machineId]
+		return lb.machines[machine.machineCoreId.machineId], machine.machineCoreId.coreId
 	}
 
 	// if no idle machine, use power of k choices (for now k = number of machines :D )
-	var machineToUse *Machine
-	contenderMachines := make([]*Machine, 0)
+	contenderMachines := make([]TmachineCoreId, 0)
 
 	for _, m := range lb.machines {
-		if m.sched.okToPlace(procToPlace) {
-			contenderMachines = append(contenderMachines, m)
+		if ok, coreId := m.sched.okToPlace(procToPlace); ok {
+			contenderMachines = append(contenderMachines, TmachineCoreId{m.mid, coreId})
 		}
 	}
 
@@ -180,13 +141,13 @@ func (lb *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	if len(contenderMachines) == 0 {
 		toWrite := fmt.Sprintf("%v: DOESN'T FIT ANYWHERE :(( -- skipping: %v \n", int(*lb.currTickPtr), procToPlace)
 		logWrite(SCHED, toWrite)
-		return nil
+		return nil, -1
 	}
 
 	// TODO: this is stupid
-	machineToUse = contenderMachines[0]
+	machineToUse := contenderMachines[0]
 
-	return machineToUse
+	return lb.machines[machineToUse.machineId], machineToUse.coreId
 }
 
 func (lb *GlobalSched) getProc() *Proc {

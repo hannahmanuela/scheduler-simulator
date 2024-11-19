@@ -34,18 +34,14 @@ func newWorld(numMachines int, numCores int) *World {
 		numProcsToGen:   INITIAL_LOAD,
 		lastChangedLoad: 0,
 	}
-	lbMachineConn := make(chan *Message) // channel all machines send on to lb
-	machineToLBConns := map[Tid]chan *Message{}
 	idleHeap := &IdleHeap{
 		heap: &MinHeap{},
 	}
 	for i := 0; i < numMachines; i++ {
 		mid := Tid(i)
-		chanMacheineToLB := make(chan *Message)
-		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
-		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick, lbMachineConn, chanMacheineToLB)
+		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick)
 	}
-	w.lb = newLoadBalancer(w.machines, &w.currTick, idleHeap, machineToLBConns, lbMachineConn)
+	w.lb = newLoadBalancer(w.machines, &w.currTick, idleHeap)
 	return w
 }
 
