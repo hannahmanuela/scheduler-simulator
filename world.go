@@ -3,7 +3,7 @@ package slasched
 const (
 	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
 
-	IDLE_HEAP_THRESHOLD = 2
+	IDLE_HEAP_THRESHOLD = 5
 
 	TICKS_WAIT_LOAD_CHANGES = 100
 	INITIAL_LOAD            = 4
@@ -20,6 +20,7 @@ const (
 type World struct {
 	currTick        Tftick
 	numProcsToGen   int
+	currProcNum     int
 	lastChangedLoad int
 	machines        map[Tid]*Machine
 	lb              *GlobalSched
@@ -28,6 +29,7 @@ type World struct {
 
 func newWorld(numMachines int, numCores int) *World {
 	w := &World{
+		currTick:        Tftick(0),
 		machines:        map[Tid]*Machine{},
 		numProcsToGen:   INITIAL_LOAD,
 		lastChangedLoad: 0,
@@ -41,9 +43,9 @@ func newWorld(numMachines int, numCores int) *World {
 		mid := Tid(i)
 		chanMacheineToLB := make(chan *Message)
 		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
-		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, lbMachineConn, chanMacheineToLB)
+		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick, lbMachineConn, chanMacheineToLB)
 	}
-	w.lb = newLoadBalancer(w.machines, idleHeap, machineToLBConns, lbMachineConn)
+	w.lb = newLoadBalancer(w.machines, &w.currTick, idleHeap, machineToLBConns, lbMachineConn)
 	return w
 }
 
@@ -60,7 +62,8 @@ func (w *World) genLoad(nProcs int) int {
 	sumTicksAdded := Tftick(0)
 	for _, up := range userProcs {
 		sumTicksAdded += up.actualComp
-		provProc := newProvProc(w.currTick, up)
+		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
+		w.currProcNum += 1
 		w.lb.putProc(provProc)
 	}
 	return len(userProcs)

@@ -2,6 +2,7 @@ package slasched
 
 import (
 	"fmt"
+	"strconv"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -10,6 +11,7 @@ import (
 
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
+	procId        Tid
 	machineId     Tid
 	timeStarted   Tftick
 	timeDone      Tftick
@@ -19,13 +21,15 @@ type Proc struct {
 }
 
 func (p *Proc) String() string {
-	return p.procInternals.String() +
+	return strconv.Itoa(int(p.procId)) + ": " +
+		p.procInternals.String() +
 		", deadline: " + p.deadline.String() +
 		", time started: " + p.timeStarted.String()
 }
 
-func newProvProc(currTick Tftick, privProc *ProcInternals) *Proc {
+func newProvProc(procId Tid, currTick Tftick, privProc *ProcInternals) *Proc {
 	return &Proc{
+		procId:        procId,
 		machineId:     -1,
 		timeStarted:   currTick,
 		timeDone:      0,
@@ -52,15 +56,11 @@ func (p *Proc) getSlack(currTime Tftick) Tftick {
 }
 
 func (p *Proc) waitTime(currTime Tftick) Tftick {
-	return (currTime - p.timeStarted) + p.compUsed()
+	return (currTime - p.timeStarted) - p.compUsed()
 }
 
 func (p *Proc) getExpectedCompLeft() Tftick {
 	return p.maxComp - p.compUsed()
-}
-
-func (p *Proc) memUsed() Tmem {
-	return p.procInternals.memUsed()
 }
 
 func (p *Proc) compUsed() Tftick {

@@ -66,19 +66,19 @@ func (q *Queue) qlen() int {
 func (q *Queue) getHOLSlack(currTime Tftick) Tftick {
 
 	if len(q.q) == 0 {
-		return Tftick(math.MaxFloat64)
+		return Tftick(1000)
 	}
 
-	runningSlackRequired := Tftick(0)
+	runningWaitTime := Tftick(0)
 	headSlack := q.q[0].getSlack(currTime)
 	extraSlack := Tftick(0)
 
 	for _, p := range q.q {
-		runningSlackRequired += p.getExpectedCompLeft()
-		currExtra := p.getSlack(currTime) - runningSlackRequired
+		currExtra := p.getSlack(currTime) - runningWaitTime
 		if currExtra < extraSlack {
 			extraSlack = currExtra
 		}
+		runningWaitTime += p.getExpectedCompLeft()
 	}
 
 	holSlack := Tftick(math.Min(float64(headSlack), float64(extraSlack)))
