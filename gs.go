@@ -91,8 +91,7 @@ func (lb *GlobalSched) placeProcs() {
 		machineToUse, coreToUse := lb.pickMachine(p)
 
 		if machineToUse == nil {
-			// toReQ = append(toReQ, p)
-			// p = lb.getProc()
+			p = lb.getProc()
 			continue
 		}
 
