@@ -54,18 +54,24 @@ type IdleHeap struct {
 }
 
 type GlobalSched struct {
-	machines     map[Tid]*Machine
-	idleMachines *IdleHeap
-	procq        *Queue
-	currTickPtr  *Tftick
+	machines        map[Tid]*Machine
+	k_choices       int
+	idleMachines    *IdleHeap
+	procq           *Queue
+	currTickPtr     *Tftick
+	numFoundIdle    int
+	numUsedKChoices int
 }
 
-func newLoadBalancer(machines map[Tid]*Machine, currTickPtr *Tftick, idleHeap *IdleHeap) *GlobalSched {
+func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, idleHeap *IdleHeap) *GlobalSched {
 	lb := &GlobalSched{
-		machines:     machines,
-		idleMachines: idleHeap,
-		procq:        &Queue{q: make([]*Proc, 0)},
-		currTickPtr:  currTickPtr,
+		machines:        machines,
+		k_choices:       int(len(machines) / 3),
+		idleMachines:    idleHeap,
+		procq:           &Queue{q: make([]*Proc, 0)},
+		currTickPtr:     currTickPtr,
+		numFoundIdle:    0,
+		numUsedKChoices: 0,
 	}
 
 	return lb
@@ -79,19 +85,19 @@ func (gs *GlobalSched) MachinesString() string {
 	return str
 }
 
-func (lb *GlobalSched) placeProcs() {
+func (gs *GlobalSched) placeProcs() {
 	// setup
-	p := lb.getProc()
+	p := gs.getProc()
 
 	toReQ := make([]*Proc, 0)
 
 	for p != nil {
 		// place given proc
 
-		machineToUse, coreToUse := lb.pickMachine(p)
+		machineToUse, coreToUse := gs.pickMachine(p)
 
 		if machineToUse == nil {
-			p = lb.getProc()
+			p = gs.getProc()
 			continue
 		}
 
@@ -99,46 +105,51 @@ func (lb *GlobalSched) placeProcs() {
 		p.machineId = machineToUse.mid
 		machineToUse.sched.placeProc(p, coreToUse)
 		if VERBOSE_LB_STATS {
-			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*lb.currTickPtr), machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
+			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*gs.currTickPtr), machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
 			logWrite(ADDED_PROCS, toWrite)
 		}
-		p = lb.getProc()
+		p = gs.getProc()
 	}
 
 	for _, p := range toReQ {
-		lb.putProc(p)
+		gs.putProc(p)
 	}
 }
 
 // admission control:
 // 1. first look for machines that simply currently have the space (using interval tree of immediately available compute)
 // 2. if there are none, do the ok to place call on all machines? on some machines? just random would be the closest to strictly following what they do...
-func (lb *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
+func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 
-	lb.idleMachines.lock.Lock()
-	machine, found := popNextLarger(lb.idleMachines.heap, procToPlace.maxComp)
-	lb.idleMachines.lock.Unlock()
+	gs.idleMachines.lock.Lock()
+	machine, found := popNextLarger(gs.idleMachines.heap, procToPlace.maxComp)
+	gs.idleMachines.lock.Unlock()
 	if found {
-		toWrite := fmt.Sprintf("%v, LB placing proc: %v, found an idle machine %d with %.2f comp avail \n", int(*lb.currTickPtr), procToPlace.String(), machine.machineCoreId, float64(machine.compIdleFor))
+		toWrite := fmt.Sprintf("%v, LB placing proc: %v, found an idle machine %d with %.2f comp avail \n", int(*gs.currTickPtr), procToPlace.String(), machine.machineCoreId, float64(machine.compIdleFor))
 		logWrite(SCHED, toWrite)
 
-		return lb.machines[machine.machineCoreId.machineId], machine.machineCoreId.coreId
+		gs.numFoundIdle++
+
+		return gs.machines[machine.machineCoreId.machineId], machine.machineCoreId.coreId
 	}
+
+	gs.numUsedKChoices++
 
 	// if no idle machine, use power of k choices (for now k = number of machines :D )
 	contenderMachines := make([]TmachineCoreId, 0)
+	machineToTry := pickRandomElements(Values(gs.machines), gs.k_choices)
 
-	for _, m := range lb.machines {
+	for _, m := range machineToTry {
 		if ok, coreId := m.sched.okToPlace(procToPlace); ok {
 			contenderMachines = append(contenderMachines, TmachineCoreId{m.mid, coreId})
 		}
 	}
 
-	toWrite := fmt.Sprintf("%v, LB placing proc: %v, there are %v contender machines \n", int(*lb.currTickPtr), procToPlace.String(), len(contenderMachines))
+	toWrite := fmt.Sprintf("%v, LB placing proc: %v, there are %v contender machines \n", int(*gs.currTickPtr), procToPlace.String(), len(contenderMachines))
 	logWrite(SCHED, toWrite)
 
 	if len(contenderMachines) == 0 {
-		toWrite := fmt.Sprintf("%v: DOESN'T FIT ANYWHERE :(( -- skipping: %v \n", int(*lb.currTickPtr), procToPlace)
+		toWrite := fmt.Sprintf("%v: DOESN'T FIT ANYWHERE :(( -- skipping: %v \n", int(*gs.currTickPtr), procToPlace)
 		logWrite(SCHED, toWrite)
 		return nil, -1
 	}
@@ -146,13 +157,13 @@ func (lb *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 	// TODO: this is stupid
 	machineToUse := contenderMachines[0]
 
-	return lb.machines[machineToUse.machineId], machineToUse.coreId
+	return gs.machines[machineToUse.machineId], machineToUse.coreId
 }
 
-func (lb *GlobalSched) getProc() *Proc {
-	return lb.procq.deq()
+func (gs *GlobalSched) getProc() *Proc {
+	return gs.procq.deq()
 }
 
-func (lb *GlobalSched) putProc(proc *Proc) {
-	lb.procq.enq(proc)
+func (gs *GlobalSched) putProc(proc *Proc) {
+	gs.procq.enq(proc)
 }

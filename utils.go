@@ -71,3 +71,26 @@ func remove(h *MinHeap, toRemove TmachineCoreId) {
 func sampleNormal(mu, sigma float64) float64 {
 	return rand.NormFloat64()*float64(sigma) + float64(mu)
 }
+
+func pickRandomElements[T any](list []T, k int) []T {
+
+	if k > len(list) {
+		k = len(list)
+	}
+
+	// Use the Fisher-Yates shuffle algorithm to shuffle the list
+	for i := len(list) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		list[i], list[j] = list[j], list[i]
+	}
+
+	return list[:k]
+}
+
+func Values[M ~map[K]V, K comparable, V any](m M) []V {
+	r := make([]V, 0, len(m))
+	for _, v := range m {
+		r = append(r, v)
+	}
+	return r
+}

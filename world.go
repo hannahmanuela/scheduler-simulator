@@ -1,9 +1,11 @@
 package slasched
 
+import "fmt"
+
 const (
 	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
 
-	IDLE_HEAP_THRESHOLD = 5
+	IDLE_HEAP_THRESHOLD = 1
 
 	TICKS_WAIT_LOAD_CHANGES = 100
 	INITIAL_LOAD            = 4
@@ -18,21 +20,19 @@ const (
 )
 
 type World struct {
-	currTick        Tftick
-	numProcsToGen   int
-	currProcNum     int
-	lastChangedLoad int
-	machines        map[Tid]*Machine
-	lb              *GlobalSched
-	app             Website
+	currTick      Tftick
+	numProcsToGen int
+	currProcNum   int
+	machines      map[Tid]*Machine
+	gs            *GlobalSched
+	app           Website
 }
 
 func newWorld(numMachines int, numCores int) *World {
 	w := &World{
-		currTick:        Tftick(0),
-		machines:        map[Tid]*Machine{},
-		numProcsToGen:   INITIAL_LOAD,
-		lastChangedLoad: 0,
+		currTick:      Tftick(0),
+		machines:      map[Tid]*Machine{},
+		numProcsToGen: INITIAL_LOAD,
 	}
 	idleHeap := &IdleHeap{
 		heap: &MinHeap{},
@@ -41,7 +41,7 @@ func newWorld(numMachines int, numCores int) *World {
 		mid := Tid(i)
 		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick)
 	}
-	w.lb = newLoadBalancer(w.machines, &w.currTick, idleHeap)
+	w.gs = newGolbalSched(w.machines, &w.currTick, idleHeap)
 	return w
 }
 
@@ -60,7 +60,7 @@ func (w *World) genLoad(nProcs int) int {
 		sumTicksAdded += up.actualComp
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
 		w.currProcNum += 1
-		w.lb.putProc(provProc)
+		w.gs.putProc(provProc)
 	}
 	return len(userProcs)
 }
@@ -84,7 +84,7 @@ func (w *World) Tick(numProcs int) {
 	// enqueues things into the procq
 	w.genLoad(numProcs)
 	// dequeues things from procq to machines
-	w.lb.placeProcs()
+	w.gs.placeProcs()
 	// runs each machine for a tick
 	w.compute()
 	w.currTick += 1
@@ -94,4 +94,5 @@ func (w *World) Run(nTick int, nProcsPerTick int) {
 	for i := 0; i < nTick; i++ {
 		w.Tick(nProcsPerTick)
 	}
+	fmt.Printf("num times found idle: %d, num times had to use power of k choices: %d\n", w.gs.numFoundIdle, w.gs.numUsedKChoices)
 }
