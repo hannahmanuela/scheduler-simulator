@@ -12,7 +12,7 @@ const (
 	THRESHOLD_RATIO_MIN     = 0.1 // min max ratio below which we add load
 	THRESHOLD_RATIO_MAX     = 0.5 // min max ratio above which we reduce load
 
-	VERBOSE_LB_STATS            = true
+	VERBOSE_GS_STATS            = true
 	VERBOSE_SCHED_STATS         = true
 	VERBOSE_WORLD_STATS         = true
 	VERBOSE_MACHINE_USAGE_STATS = true
@@ -78,7 +78,7 @@ func (w *World) printAllProcs() {
 }
 
 func (w *World) Tick(numProcs int) {
-	if VERBOSE_LB_STATS {
+	if VERBOSE_GS_STATS {
 		w.printAllProcs()
 	}
 	// enqueues things into the procq

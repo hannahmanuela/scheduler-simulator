@@ -64,17 +64,17 @@ type GlobalSched struct {
 }
 
 func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, idleHeap *IdleHeap) *GlobalSched {
-	lb := &GlobalSched{
+	gs := &GlobalSched{
 		machines:        machines,
 		k_choices:       int(len(machines) / 3),
 		idleMachines:    idleHeap,
-		procq:           &Queue{q: make([]*Proc, 0)},
+		procq:           newQueue(),
 		currTickPtr:     currTickPtr,
 		numFoundIdle:    0,
 		numUsedKChoices: 0,
 	}
 
-	return lb
+	return gs
 }
 
 func (gs *GlobalSched) MachinesString() string {
@@ -89,8 +89,6 @@ func (gs *GlobalSched) placeProcs() {
 	// setup
 	p := gs.getProc()
 
-	toReQ := make([]*Proc, 0)
-
 	for p != nil {
 		// place given proc
 
@@ -104,16 +102,13 @@ func (gs *GlobalSched) placeProcs() {
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
 		machineToUse.sched.placeProc(p, coreToUse)
-		if VERBOSE_LB_STATS {
+		if VERBOSE_GS_STATS {
 			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*gs.currTickPtr), machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
 			logWrite(ADDED_PROCS, toWrite)
 		}
 		p = gs.getProc()
 	}
 
-	for _, p := range toReQ {
-		gs.putProc(p)
-	}
 }
 
 // admission control:
@@ -125,7 +120,7 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 	machine, found := popNextLarger(gs.idleMachines.heap, procToPlace.maxComp)
 	gs.idleMachines.lock.Unlock()
 	if found {
-		toWrite := fmt.Sprintf("%v, LB placing proc: %v, found an idle machine %d with %.2f comp avail \n", int(*gs.currTickPtr), procToPlace.String(), machine.machineCoreId, float64(machine.compIdleFor))
+		toWrite := fmt.Sprintf("%v, GS placing proc: %v, found an idle machine %d with %.2f comp avail \n", int(*gs.currTickPtr), procToPlace.String(), machine.machineCoreId, float64(machine.compIdleFor))
 		logWrite(SCHED, toWrite)
 
 		gs.numFoundIdle++
@@ -145,7 +140,7 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 		}
 	}
 
-	toWrite := fmt.Sprintf("%v, LB placing proc: %v, there are %v contender machines \n", int(*gs.currTickPtr), procToPlace.String(), len(contenderMachines))
+	toWrite := fmt.Sprintf("%v, GS placing proc: %v, the contender machines are %v \n", int(*gs.currTickPtr), procToPlace.String(), contenderMachines)
 	logWrite(SCHED, toWrite)
 
 	if len(contenderMachines) == 0 {

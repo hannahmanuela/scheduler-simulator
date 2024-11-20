@@ -1,6 +1,8 @@
 package slasched
 
-import "math"
+import (
+	"math"
+)
 
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {

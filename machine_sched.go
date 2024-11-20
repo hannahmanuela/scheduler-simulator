@@ -66,7 +66,8 @@ func (sd *Sched) okToPlace(newProc *Proc) (bool, Tid) {
 outer:
 	for currCore := 0; currCore < sd.numCores; currCore++ {
 
-		fullList := append(sd.activeQ[Tid(currCore)].getQ(), newProc)
+		fullList := append(make([]*Proc, 0, len(sd.activeQ[Tid(currCore)].getQ())+1), sd.activeQ[Tid(currCore)].getQ()...)
+		fullList = append(fullList, newProc)
 		sort.Slice(fullList, func(i, j int) bool {
 			return fullList[i].deadline < fullList[j].deadline
 		})
@@ -141,7 +142,7 @@ func (sd *Sched) simulateRunProcs() {
 					logWrite(SCHED, toWrite)
 				}
 
-				if VERBOSE_LB_STATS {
+				if VERBOSE_GS_STATS {
 					toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", int(*sd.currTickPtr), procToRun.machineId, procToRun.procInternals.procType, float64(procToRun.deadline), float64(procToRun.timeDone-procToRun.timeStarted), float64(procToRun.procInternals.actualComp))
 					logWrite(DONE_PROCS, toWrite)
 				}
