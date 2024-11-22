@@ -59,8 +59,10 @@ type GlobalSched struct {
 	idleMachines    *IdleHeap
 	procq           *Queue
 	currTickPtr     *Tftick
-	numFoundIdle    int
-	numUsedKChoices int
+	numFoundIdle    map[int]int
+	numUsedKChoices map[int]int
+	numSaidNo       map[int]int
+	numStarted      map[int]int
 }
 
 func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, idleHeap *IdleHeap) *GlobalSched {
@@ -70,8 +72,10 @@ func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, idleHeap *Id
 		idleMachines:    idleHeap,
 		procq:           newQueue(),
 		currTickPtr:     currTickPtr,
-		numFoundIdle:    0,
-		numUsedKChoices: 0,
+		numFoundIdle:    make(map[int]int),
+		numUsedKChoices: make(map[int]int),
+		numSaidNo:       make(map[int]int),
+		numStarted:      make(map[int]int),
 	}
 
 	return gs
@@ -116,6 +120,12 @@ func (gs *GlobalSched) placeProcs() {
 // 2. if there are none, do the ok to place call on all machines? on some machines? just random would be the closest to strictly following what they do...
 func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 
+	if _, ok := gs.numStarted[int(procToPlace.deadline)]; ok {
+		gs.numStarted[int(procToPlace.deadline)] += 1
+	} else {
+		gs.numStarted[int(procToPlace.deadline)] = 1
+	}
+
 	gs.idleMachines.lock.Lock()
 	machine, found := popNextLarger(gs.idleMachines.heap, procToPlace.maxComp)
 	gs.idleMachines.lock.Unlock()
@@ -123,12 +133,20 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 		toWrite := fmt.Sprintf("%v, GS placing proc: %v, found an idle machine %d with %.2f comp avail \n", int(*gs.currTickPtr), procToPlace.String(), machine.machineCoreId, float64(machine.compIdleFor))
 		logWrite(SCHED, toWrite)
 
-		gs.numFoundIdle++
+		if _, ok := gs.numFoundIdle[int(procToPlace.deadline)]; ok {
+			gs.numFoundIdle[int(procToPlace.deadline)] += 1
+		} else {
+			gs.numFoundIdle[int(procToPlace.deadline)] = 1
+		}
 
 		return gs.machines[machine.machineCoreId.machineId], machine.machineCoreId.coreId
 	}
 
-	gs.numUsedKChoices++
+	if _, ok := gs.numUsedKChoices[int(procToPlace.deadline)]; ok {
+		gs.numUsedKChoices[int(procToPlace.deadline)] += 1
+	} else {
+		gs.numUsedKChoices[int(procToPlace.deadline)] = 1
+	}
 
 	// if no idle machine, use power of k choices (for now k = number of machines :D )
 	contenderMachines := make([]TmachineCoreId, 0)
@@ -146,6 +164,11 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 	if len(contenderMachines) == 0 {
 		toWrite := fmt.Sprintf("%v: DOESN'T FIT ANYWHERE :(( -- skipping: %v \n", int(*gs.currTickPtr), procToPlace)
 		logWrite(SCHED, toWrite)
+		if _, ok := gs.numSaidNo[int(procToPlace.deadline)]; ok {
+			gs.numSaidNo[int(procToPlace.deadline)] += 1
+		} else {
+			gs.numSaidNo[int(procToPlace.deadline)] = 1
+		}
 		return nil, -1
 	}
 

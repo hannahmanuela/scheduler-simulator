@@ -9,7 +9,7 @@ const (
 	N_TICK               = 1000
 	N_MACHINES           = 10
 	N_CORES_PER_MACHINE  = 8
-	N_PROCS_GEN_PER_TICK = 30
+	N_PROCS_GEN_PER_TICK = 15
 )
 
 func TestRunWorld(t *testing.T) {

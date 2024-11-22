@@ -144,30 +144,6 @@ plt.grid(True)
 plt.legend()
 
 
-# ==============================================================================================================
-# q length range
-# ==============================================================================================================
-# q_lens = util_metrics.groupby("tick")["qlen"].agg(['min', 'max', 'mean']).reset_index()
-# q_lens['range'] = q_lens['max'] - q_lens['min']
-
-# plt.figure(figsize=(15,6))
-# plt.scatter(q_lens["tick"], q_lens["range"], label="range")
-# plt.plot(q_lens["tick"], q_lens["range"])
-
-# # plt.scatter(q_lens["tick"], q_lens["min"], color='lightblue', label="min")
-# # plt.plot(q_lens["tick"], q_lens["min"], color='lightblue')
-
-# # plt.scatter(q_lens["tick"], q_lens["max"], color='darkblue', label="max")
-# # plt.plot(q_lens["tick"], q_lens["max"], color='darkblue')
-
-# plt.title('Qlength range')
-# plt.xlabel('Tick')
-# plt.ylabel('Range of qlen')
-# plt.grid(True)
-# plt.legend()
-
-
-
 
 plt.show()
 

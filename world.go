@@ -94,5 +94,5 @@ func (w *World) Run(nTick int, nProcsPerTick int) {
 	for i := 0; i < nTick; i++ {
 		w.Tick(nProcsPerTick)
 	}
-	fmt.Printf("num times found idle: %d, num times had to use power of k choices: %d\n", w.gs.numFoundIdle, w.gs.numUsedKChoices)
+	fmt.Printf(" %v: idle \n %v: k-choices \n ---- \n %v: num created (incl ones said no) \n %v: num said no \n", w.gs.numFoundIdle, w.gs.numUsedKChoices, w.gs.numStarted, w.gs.numSaidNo)
 }
