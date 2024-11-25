@@ -59,23 +59,21 @@ type GlobalSched struct {
 	idleMachines    *IdleHeap
 	procq           *Queue
 	currTickPtr     *Tftick
+	nProcGenPerTick int
 	numFoundIdle    map[int]int
 	numUsedKChoices map[int]int
-	numSaidNo       map[int]int
-	numStarted      map[int]int
 }
 
-func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, idleHeap *IdleHeap) *GlobalSched {
+func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap) *GlobalSched {
 	gs := &GlobalSched{
 		machines:        machines,
 		k_choices:       int(len(machines) / 3),
 		idleMachines:    idleHeap,
 		procq:           newQueue(),
 		currTickPtr:     currTickPtr,
+		nProcGenPerTick: numGenPerTick,
 		numFoundIdle:    make(map[int]int),
 		numUsedKChoices: make(map[int]int),
-		numSaidNo:       make(map[int]int),
-		numStarted:      make(map[int]int),
 	}
 
 	return gs
@@ -106,10 +104,8 @@ func (gs *GlobalSched) placeProcs() {
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
 		machineToUse.sched.placeProc(p, coreToUse)
-		if VERBOSE_GS_STATS {
-			toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*gs.currTickPtr), machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
-			logWrite(ADDED_PROCS, toWrite)
-		}
+		toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*gs.currTickPtr), machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
+		logWrite(ADDED_PROCS, toWrite)
 		p = gs.getProc()
 	}
 
@@ -119,12 +115,6 @@ func (gs *GlobalSched) placeProcs() {
 // 1. first look for machines that simply currently have the space (using interval tree of immediately available compute)
 // 2. if there are none, do the ok to place call on all machines? on some machines? just random would be the closest to strictly following what they do...
 func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
-
-	if _, ok := gs.numStarted[int(procToPlace.deadline)]; ok {
-		gs.numStarted[int(procToPlace.deadline)] += 1
-	} else {
-		gs.numStarted[int(procToPlace.deadline)] = 1
-	}
 
 	gs.idleMachines.lock.Lock()
 	machine, found := popNextLarger(gs.idleMachines.heap, procToPlace.maxComp)
@@ -164,11 +154,9 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 	if len(contenderMachines) == 0 {
 		toWrite := fmt.Sprintf("%v: DOESN'T FIT ANYWHERE :(( -- skipping: %v \n", int(*gs.currTickPtr), procToPlace)
 		logWrite(SCHED, toWrite)
-		if _, ok := gs.numSaidNo[int(procToPlace.deadline)]; ok {
-			gs.numSaidNo[int(procToPlace.deadline)] += 1
-		} else {
-			gs.numSaidNo[int(procToPlace.deadline)] = 1
-		}
+
+		toWrite = fmt.Sprintf("%v, %v \n", gs.nProcGenPerTick, int(procToPlace.deadline))
+		logWrite(SAID_NO, toWrite)
 		return nil, -1
 	}
 

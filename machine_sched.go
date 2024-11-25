@@ -11,20 +11,22 @@ const (
 )
 
 type Sched struct {
-	machineId   Tid
-	numCores    int
-	activeQ     map[Tid]*Queue
-	idleHeap    *IdleHeap
-	currTickPtr *Tftick
+	machineId               Tid
+	numCores                int
+	activeQ                 map[Tid]*Queue
+	idleHeap                *IdleHeap
+	currTickPtr             *Tftick
+	worldNumProcsGenPerTick int
 }
 
-func newSched(numCores int, idleHeap *IdleHeap, mid Tid, currTickPtr *Tftick) *Sched {
+func newSched(numCores int, idleHeap *IdleHeap, mid Tid, currTickPtr *Tftick, nGenPerTick int) *Sched {
 	sd := &Sched{
-		machineId:   mid,
-		numCores:    numCores,
-		activeQ:     make(map[Tid]*Queue),
-		idleHeap:    idleHeap,
-		currTickPtr: currTickPtr,
+		machineId:               mid,
+		numCores:                numCores,
+		activeQ:                 make(map[Tid]*Queue),
+		idleHeap:                idleHeap,
+		currTickPtr:             currTickPtr,
+		worldNumProcsGenPerTick: nGenPerTick,
 	}
 	for i := 0; i < numCores; i++ {
 		sd.activeQ[Tid(i)] = newQueue()
@@ -98,10 +100,8 @@ func (sd *Sched) simulateRunProcs() {
 		sum_qlens += sd.activeQ[Tid(i)].qlen()
 	}
 
-	if VERBOSE_MACHINE_USAGE_STATS {
-		toWrite := fmt.Sprintf("%v, %v, %v", int(*sd.currTickPtr), sd.machineId, sum_qlens)
-		logWrite(USAGE, toWrite)
-	}
+	toWrite := fmt.Sprintf("%v, %v, %v, %v", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), sd.machineId, sum_qlens)
+	logWrite(USAGE, toWrite)
 
 	ticksLeftPerCore := make(map[int]Tftick, 0)
 	totalTicksLeftToGive := Tftick(sd.numCores)
@@ -142,10 +142,8 @@ func (sd *Sched) simulateRunProcs() {
 					logWrite(SCHED, toWrite)
 				}
 
-				if VERBOSE_GS_STATS {
-					toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", int(*sd.currTickPtr), procToRun.machineId, procToRun.procInternals.procType, float64(procToRun.deadline), float64(procToRun.timeDone-procToRun.timeStarted), float64(procToRun.procInternals.actualComp))
-					logWrite(DONE_PROCS, toWrite)
-				}
+				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", int(*sd.currTickPtr), procToRun.machineId, procToRun.procInternals.procType, float64(procToRun.deadline), float64(procToRun.timeDone-procToRun.timeStarted), float64(procToRun.procInternals.actualComp))
+				logWrite(DONE_PROCS, toWrite)
 			}
 		}
 	}
@@ -176,8 +174,6 @@ func (sd *Sched) simulateRunProcs() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	if VERBOSE_MACHINE_USAGE_STATS {
-		toWrite := fmt.Sprintf(", %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)))
-		logWrite(USAGE, toWrite)
-	}
+	toWrite = fmt.Sprintf(", %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)))
+	logWrite(USAGE, toWrite)
 }

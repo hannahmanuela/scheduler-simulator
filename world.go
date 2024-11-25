@@ -7,16 +7,9 @@ const (
 
 	IDLE_HEAP_THRESHOLD = 1
 
-	TICKS_WAIT_LOAD_CHANGES = 100
-	INITIAL_LOAD            = 4
-	THRESHOLD_RATIO_MIN     = 0.1 // min max ratio below which we add load
-	THRESHOLD_RATIO_MAX     = 0.5 // min max ratio above which we reduce load
-
-	VERBOSE_GS_STATS            = true
-	VERBOSE_SCHED_STATS         = true
-	VERBOSE_WORLD_STATS         = true
-	VERBOSE_MACHINE_USAGE_STATS = true
-	VERBOSE_PRESSURE_VALS       = true
+	VERBOSE_PROC_PRINTS = false
+	VERBOSE_SCHED_INFO  = false
+	VERBOSE_USAGE_STATS = true
 )
 
 type World struct {
@@ -28,20 +21,20 @@ type World struct {
 	app           Website
 }
 
-func newWorld(numMachines int, numCores int) *World {
+func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
 	w := &World{
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
-		numProcsToGen: INITIAL_LOAD,
+		numProcsToGen: nGenPerTick,
 	}
 	idleHeap := &IdleHeap{
 		heap: &MinHeap{},
 	}
 	for i := 0; i < numMachines; i++ {
 		mid := Tid(i)
-		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick)
+		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick, nGenPerTick)
 	}
-	w.gs = newGolbalSched(w.machines, &w.currTick, idleHeap)
+	w.gs = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap)
 	return w
 }
 
@@ -78,9 +71,7 @@ func (w *World) printAllProcs() {
 }
 
 func (w *World) Tick(numProcs int) {
-	if VERBOSE_GS_STATS {
-		w.printAllProcs()
-	}
+	w.printAllProcs()
 	// enqueues things into the procq
 	w.genLoad(numProcs)
 	// dequeues things from procq to machines
@@ -90,9 +81,9 @@ func (w *World) Tick(numProcs int) {
 	w.currTick += 1
 }
 
-func (w *World) Run(nTick int, nProcsPerTick int) {
+func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
-		w.Tick(nProcsPerTick)
+		w.Tick(w.numProcsToGen)
 	}
-	fmt.Printf(" %v: idle \n %v: k-choices \n ---- \n %v: num created (incl ones said no) \n %v: num said no \n", w.gs.numFoundIdle, w.gs.numUsedKChoices, w.gs.numStarted, w.gs.numSaidNo)
+	fmt.Printf(" %v: idle \n %v: k-choices \n", w.gs.numFoundIdle, w.gs.numUsedKChoices)
 }

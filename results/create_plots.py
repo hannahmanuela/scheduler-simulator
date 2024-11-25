@@ -15,7 +15,9 @@ procs_current = pd.read_csv("procs_current.txt", index_col=None, names=["tick", 
 procs_done = pd.read_csv("procs_done.txt", index_col=None, names=["tick", "machineID", "procType", "sla", "ticksPassed", "actualComp"])
 # procs_killed = pd.read_csv("procs_killed.txt", index_col=None, names=["tick", "machineID", "sla", "compDone", "memUsed"])
 
-util_metrics = pd.read_csv("usage.txt", index_col=None, names=["tick", "machineID", "qlen", "ticksLeftOver"])
+util_metrics = pd.read_csv("usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineID", "qlen", "ticksLeftOver"])
+
+util_metrics = util_metrics.where(util_metrics["nGenPerTick"] == 30).dropna()
 
 
 
@@ -35,9 +37,8 @@ proc_timings = pd.merge(procs_done, load_num_procs_per_tick, on='tick', how='lef
 
 ticks_left = util_metrics.groupby("tick")["ticksLeftOver"].agg(['min', 'max', 'mean']).reset_index()
 
-
 # ==============================================================================================================
-# Proc latency over load
+# Proc latency distribution (hist)
 # ==============================================================================================================
 
 unique_ids = proc_timings['procType'].unique()
@@ -47,11 +48,9 @@ num_plots = len(unique_ids)
 num_cols = 2  # Adjust as needed
 num_rows = -(-num_plots // num_cols)  # Ceiling division
 
-if args.variable_load:
+if len(proc_timings) > 0:
 
-    def get_percentile(pctile, proc_type):
-        return proc_timings.where(proc_timings["procType"] == proc_type)[["numProcsCurrent", "timePassedAsPct"]].groupby("numProcsCurrent").quantile(pctile / 100).reset_index()
-
+    # Set up subplots
     fig, axes = plt.subplots(num_rows, num_cols, figsize=(15, 4*num_rows))
     if num_rows > 1 and num_cols > 1:
         axes = axes.flatten()
@@ -59,22 +58,11 @@ if args.variable_load:
     # Plot each machine's data
     for i, id_ in enumerate(unique_ids):
         ax = axes[i]
-        ax.scatter(get_percentile(50, id_)["numProcsCurrent"], get_percentile(50, id_)["timePassedAsPct"], color='lightblue', label="50")
-        ax.plot(get_percentile(50, id_)["numProcsCurrent"], get_percentile(50, id_)["timePassedAsPct"], color='lightblue')
+        ax.hist(proc_timings.where(proc_timings["procType"] == id_)["timePassedAsPct"], bins=100)
 
-        ax.scatter(get_percentile(90, id_)["numProcsCurrent"], get_percentile(90, id_)["timePassedAsPct"], label="90")
-        ax.plot(get_percentile(90, id_)["numProcsCurrent"], get_percentile(90, id_)["timePassedAsPct"])
-
-        ax.scatter(get_percentile(95, id_)["numProcsCurrent"], get_percentile(95, id_)["timePassedAsPct"], color='grey', label="95")
-        ax.plot(get_percentile(95, id_)["numProcsCurrent"], get_percentile(95, id_)["timePassedAsPct"], color='grey')
-
-        ax.scatter(get_percentile(95, id_)["numProcsCurrent"], get_percentile(99, id_)["timePassedAsPct"], color='black', label="99")
-        ax.plot(get_percentile(95, id_)["numProcsCurrent"], get_percentile(99, id_)["timePassedAsPct"], color='black')
-
-        ax.set_title(f'Latency over load for proc type {id_}')
-        ax.set_xlabel('Number of procs added that tick')
-        ax.set_ylabel('Time passed as a fraction of the SLA')
-        ax.legend()
+        ax.set_title(f'Latency distribution for proc type {id_}')
+        ax.set_xlabel('Time passed as a fraction of the SLA')
+        ax.set_ylabel('Number of procs')
         ax.grid(True)
 
     # If there are unused subplots, hide them
@@ -83,31 +71,6 @@ if args.variable_load:
 
     plt.tight_layout()
 
-# ==============================================================================================================
-# Proc latency distribution (hist)
-# ==============================================================================================================
-
-# Set up subplots
-fig, axes = plt.subplots(num_rows, num_cols, figsize=(15, 4*num_rows))
-if num_rows > 1 and num_cols > 1:
-    axes = axes.flatten()
-
-# Plot each machine's data
-for i, id_ in enumerate(unique_ids):
-    ax = axes[i]
-    ax.hist(proc_timings.where(proc_timings["procType"] == id_)["timePassedAsPct"], bins=100)
-
-    ax.set_title(f'Latency distribution for proc type {id_}')
-    ax.set_xlabel('Time passed as a fraction of the SLA')
-    ax.set_ylabel('Number of procs')
-    ax.grid(True)
-
-# If there are unused subplots, hide them
-for i in range(len(unique_ids), num_rows * num_cols):
-    axes[i].axis('off')
-
-plt.tight_layout()
-
 
 # 
 # ticks added
@@ -115,14 +78,16 @@ plt.tight_layout()
 
 ticks_added = procs_added[["tick", "actualComp"]].groupby("tick").sum().reset_index()
 
-plt.figure(figsize=(15,6))
-plt.hist(ticks_added["actualComp"], bins=100)
+if len(ticks_added) > 0:
 
-plt.title('Distribution of ticks of compute added per tick')
-plt.xlabel('Ticks added')
-plt.ylabel('Frequency')
-plt.grid(True)
-plt.legend()
+    plt.figure(figsize=(15,6))
+    plt.hist(ticks_added["actualComp"], bins=100)
+
+    plt.title('Distribution of ticks of compute added per tick')
+    plt.xlabel('Ticks added')
+    plt.ylabel('Frequency')
+    plt.grid(True)
+    plt.legend()
 
 # ==============================================================================================================
 # utilization

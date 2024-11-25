@@ -22,13 +22,23 @@ const (
 	DONE_PROCS
 	SCHED
 	USAGE
+	SAID_NO
 )
 
 func (pt PrintType) fileName() string {
-	return []string{"results/procs_current.txt", "results/procs_added.txt", "results/procs_done.txt", "results/sched.txt", "results/usage.txt"}[pt]
+	return []string{"results/procs_current.txt", "results/procs_added.txt", "results/procs_done.txt", "results/sched.txt", "results/usage.txt", "results/said_no.txt"}[pt]
+}
+
+func (pt PrintType) should_print() bool {
+	return []bool{VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS}[pt]
 }
 
 func logWrite(printType PrintType, toWrite string) {
+
+	if !printType.should_print() {
+		return
+	}
+
 	f, err := os.OpenFile(printType.fileName(), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		panic(err)
@@ -42,7 +52,7 @@ func logWrite(printType PrintType, toWrite string) {
 }
 
 func emptyFiles() {
-	types := []PrintType{CURR_PROCS, ADDED_PROCS, DONE_PROCS, SCHED, USAGE}
+	types := []PrintType{CURR_PROCS, ADDED_PROCS, DONE_PROCS, SCHED, USAGE, SAID_NO}
 
 	for _, t := range types {
 		os.Truncate(t.fileName(), 0)
