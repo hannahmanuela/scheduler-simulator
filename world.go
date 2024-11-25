@@ -17,6 +17,7 @@ type World struct {
 	numProcsToGen int
 	currProcNum   int
 	machines      map[Tid]*Machine
+	idealDC       IdealDC
 	gs            *GlobalSched
 	app           Website
 }
@@ -26,6 +27,7 @@ func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
+		idealDC:       *newIdealDC(numMachines * numCores),
 	}
 	idleHeap := &IdleHeap{
 		heap: &MinHeap{},
@@ -48,9 +50,9 @@ func (w *World) String() string {
 
 func (w *World) genLoad(nProcs int) int {
 	userProcs := w.app.genLoad(nProcs)
-	sumTicksAdded := Tftick(0)
 	for _, up := range userProcs {
-		sumTicksAdded += up.actualComp
+		w.idealDC.addProc(newProvProc(Tid(w.currProcNum), w.currTick, up))
+
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
 		w.currProcNum += 1
 		w.gs.putProc(provProc)
@@ -62,6 +64,7 @@ func (w *World) compute() {
 	for _, m := range w.machines {
 		m.sched.tick()
 	}
+	w.idealDC.tick()
 }
 
 func (w *World) printAllProcs() {
