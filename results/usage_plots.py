@@ -1,6 +1,7 @@
 import pandas as pd
 from matplotlib import pyplot as plt
 import seaborn as sns
+import itertools
 
 
 util_metrics = pd.read_csv("usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineID", "qlen", "ticksLeftOver"])
@@ -10,11 +11,16 @@ util_metrics = util_metrics.where(util_metrics["tick"] > 100).dropna()
 
 util_metrics_grouped = util_metrics.groupby('nGenPerTick')['ticksLeftOver'].agg(['min', 'max', 'mean']).reset_index()
 
+# the game below is just to ensure that counts of 0 are explicitly included
+unique_npgs = util_metrics_grouped['nGenPerTick'].unique()
+unique_dls = said_no['deadline'].unique()
+all_combinations = pd.DataFrame(itertools.product(unique_npgs, unique_dls), columns=['nGenPerTick', 'deadline'])
 said_no_grouped = said_no.groupby(['nGenPerTick', 'deadline']).size().reset_index(name='count')
-# print(said_no_grouped)
+said_no_grouped = pd.merge(all_combinations, said_no_grouped, on=['nGenPerTick', 'deadline'], how='left')
+said_no_grouped['count'] = said_no_grouped['count'].fillna(0).astype(int)
 
 
-fig, axs = plt.subplots(2, 1, figsize=(8, 6))
+fig, axs = plt.subplots(2, 1, sharex=True, figsize=(8, 6))
 
 # Subplot 1: min, max, mean of ticksLeftOver
 sns.lineplot(data=util_metrics_grouped, x='nGenPerTick', y='min', label='Min', ax=axs[0], color='red')
@@ -30,6 +36,7 @@ sns.scatterplot(data=util_metrics_grouped, x='nGenPerTick', y='mean', color='gre
 axs[0].set_title('Ticks LeftOver (Min, Max, Mean) vs nGenPerTick')
 axs[0].set_xlabel('nGenPerTick')
 axs[0].set_ylabel('ticksLeftOver')
+axs[0].set_xticks(util_metrics_grouped['nGenPerTick'])
 axs[0].legend()
 
 # Subplot 2: Number of rows in said_no colored by deadline
