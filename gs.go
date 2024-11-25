@@ -151,11 +151,14 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 	toWrite := fmt.Sprintf("%v, GS placing proc: %v, the contender machines are %v \n", int(*gs.currTickPtr), procToPlace.String(), contenderMachines)
 	logWrite(SCHED, toWrite)
 
+	toWrite = fmt.Sprintf("%v, %v, %v \n", gs.nProcGenPerTick, int(*gs.currTickPtr), int(procToPlace.deadline))
+	logWrite(CREATED_PROCS, toWrite)
+
 	if len(contenderMachines) == 0 {
 		toWrite := fmt.Sprintf("%v: DOESN'T FIT ANYWHERE :(( -- skipping: %v \n", int(*gs.currTickPtr), procToPlace)
 		logWrite(SCHED, toWrite)
 
-		toWrite = fmt.Sprintf("%v, %v \n", gs.nProcGenPerTick, int(procToPlace.deadline))
+		toWrite = fmt.Sprintf("%v, %v, %v \n", gs.nProcGenPerTick, int(*gs.currTickPtr), int(procToPlace.deadline))
 		logWrite(SAID_NO, toWrite)
 		return nil, -1
 	}

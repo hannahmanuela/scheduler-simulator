@@ -23,14 +23,15 @@ const (
 	SCHED
 	USAGE
 	SAID_NO
+	CREATED_PROCS
 )
 
 func (pt PrintType) fileName() string {
-	return []string{"results/procs_current.txt", "results/procs_added.txt", "results/procs_done.txt", "results/sched.txt", "results/usage.txt", "results/said_no.txt"}[pt]
+	return []string{"results/procs_current.txt", "results/procs_added.txt", "results/procs_done.txt", "results/sched.txt", "results/usage.txt", "results/said_no.txt", "results/procs_created.txt"}[pt]
 }
 
 func (pt PrintType) should_print() bool {
-	return []bool{VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS}[pt]
+	return []bool{VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS}[pt]
 }
 
 func logWrite(printType PrintType, toWrite string) {

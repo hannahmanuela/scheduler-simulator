@@ -5,19 +5,19 @@ import itertools
 
 
 util_metrics = pd.read_csv("usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineID", "qlen", "ticksLeftOver"])
-said_no = pd.read_csv("said_no.txt", index_col=None, names=["nGenPerTick", "deadline"])
+said_no = pd.read_csv("said_no.txt", index_col=None, names=["nGenPerTick", "tick", "deadline"])
+procs_created = pd.read_csv("procs_created.txt", index_col=None, names=["nGenPerTick", "tick", "deadline"])
 
 util_metrics = util_metrics.where(util_metrics["tick"] > 100).dropna()
+said_no = said_no.where(said_no["tick"] > 100).dropna()
+procs_created = procs_created.where(procs_created["tick"] > 100).dropna()
 
 util_metrics_grouped = util_metrics.groupby('nGenPerTick')['ticksLeftOver'].agg(['min', 'max', 'mean']).reset_index()
 
-# the game below is just to ensure that counts of 0 are explicitly included
-unique_npgs = util_metrics_grouped['nGenPerTick'].unique()
-unique_dls = said_no['deadline'].unique()
-all_combinations = pd.DataFrame(itertools.product(unique_npgs, unique_dls), columns=['nGenPerTick', 'deadline'])
-said_no_grouped = said_no.groupby(['nGenPerTick', 'deadline']).size().reset_index(name='count')
-said_no_grouped = pd.merge(all_combinations, said_no_grouped, on=['nGenPerTick', 'deadline'], how='left')
-said_no_grouped['count'] = said_no_grouped['count'].fillna(0).astype(int)
+procs_created_grouped = procs_created.groupby(["nGenPerTick", "deadline"]).size().reset_index(name="count_created")
+said_no_grouped = said_no.groupby(['nGenPerTick', 'deadline']).size().reset_index(name='count_rejected')
+relative_said_no = pd.merge(procs_created_grouped, said_no_grouped, on=['nGenPerTick', 'deadline'], how='outer').fillna(0)
+relative_said_no['pct_rejected'] = relative_said_no['count_rejected'] / relative_said_no['count_created']
 
 
 fig, axs = plt.subplots(2, 1, sharex=True, figsize=(8, 6))
@@ -44,13 +44,14 @@ deadline_colors = {
     1: 'red',     # Replace with your own deadline names and colors
     4: 'orange',
     100: 'green',
+    1000: 'blue',
 }
-sns.scatterplot(data=said_no_grouped, x='nGenPerTick', y='count', hue='deadline', palette=deadline_colors, ax=axs[1])
-sns.lineplot(data=said_no_grouped, x='nGenPerTick', y='count', ax=axs[1], hue='deadline', palette=deadline_colors, legend=False)
+sns.scatterplot(data=relative_said_no, x='nGenPerTick', y='pct_rejected', hue='deadline', palette=deadline_colors, ax=axs[1])
+sns.lineplot(data=relative_said_no, x='nGenPerTick', y='pct_rejected', ax=axs[1], hue='deadline', palette=deadline_colors, legend=False)
 
-axs[1].set_title('Rows in said_no vs nGenPerTick')
+axs[1].set_title('Percent of created procs rejected')
 axs[1].set_xlabel('nGenPerTick')
-axs[1].set_ylabel('Number of Rows')
+axs[1].set_ylabel('Pct rejected')
 axs[1].legend()
 
 # Show plot
