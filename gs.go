@@ -57,6 +57,7 @@ type GlobalSched struct {
 	machines        map[Tid]*Machine
 	k_choices       int
 	idleMachines    *IdleHeap
+	idealDC         *IdealDC
 	procq           *Queue
 	currTickPtr     *Tftick
 	nProcGenPerTick int
@@ -64,11 +65,12 @@ type GlobalSched struct {
 	numUsedKChoices map[int]int
 }
 
-func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap) *GlobalSched {
+func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap, idealDC *IdealDC) *GlobalSched {
 	gs := &GlobalSched{
 		machines:        machines,
 		k_choices:       int(len(machines) / 3),
 		idleMachines:    idleHeap,
+		idealDC:         idealDC,
 		procq:           newQueue(),
 		currTickPtr:     currTickPtr,
 		nProcGenPerTick: numGenPerTick,
@@ -93,6 +95,12 @@ func (gs *GlobalSched) placeProcs() {
 
 	for p != nil {
 		// place given proc
+
+		// try placing on the ideal
+		procCopy := newProvProc(p.procId, *gs.currTickPtr, p.procInternals)
+		if gs.idealDC.okToPlace(procCopy) {
+			gs.idealDC.addProc(procCopy)
+		}
 
 		machineToUse, coreToUse := gs.pickMachine(p)
 

@@ -17,7 +17,7 @@ type World struct {
 	numProcsToGen int
 	currProcNum   int
 	machines      map[Tid]*Machine
-	idealDC       IdealDC
+	idealDC       *IdealDC
 	gs            *GlobalSched
 	app           Website
 }
@@ -27,8 +27,8 @@ func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
-		idealDC:       *newIdealDC(numMachines * numCores),
 	}
+	w.idealDC = newIdealDC(numMachines*numCores, &w.currTick)
 	idleHeap := &IdleHeap{
 		heap: &MinHeap{},
 	}
@@ -36,7 +36,7 @@ func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
 		mid := Tid(i)
 		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick, nGenPerTick)
 	}
-	w.gs = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap)
+	w.gs = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap, w.idealDC)
 	return w
 }
 
@@ -51,8 +51,6 @@ func (w *World) String() string {
 func (w *World) genLoad(nProcs int) int {
 	userProcs := w.app.genLoad(nProcs)
 	for _, up := range userProcs {
-		w.idealDC.addProc(newProvProc(Tid(w.currProcNum), w.currTick, up))
-
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
 		w.currProcNum += 1
 		w.gs.putProc(provProc)

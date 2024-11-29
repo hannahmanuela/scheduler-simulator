@@ -1,7 +1,6 @@
 package slasched
 
 import (
-	"fmt"
 	"strconv"
 )
 
@@ -17,12 +16,13 @@ type Proc struct {
 	timeDone      Tftick
 	deadline      Tftick
 	maxComp       Tftick
+	compDone      Tftick
 	procInternals *ProcInternals
 }
 
 func (p *Proc) String() string {
 	return strconv.Itoa(int(p.procId)) + ": " +
-		p.procInternals.String() +
+		"comp done: " + p.compDone.String() +
 		", deadline: " + p.deadline.String() +
 		", time started: " + p.timeStarted.String()
 }
@@ -37,12 +37,6 @@ func newProvProc(procId Tid, currTick Tftick, privProc *ProcInternals) *Proc {
 		maxComp:       privProc.maxComp,
 		procInternals: privProc,
 	}
-}
-
-// runs proc for the number of ticks passed or until the proc is done,
-// returning whether the proc is done and how many ticks were run
-func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
-	return p.procInternals.runTillOutOrDone(toRun)
 }
 
 // returns the deadline (relative, offset by time started)
@@ -64,7 +58,20 @@ func (p *Proc) getExpectedCompLeft() Tftick {
 }
 
 func (p *Proc) compUsed() Tftick {
-	return p.procInternals.compDone
+	return p.compDone
+}
+
+func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
+
+	workLeft := p.procInternals.actualComp - p.compDone
+
+	if workLeft <= toRun {
+		p.compDone = p.procInternals.actualComp
+		return workLeft, true
+	} else {
+		p.compDone += toRun
+		return toRun, false
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -75,13 +82,8 @@ func (p *Proc) compUsed() Tftick {
 type ProcInternals struct {
 	deadline   Tftick
 	maxComp    Tftick
-	compDone   Tftick
 	actualComp Tftick
 	procType   ProcType
-}
-
-func (p *ProcInternals) String() string {
-	return fmt.Sprintf("compDone %v", p.compDone)
 }
 
 func (p *ProcInternals) memUsed() Tmem {
@@ -99,18 +101,5 @@ func newPrivProc(sla Tftick, maxComp Tftick, procType ProcType) *ProcInternals {
 		actualComp = maxComp
 	}
 
-	return &ProcInternals{sla, maxComp, 0, actualComp, procType}
-}
-
-func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
-
-	workLeft := p.actualComp - p.compDone
-
-	if workLeft <= toRun {
-		p.compDone = p.actualComp
-		return workLeft, true
-	} else {
-		p.compDone += toRun
-		return toRun, false
-	}
+	return &ProcInternals{sla, maxComp, actualComp, procType}
 }
