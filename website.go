@@ -1,9 +1,5 @@
 package slasched
 
-import (
-	"math/rand"
-)
-
 // constants characterizing the wesbite traffic
 const (
 	// fraction of procs generated that are in each category
@@ -106,7 +102,7 @@ func (website *SimpleWebsite) genNumberOfProcs(totalNumProcs int) (int, int, int
 	numProcessBg := 0
 
 	for i := 0; i < totalNumProcs; i++ {
-		randVal := rand.Float64()
+		randVal := r.Float64()
 		if randVal < FRACTION_DATA_PROCESS_BG {
 			numProcessBg += 1
 		} else if randVal < FRACTION_DATA_PROCESS_BG+FRACTION_DATA_PROCESS_FG {

@@ -96,15 +96,23 @@ func (gs *GlobalSched) placeProcs() {
 	for p != nil {
 		// place given proc
 
+		toWrite := fmt.Sprintf("%v, %v, %v \n", gs.nProcGenPerTick, int(*gs.currTickPtr), int(p.deadline))
+		logWrite(CREATED_PROCS, toWrite)
+
 		// try placing on the ideal
 		procCopy := newProvProc(p.procId, *gs.currTickPtr, p.procInternals)
 		if gs.idealDC.okToPlace(procCopy) {
 			gs.idealDC.addProc(procCopy)
+		} else {
+			toWrite := fmt.Sprintf("%v, %v, %v \n", gs.nProcGenPerTick, int(*gs.currTickPtr), int(p.deadline))
+			logWrite(IDEAL_SAID_NO, toWrite)
 		}
 
 		machineToUse, coreToUse := gs.pickMachine(p)
 
 		if machineToUse == nil {
+			toWrite := fmt.Sprintf("%v, %v, %v \n", gs.nProcGenPerTick, int(*gs.currTickPtr), int(p.deadline))
+			logWrite(SAID_NO, toWrite)
 			p = gs.getProc()
 			continue
 		}
@@ -112,7 +120,7 @@ func (gs *GlobalSched) placeProcs() {
 		// place proc on chosen machine
 		p.machineId = machineToUse.mid
 		machineToUse.sched.placeProc(p, coreToUse)
-		toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*gs.currTickPtr), machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
+		toWrite = fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*gs.currTickPtr), machineToUse.mid, p.procInternals.procType, float64(p.procInternals.deadline), float64(p.procInternals.actualComp))
 		logWrite(ADDED_PROCS, toWrite)
 		p = gs.getProc()
 	}
@@ -159,15 +167,10 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, Tid) {
 	toWrite := fmt.Sprintf("%v, GS placing proc: %v, the contender machines are %v \n", int(*gs.currTickPtr), procToPlace.String(), contenderMachines)
 	logWrite(SCHED, toWrite)
 
-	toWrite = fmt.Sprintf("%v, %v, %v \n", gs.nProcGenPerTick, int(*gs.currTickPtr), int(procToPlace.deadline))
-	logWrite(CREATED_PROCS, toWrite)
-
 	if len(contenderMachines) == 0 {
 		toWrite := fmt.Sprintf("%v: DOESN'T FIT ANYWHERE :(( -- skipping: %v \n", int(*gs.currTickPtr), procToPlace)
 		logWrite(SCHED, toWrite)
 
-		toWrite = fmt.Sprintf("%v, %v, %v \n", gs.nProcGenPerTick, int(*gs.currTickPtr), int(procToPlace.deadline))
-		logWrite(SAID_NO, toWrite)
 		return nil, -1
 	}
 

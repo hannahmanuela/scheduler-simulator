@@ -81,7 +81,7 @@ outer:
 			if float64(p.getSlack(*sd.currTickPtr)-runningWaitTime) < 0.0 {
 				continue outer
 			}
-			runningWaitTime += p.getExpectedCompLeft()
+			runningWaitTime += p.getMaxCompLeft()
 		}
 
 		return true, Tid(currCore)

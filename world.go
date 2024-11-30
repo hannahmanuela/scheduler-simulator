@@ -1,16 +1,24 @@
 package slasched
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+)
 
 const (
 	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
 
 	IDLE_HEAP_THRESHOLD = 1
 
-	VERBOSE_PROC_PRINTS = false
-	VERBOSE_SCHED_INFO  = false
-	VERBOSE_USAGE_STATS = true
+	VERBOSE_PROC_PRINTS      = false
+	VERBOSE_SCHED_INFO       = false
+	VERBOSE_USAGE_STATS      = true
+	VERBOSE_IDEAL_SCHED_INFO = true
 )
+
+const SEED = 12345
+
+var r = rand.New(rand.NewSource(SEED))
 
 type World struct {
 	currTick      Tftick
@@ -28,7 +36,7 @@ func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
 	}
-	w.idealDC = newIdealDC(numMachines*numCores, &w.currTick)
+	w.idealDC = newIdealDC(numMachines*numCores, &w.currTick, nGenPerTick)
 	idleHeap := &IdleHeap{
 		heap: &MinHeap{},
 	}

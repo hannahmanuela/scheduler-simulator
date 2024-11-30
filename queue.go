@@ -80,7 +80,7 @@ func (q *Queue) getHOLSlack(currTime Tftick) Tftick {
 		if currExtra < extraSlack {
 			extraSlack = currExtra
 		}
-		runningWaitTime += p.getExpectedCompLeft()
+		runningWaitTime += p.getMaxCompLeft()
 	}
 
 	holSlack := Tftick(math.Min(float64(headSlack), float64(extraSlack)))

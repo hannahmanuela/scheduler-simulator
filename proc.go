@@ -53,7 +53,7 @@ func (p *Proc) waitTime(currTime Tftick) Tftick {
 	return (currTime - p.timeStarted) - p.compUsed()
 }
 
-func (p *Proc) getExpectedCompLeft() Tftick {
+func (p *Proc) getMaxCompLeft() Tftick {
 	return p.maxComp - p.compUsed()
 }
 
@@ -84,10 +84,6 @@ type ProcInternals struct {
 	maxComp    Tftick
 	actualComp Tftick
 	procType   ProcType
-}
-
-func (p *ProcInternals) memUsed() Tmem {
-	return p.procType.getMemoryUsage()
 }
 
 func newPrivProc(sla Tftick, maxComp Tftick, procType ProcType) *ProcInternals {
