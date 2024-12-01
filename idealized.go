@@ -66,6 +66,9 @@ func (idc *IdealDC) okToPlace(newProc *Proc) bool {
 
 func (idc *IdealDC) tick() {
 
+	toWrite := fmt.Sprintf("%v @ %v: WHOLE QUEUE %v\n", idc.worldNumProcsGenPerTick, idc.currTickPtr, idc.procQ.String())
+	logWrite(IDEAL_SCHED, toWrite)
+
 	totalTicksLeftToGive := Tftick(idc.amtWorkPerTick)
 	ticksLeftPerCore := make(map[int]Tftick, 0)
 	coresLeft := make(map[int]bool, 0)
@@ -75,7 +78,7 @@ func (idc *IdealDC) tick() {
 		coresLeft[i] = true
 	}
 
-	toWrite := fmt.Sprintf("%v, %v, %v, %v", idc.worldNumProcsGenPerTick, int(*idc.currTickPtr), -1, idc.procQ.qlen())
+	toWrite = fmt.Sprintf("%v, %v, %v, %v", idc.worldNumProcsGenPerTick, int(*idc.currTickPtr), -1, idc.procQ.qlen())
 	logWrite(IDEAL_USAGE, toWrite)
 
 	putProcOnCoreWithMaxTimeLeft := func() int {
@@ -116,6 +119,9 @@ func (idc *IdealDC) tick() {
 			if procToRun == nil {
 				continue
 			}
+
+			toWrite := fmt.Sprintf("   giving %v to proc %v\n", ticksLeftPerCore[currCore], procToRun.String())
+			logWrite(IDEAL_SCHED, toWrite)
 
 			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 

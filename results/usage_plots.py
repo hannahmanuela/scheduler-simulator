@@ -10,7 +10,7 @@ ideal_said_no = pd.read_csv("ideal_said_no.txt", index_col=None, names=["nGenPer
 procs_created = pd.read_csv("procs_created.txt", index_col=None, names=["nGenPerTick", "tick", "deadline"])
 
 util_metrics = util_metrics.where(util_metrics["tick"] > 100).dropna()
-ideal_metrics = ideal_metrics.where(util_metrics["tick"] > 100).dropna()
+ideal_metrics = ideal_metrics.where(ideal_metrics["tick"] > 100).dropna()
 said_no = said_no.where(said_no["tick"] > 100).dropna()
 ideal_said_no = ideal_said_no.where(said_no["tick"] > 100).dropna()
 procs_created = procs_created.where(procs_created["tick"] > 100).dropna()

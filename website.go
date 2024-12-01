@@ -21,10 +21,10 @@ const (
 	DATA_PROCESS_BG_MAX_COMP = 700 // 3.5 s (30% slack)
 
 	// mem usage, in MB
-	PAGE_STATIC_MEM_USG     = 20
-	PAGE_DYNAMIC_MEM_USG    = 300
-	DATA_PROCESS_FG_MEM_USG = 1000
-	DATA_PROCESS_BG_MEM_USG = 10000
+	// PAGE_STATIC_MEM_USG     = 20
+	// PAGE_DYNAMIC_MEM_USG    = 300
+	// DATA_PROCESS_FG_MEM_USG = 1000
+	// DATA_PROCESS_BG_MEM_USG = 10000
 )
 
 // the types of procs the website will have
@@ -54,11 +54,11 @@ func (pt ProcType) getExpectedSlaBuffer() float64 {
 	return []float64{0.2, 0.2, 0.1, 0.7}[pt]
 }
 
-// the amount memory a proc of the given type will use (for now this is static)
-func (pt ProcType) getMemoryUsage() Tmem {
-	// page static, page dynamic, data process fg, data process bg
-	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
-}
+// // the amount memory a proc of the given type will use (for now this is static)
+// func (pt ProcType) getMemoryUsage() Tmem {
+// 	// page static, page dynamic, data process fg, data process bg
+// 	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
+// }
 
 type Website interface {
 	genLoad(nProcs int) []*ProcInternals

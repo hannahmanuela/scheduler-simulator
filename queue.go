@@ -26,16 +26,6 @@ func (q *Queue) getQ() []*Proc {
 	return q.q
 }
 
-func (q *Queue) remove(toRemove *Proc) {
-	for i := 0; i < len(q.q); i++ {
-		if q.q[i] == toRemove {
-			newQ := append(q.q[:i], q.q[i+1:]...)
-			q.q = newQ
-			return
-		}
-	}
-}
-
 func (q *Queue) enq(p *Proc) {
 	if len(q.q) == 0 {
 		q.q = append(q.q, p)
