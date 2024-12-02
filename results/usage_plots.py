@@ -69,6 +69,7 @@ for ax in axs.flat:
 
 # Adjust layout and show plot
 plt.tight_layout()
+plt.savefig('current_res.png')
 plt.show()
 
-plt.savefig('current_res.png')
+
