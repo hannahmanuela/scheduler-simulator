@@ -1,9 +1,5 @@
 package slasched
 
-import (
-	"math/rand"
-)
-
 // constants characterizing the wesbite traffic
 const (
 	// fraction of procs generated that are in each category
@@ -19,16 +15,16 @@ const (
 	DATA_PROCESS_FG_SLA = 100  // 500 ms
 	DATA_PROCESS_BG_SLA = 1000 // 5 s
 
-	PAGE_STATIC_MAX_COMP     = 0.8 // 4 ms
-	PAGE_DYNAMIC_MAX_COMP    = 3.6 // 18 ms
-	DATA_PROCESS_FG_MAX_COMP = 90  // 450 ms
-	DATA_PROCESS_BG_MAX_COMP = 700 // 3.5 s
+	PAGE_STATIC_MAX_COMP     = 0.8 // 4 ms (20% slack)
+	PAGE_DYNAMIC_MAX_COMP    = 3.6 // 18 ms (10% slack)
+	DATA_PROCESS_FG_MAX_COMP = 90  // 450 ms (10% slack)
+	DATA_PROCESS_BG_MAX_COMP = 700 // 3.5 s (30% slack)
 
 	// mem usage, in MB
-	PAGE_STATIC_MEM_USG     = 20
-	PAGE_DYNAMIC_MEM_USG    = 300
-	DATA_PROCESS_FG_MEM_USG = 1000
-	DATA_PROCESS_BG_MEM_USG = 10000
+	// PAGE_STATIC_MEM_USG     = 20
+	// PAGE_DYNAMIC_MEM_USG    = 300
+	// DATA_PROCESS_FG_MEM_USG = 1000
+	// DATA_PROCESS_BG_MEM_USG = 10000
 )
 
 // the types of procs the website will have
@@ -58,11 +54,11 @@ func (pt ProcType) getExpectedSlaBuffer() float64 {
 	return []float64{0.2, 0.2, 0.1, 0.7}[pt]
 }
 
-// the amount memory a proc of the given type will use (for now this is static)
-func (pt ProcType) getMemoryUsage() Tmem {
-	// page static, page dynamic, data process fg, data process bg
-	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
-}
+// // the amount memory a proc of the given type will use (for now this is static)
+// func (pt ProcType) getMemoryUsage() Tmem {
+// 	// page static, page dynamic, data process fg, data process bg
+// 	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
+// }
 
 type Website interface {
 	genLoad(nProcs int) []*ProcInternals
@@ -106,7 +102,7 @@ func (website *SimpleWebsite) genNumberOfProcs(totalNumProcs int) (int, int, int
 	numProcessBg := 0
 
 	for i := 0; i < totalNumProcs; i++ {
-		randVal := rand.Float64()
+		randVal := r.Float64()
 		if randVal < FRACTION_DATA_PROCESS_BG {
 			numProcessBg += 1
 		} else if randVal < FRACTION_DATA_PROCESS_BG+FRACTION_DATA_PROCESS_FG {

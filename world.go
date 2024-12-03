@@ -1,45 +1,50 @@
 package slasched
 
-const (
-	MAX_MEM_PER_MACHINE   = 32000 // the amount of memory every core will have, in MB
-	NUM_CORES_PER_MACHINE = 12
-
-	TICKS_WAIT_LOAD_CHANGES = 100
-	INITIAL_LOAD            = 4
-	THRESHOLD_RATIO_MIN     = 0.1 // min max ratio below which we add load
-	THRESHOLD_RATIO_MAX     = 0.5 // min max ratio above which we reduce load
-
-	VERBOSE_LB_STATS            = true
-	VERBOSE_SCHED_STATS         = true
-	VERBOSE_WORLD_STATS         = true
-	VERBOSE_MACHINE_USAGE_STATS = true
-	VERBOSE_PRESSURE_VALS       = true
+import (
+	"fmt"
+	"math/rand"
 )
 
+const (
+	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
+
+	IDLE_HEAP_THRESHOLD = 1
+
+	VERBOSE_PROC_PRINTS      = false
+	VERBOSE_SCHED_INFO       = false
+	VERBOSE_USAGE_STATS      = true
+	VERBOSE_IDEAL_SCHED_INFO = false
+)
+
+const SEED = 12345
+
+var r = rand.New(rand.NewSource(SEED))
+
 type World struct {
-	currTick        Tftick
-	numProcsToGen   int
-	lastChangedLoad int
-	machines        map[Tid]*Machine
-	lb              *GlobalSched
-	app             Website
+	currTick      Tftick
+	numProcsToGen int
+	currProcNum   int
+	machines      map[Tid]*Machine
+	idealDC       *IdealDC
+	gs            *GlobalSched
+	app           Website
 }
 
-func newWorld(numMachines int) *World {
+func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
 	w := &World{
-		machines:        map[Tid]*Machine{},
-		numProcsToGen:   INITIAL_LOAD,
-		lastChangedLoad: 0,
+		currTick:      Tftick(0),
+		machines:      map[Tid]*Machine{},
+		numProcsToGen: nGenPerTick,
 	}
-	lbMachineConn := make(chan *Message) // channel all machines send on to lb
-	machineToLBConns := map[Tid]chan *Message{}
+	w.idealDC = newIdealDC(numMachines*numCores, &w.currTick, nGenPerTick)
+	idleHeap := &IdleHeap{
+		heap: &MinHeap{},
+	}
 	for i := 0; i < numMachines; i++ {
 		mid := Tid(i)
-		chanMacheineToLB := make(chan *Message)
-		machineToLBConns[mid] = chanMacheineToLB // channel machine receives on
-		w.machines[Tid(i)] = newMachine(mid, NUM_CORES_PER_MACHINE, lbMachineConn, chanMacheineToLB)
+		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick, nGenPerTick)
 	}
-	w.lb = newLoadBalancer(w.machines, machineToLBConns, lbMachineConn)
+	w.gs = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap, w.idealDC)
 	return w
 }
 
@@ -53,11 +58,10 @@ func (w *World) String() string {
 
 func (w *World) genLoad(nProcs int) int {
 	userProcs := w.app.genLoad(nProcs)
-	sumTicksAdded := Tftick(0)
 	for _, up := range userProcs {
-		sumTicksAdded += up.actualComp
-		provProc := newProvProc(w.currTick, up)
-		w.lb.putProc(provProc)
+		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
+		w.currProcNum += 1
+		w.gs.putProc(provProc)
 	}
 	return len(userProcs)
 }
@@ -66,6 +70,7 @@ func (w *World) compute() {
 	for _, m := range w.machines {
 		m.sched.tick()
 	}
+	w.idealDC.tick()
 }
 
 func (w *World) printAllProcs() {
@@ -75,20 +80,19 @@ func (w *World) printAllProcs() {
 }
 
 func (w *World) Tick(numProcs int) {
-	if VERBOSE_LB_STATS {
-		w.printAllProcs()
-	}
+	w.printAllProcs()
 	// enqueues things into the procq
 	w.genLoad(numProcs)
 	// dequeues things from procq to machines
-	w.lb.placeProcs()
+	w.gs.placeProcs()
 	// runs each machine for a tick
 	w.compute()
 	w.currTick += 1
 }
 
-func (w *World) Run(nTick int, nProcsPerTick int) {
+func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
-		w.Tick(nProcsPerTick)
+		w.Tick(w.numProcsToGen)
 	}
+	fmt.Printf(" %v: idle \n %v: k-choices \n", w.gs.numFoundIdle, w.gs.numUsedKChoices)
 }

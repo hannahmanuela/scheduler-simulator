@@ -8,15 +8,14 @@ type Ttickmap map[Tid]Tftick
 type Tprocmap map[Tid]int
 
 type Machine struct {
-	mid      Tid
-	numCores int
-	sched    *Sched
+	mid   Tid
+	sched *Sched
 }
 
-func newMachine(mid Tid, numCores int, lbConnSend chan *Message, lbConnRecv chan *Message) *Machine {
+func newMachine(mid Tid, idleHeap *IdleHeap, numCores int, currTickPtr *Tftick, nGenPerTick int) *Machine {
 	sd := &Machine{
 		mid:   mid,
-		sched: newSched(numCores, lbConnSend, lbConnRecv, mid),
+		sched: newSched(numCores, idleHeap, mid, currTickPtr, nGenPerTick),
 	}
 	return sd
 }

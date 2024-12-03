@@ -1,7 +1,7 @@
 package slasched
 
 import (
-	"fmt"
+	"strconv"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -10,22 +10,26 @@ import (
 
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
+	procId        Tid
 	machineId     Tid
 	timeStarted   Tftick
 	timeDone      Tftick
 	deadline      Tftick
 	maxComp       Tftick
+	compDone      Tftick
 	procInternals *ProcInternals
 }
 
 func (p *Proc) String() string {
-	return p.procInternals.String() +
+	return strconv.Itoa(int(p.procId)) + ": " +
+		"comp done: " + p.compDone.String() +
 		", deadline: " + p.deadline.String() +
 		", time started: " + p.timeStarted.String()
 }
 
-func newProvProc(currTick Tftick, privProc *ProcInternals) *Proc {
+func newProvProc(procId Tid, currTick Tftick, privProc *ProcInternals) *Proc {
 	return &Proc{
+		procId:        procId,
 		machineId:     -1,
 		timeStarted:   currTick,
 		timeDone:      0,
@@ -33,17 +37,6 @@ func newProvProc(currTick Tftick, privProc *ProcInternals) *Proc {
 		maxComp:       privProc.maxComp,
 		procInternals: privProc,
 	}
-}
-
-// runs proc for the number of ticks passed or until the proc is done,
-// returning whether the proc is done and how many ticks were run
-func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
-	return p.procInternals.runTillOutOrDone(toRun)
-}
-
-// returns the deadline (in absolute terms)
-func (p *Proc) getDeadline() Tftick {
-	return p.deadline
 }
 
 // returns the deadline (relative, offset by time started)
@@ -57,19 +50,28 @@ func (p *Proc) getSlack(currTime Tftick) Tftick {
 }
 
 func (p *Proc) waitTime(currTime Tftick) Tftick {
-	return (currTime - p.timeStarted) + p.compUsed()
+	return (currTime - p.timeStarted) - p.compUsed()
 }
 
-func (p *Proc) getExpectedCompLeft() Tftick {
+func (p *Proc) getMaxCompLeft() Tftick {
 	return p.maxComp - p.compUsed()
 }
 
-func (p *Proc) memUsed() Tmem {
-	return p.procInternals.memUsed()
+func (p *Proc) compUsed() Tftick {
+	return p.compDone
 }
 
-func (p *Proc) compUsed() Tftick {
-	return p.procInternals.compDone
+func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
+
+	workLeft := p.procInternals.actualComp - p.compDone
+
+	if workLeft <= toRun {
+		p.compDone = p.procInternals.actualComp
+		return workLeft, true
+	} else {
+		p.compDone += toRun
+		return toRun, false
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -80,17 +82,8 @@ func (p *Proc) compUsed() Tftick {
 type ProcInternals struct {
 	deadline   Tftick
 	maxComp    Tftick
-	compDone   Tftick
 	actualComp Tftick
 	procType   ProcType
-}
-
-func (p *ProcInternals) String() string {
-	return fmt.Sprintf("compDone %v", p.compDone)
-}
-
-func (p *ProcInternals) memUsed() Tmem {
-	return p.procType.getMemoryUsage()
 }
 
 func newPrivProc(sla Tftick, maxComp Tftick, procType ProcType) *ProcInternals {
@@ -104,18 +97,5 @@ func newPrivProc(sla Tftick, maxComp Tftick, procType ProcType) *ProcInternals {
 		actualComp = maxComp
 	}
 
-	return &ProcInternals{sla, maxComp, 0, actualComp, procType}
-}
-
-func (p *ProcInternals) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
-
-	workLeft := p.actualComp - p.compDone
-
-	if workLeft <= toRun {
-		p.compDone = p.actualComp
-		return workLeft, true
-	} else {
-		p.compDone += toRun
-		return toRun, false
-	}
+	return &ProcInternals{sla, maxComp, actualComp, procType}
 }

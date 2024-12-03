@@ -1,5 +1,9 @@
 package slasched
 
+import (
+	"math"
+)
+
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {
 	q []*Proc
@@ -20,16 +24,6 @@ func (q *Queue) String() string {
 
 func (q *Queue) getQ() []*Proc {
 	return q.q
-}
-
-func (q *Queue) remove(toRemove *Proc) {
-	for i := 0; i < len(q.q); i++ {
-		if q.q[i] == toRemove {
-			newQ := append(q.q[:i], q.q[i+1:]...)
-			q.q = newQ
-			return
-		}
-	}
 }
 
 func (q *Queue) enq(p *Proc) {
@@ -59,4 +53,27 @@ func (q *Queue) deq() *Proc {
 
 func (q *Queue) qlen() int {
 	return len(q.q)
+}
+
+func (q *Queue) getHOLSlack(currTime Tftick) Tftick {
+
+	if len(q.q) == 0 {
+		return Tftick(1000)
+	}
+
+	runningWaitTime := Tftick(0)
+	headSlack := q.q[0].getSlack(currTime)
+	extraSlack := Tftick(0)
+
+	for _, p := range q.q {
+		currExtra := p.getSlack(currTime) - runningWaitTime
+		if currExtra < extraSlack {
+			extraSlack = currExtra
+		}
+		runningWaitTime += p.getMaxCompLeft()
+	}
+
+	holSlack := Tftick(math.Min(float64(headSlack), float64(extraSlack)))
+
+	return holSlack
 }
