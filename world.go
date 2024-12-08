@@ -27,24 +27,32 @@ type World struct {
 	machines      map[Tid]*Machine
 	idealDC       *IdealDC
 	gs            *GlobalSched
-	app           Website
+	tenants       []*Ttenant
 }
 
-func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
+func newWorld(numMachines int, numCores int, nGenPerTick int, tenants map[Tid]int) *World {
 	w := &World{
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
 	}
-	w.idealDC = newIdealDC(numMachines*numCores, &w.currTick, nGenPerTick)
-	idleHeap := &IdleHeap{
-		heap: &MinHeap{},
+	w.tenants = make([]*Ttenant, len(tenants))
+	totNTok := 0
+	for tid, ntok := range tenants {
+		w.tenants[tid] = newTenant(ntok)
+		totNTok += ntok
 	}
+	if totNTok <= (numCores * numMachines) {
+		fmt.Println("Number of tokens exceeds amount of resources")
+		return nil
+	}
+	w.idealDC = newIdealDC(numMachines*numCores, &w.currTick, nGenPerTick, w.tenants)
 	for i := 0; i < numMachines; i++ {
 		mid := Tid(i)
-		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick, nGenPerTick)
+		w.machines[Tid(i)] = newMachine(mid, numCores, &w.currTick, nGenPerTick)
 	}
-	w.gs = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap, w.idealDC)
+	w.gs = newGolbalSched(w.machines, &w.currTick, nGenPerTick, w.idealDC)
+
 	return w
 }
 
@@ -56,8 +64,11 @@ func (w *World) String() string {
 	return str
 }
 
-func (w *World) genLoad(nProcs int) int {
-	userProcs := w.app.genLoad(nProcs)
+func (w *World) genLoad() int {
+	userProcs := make([]*ProcInternals, 0)
+	for _, tn := range w.tenants {
+		userProcs = append(userProcs, tn.genLoad(w.numProcsToGen)...)
+	}
 	for _, up := range userProcs {
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
 		w.currProcNum += 1
@@ -79,10 +90,10 @@ func (w *World) printAllProcs() {
 	}
 }
 
-func (w *World) Tick(numProcs int) {
+func (w *World) Tick() {
 	w.printAllProcs()
 	// enqueues things into the procq
-	w.genLoad(numProcs)
+	w.genLoad()
 	// dequeues things from procq to machines
 	w.gs.placeProcs()
 	// runs each machine for a tick
@@ -92,7 +103,7 @@ func (w *World) Tick(numProcs int) {
 
 func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
-		w.Tick(w.numProcsToGen)
+		w.Tick()
 	}
 	fmt.Printf(" %v: idle \n %v: k-choices \n", w.gs.numFoundIdle, w.gs.numUsedKChoices)
 }

@@ -3,7 +3,6 @@ package slasched
 import (
 	"fmt"
 	"math"
-	"sort"
 )
 
 const (
@@ -14,17 +13,15 @@ type Sched struct {
 	machineId               Tid
 	numCores                int
 	activeQ                 map[Tid]*Queue
-	idleHeap                *IdleHeap
 	currTickPtr             *Tftick
 	worldNumProcsGenPerTick int
 }
 
-func newSched(numCores int, idleHeap *IdleHeap, mid Tid, currTickPtr *Tftick, nGenPerTick int) *Sched {
+func newSched(numCores int, mid Tid, currTickPtr *Tftick, nGenPerTick int) *Sched {
 	sd := &Sched{
 		machineId:               mid,
 		numCores:                numCores,
 		activeQ:                 make(map[Tid]*Queue),
-		idleHeap:                idleHeap,
 		currTickPtr:             currTickPtr,
 		worldNumProcsGenPerTick: nGenPerTick,
 	}
@@ -45,9 +42,9 @@ func (sd *Sched) tick() {
 func (sd *Sched) printAllProcs() {
 
 	for i := 0; i < sd.numCores; i++ {
-		for _, p := range sd.activeQ[Tid(i)].getQ() {
+		for _, p := range sd.activeQ[Tid(i)].getAllProcs() {
 			toWrite := fmt.Sprintf("%v, %v, 1, %v, %v, %v\n", int(*sd.currTickPtr), sd.machineId,
-				float64(p.deadline), float64(p.procInternals.actualComp), float64(p.compUsed()))
+				float64(p.priority), float64(p.procInternals.actualComp), float64(p.compDone))
 			logWrite(CURR_PROCS, toWrite)
 		}
 	}
@@ -59,45 +56,21 @@ func (sd *Sched) placeProc(newProc *Proc, coreId Tid) {
 
 }
 
-// checks if a proc can fit:
-// a) if it has enough slack to accomodate procs with a lower deadline, and
-// b) if procs with a larger deadline have enough slack to accomodate it
-func (sd *Sched) okToPlace(newProc *Proc) (bool, Tid) {
+func (sd *Sched) tryPlace(newProc *Proc) (Tftick, Tid) {
 
-	// fmt.Printf("--- running okToPlace: %v, %v \n", sd.currTick, sd.machineId)
-outer:
-	for currCore := 0; currCore < sd.numCores; currCore++ {
+	// TODO:
 
-		fullList := append(make([]*Proc, 0, len(sd.activeQ[Tid(currCore)].getQ())+1), sd.activeQ[Tid(currCore)].getQ()...)
-		fullList = append(fullList, newProc)
-		sort.Slice(fullList, func(i, j int) bool {
-			return fullList[i].deadline < fullList[j].deadline
-		})
+	// check if the tenant has the tokens for it currently?
 
-		runningWaitTime := Tftick(0)
-
-		for _, p := range fullList {
-
-			if float64(p.getSlack(*sd.currTickPtr)-runningWaitTime) < 0.0 {
-				continue outer
-			}
-			runningWaitTime += p.getMaxCompLeft()
-		}
-
-		return true, Tid(currCore)
-
-	}
-
-	return false, -1
+	return 0, 0
 
 }
 
-// do numCores ticks of computation (only on procs in the activeQ)
 func (sd *Sched) simulateRunProcs() {
 
 	sum_qlens := 0
 	for i := 0; i < sd.numCores; i++ {
-		sum_qlens += sd.activeQ[Tid(i)].qlen()
+		sum_qlens += sd.activeQ[Tid(i)].numProcs()
 	}
 
 	toWrite := fmt.Sprintf("%v, %v, %v, %v", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), sd.machineId, sum_qlens)
@@ -114,7 +87,7 @@ func (sd *Sched) simulateRunProcs() {
 		toWrite := fmt.Sprintf("%v, %v, %v, curr q ACTIVE: %v \n", int(*sd.currTickPtr), sd.machineId, currCore, sd.activeQ[Tid(currCore)].String())
 		logWrite(SCHED, toWrite)
 
-		for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && sd.activeQ[Tid(currCore)].qlen() > 0 {
+		for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && sd.activeQ[Tid(currCore)].numProcs() > 0 {
 
 			procToRun := sd.activeQ[Tid(currCore)].deq()
 
@@ -137,36 +110,9 @@ func (sd *Sched) simulateRunProcs() {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *sd.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
-				if (procToRun.timeDone - procToRun.timeStarted) > procToRun.deadline {
-					toWrite := fmt.Sprintf("PROC OVER: %v \n", procToRun.String())
-					logWrite(SCHED, toWrite)
-				}
-
-				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, %v\n", int(*sd.currTickPtr), procToRun.machineId, procToRun.procInternals.procType, float64(procToRun.deadline), float64(procToRun.timeDone-procToRun.timeStarted), float64(procToRun.procInternals.actualComp))
+				toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*sd.currTickPtr), procToRun.procInternals.procType, float64(procToRun.priority), float64(procToRun.timeDone-procToRun.timeStarted), float64(procToRun.procInternals.actualComp))
 				logWrite(DONE_PROCS, toWrite)
 			}
-		}
-	}
-
-	// do this for every core
-	for coreNum := 0; coreNum < sd.numCores; coreNum++ {
-		// use core num to get info
-		if sd.activeQ[Tid(coreNum)].getHOLSlack(*sd.currTickPtr) > IDLE_HEAP_THRESHOLD {
-
-			toWrite := fmt.Sprintf("adding machine %d core %v to idle \n", sd.machineId, coreNum)
-			logWrite(SCHED, toWrite)
-
-			sd.idleHeap.lock.Lock()
-			// also if it is already in the heap, then replace it with the new value
-			if contains(sd.idleHeap.heap, TmachineCoreId{sd.machineId, Tid(coreNum)}) {
-				remove(sd.idleHeap.heap, TmachineCoreId{sd.machineId, Tid(coreNum)})
-			}
-			toPush := TIdleMachine{
-				compIdleFor:   sd.activeQ[Tid(coreNum)].getHOLSlack(*sd.currTickPtr),
-				machineCoreId: TmachineCoreId{sd.machineId, Tid(coreNum)},
-			}
-			sd.idleHeap.heap.Push(toPush)
-			sd.idleHeap.lock.Unlock()
 		}
 	}
 

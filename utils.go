@@ -1,13 +1,15 @@
 package slasched
 
 import (
-	"container/heap"
 	"fmt"
 	"os"
+
+	"github.com/markphelps/optional"
 )
 
 type Tmem int
 type Tftick float64
+type TCompTokens optional.Int
 
 func (f Tftick) String() string {
 	return fmt.Sprintf("%.6fT", f)
@@ -61,24 +63,6 @@ func emptyFiles() {
 		os.Truncate(t.fileName(), 0)
 	}
 
-}
-
-func contains(h *MinHeap, value TmachineCoreId) bool {
-	for _, v := range *h {
-		if v.machineCoreId == value {
-			return true
-		}
-	}
-	return false
-}
-
-func remove(h *MinHeap, toRemove TmachineCoreId) {
-	for i := 0; i < h.Len(); i++ {
-		if (*h)[i].machineCoreId == toRemove {
-			heap.Remove(h, i)
-			break
-		}
-	}
 }
 
 func sampleNormal(mu, sigma float64) float64 {

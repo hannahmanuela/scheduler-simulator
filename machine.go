@@ -12,10 +12,10 @@ type Machine struct {
 	sched *Sched
 }
 
-func newMachine(mid Tid, idleHeap *IdleHeap, numCores int, currTickPtr *Tftick, nGenPerTick int) *Machine {
+func newMachine(mid Tid, numCores int, currTickPtr *Tftick, nGenPerTick int) *Machine {
 	sd := &Machine{
 		mid:   mid,
-		sched: newSched(numCores, idleHeap, mid, currTickPtr, nGenPerTick),
+		sched: newSched(numCores, mid, currTickPtr, nGenPerTick),
 	}
 	return sd
 }
