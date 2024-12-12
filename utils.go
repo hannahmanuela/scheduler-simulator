@@ -63,18 +63,18 @@ func emptyFiles() {
 
 }
 
-func contains(h *MinHeap, value TmachineCoreId) bool {
+func contains(h *MinHeap, value Tid) bool {
 	for _, v := range *h {
-		if v.machineCoreId == value {
+		if v.machine == value {
 			return true
 		}
 	}
 	return false
 }
 
-func remove(h *MinHeap, toRemove TmachineCoreId) {
+func remove(h *MinHeap, toRemove Tid) {
 	for i := 0; i < h.Len(); i++ {
-		if (*h)[i].machineCoreId == toRemove {
+		if (*h)[i].machine == toRemove {
 			heap.Remove(h, i)
 			break
 		}

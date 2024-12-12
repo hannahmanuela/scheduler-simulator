@@ -11,54 +11,33 @@ import (
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
 	procId        Tid
-	machineId     Tid
 	timeStarted   Tftick
 	timeDone      Tftick
-	deadline      Tftick
-	maxComp       Tftick
 	compDone      Tftick
 	procInternals *ProcInternals
 }
 
 func (p *Proc) String() string {
 	return strconv.Itoa(int(p.procId)) + ": " +
-		"comp done: " + p.compDone.String() +
-		", deadline: " + p.deadline.String() +
 		", time started: " + p.timeStarted.String()
 }
 
 func newProvProc(procId Tid, currTick Tftick, privProc *ProcInternals) *Proc {
 	return &Proc{
 		procId:        procId,
-		machineId:     -1,
 		timeStarted:   currTick,
 		timeDone:      0,
-		deadline:      privProc.deadline,
-		maxComp:       privProc.maxComp,
+		compDone:      0,
 		procInternals: privProc,
 	}
 }
 
-// returns the deadline (relative, offset by time started)
-func (p *Proc) getRelDeadline() Tftick {
-	return p.timeStarted + p.deadline
+func (p *Proc) willingToSpend() float32 {
+	return p.procInternals.willingToSpend
 }
 
-func (p *Proc) getSlack(currTime Tftick) Tftick {
-	ogSlack := p.deadline - p.maxComp
-	return ogSlack - p.waitTime(currTime)
-}
-
-func (p *Proc) waitTime(currTime Tftick) Tftick {
-	return (currTime - p.timeStarted) - p.compUsed()
-}
-
-func (p *Proc) getMaxCompLeft() Tftick {
-	return p.maxComp - p.compUsed()
-}
-
-func (p *Proc) compUsed() Tftick {
-	return p.compDone
+func (p *Proc) maxMem() Tmem {
+	return p.procInternals.maxMem
 }
 
 func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
@@ -80,22 +59,17 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 
 // this is the internal view of a proc, ie what the client of the provider would create/run
 type ProcInternals struct {
-	deadline   Tftick
-	maxComp    Tftick
-	actualComp Tftick
-	procType   ProcType
+	actualComp     Tftick
+	willingToSpend float32
+	maxMem         Tmem
 }
 
-func newPrivProc(sla Tftick, maxComp Tftick, procType ProcType) *ProcInternals {
+func newPrivProc(expectedComp float32, compVar float32, willingToSpend float32, maxMem Tmem) *ProcInternals {
 
-	// get actual comp from a normal distribution, assuming the sla left a buffer
-	slaWithoutBuffer := float64(sla) - procType.getExpectedSlaBuffer()*float64(sla)
-	actualComp := Tftick(sampleNormal(slaWithoutBuffer, procType.getExpectedProcDeviationVariance()))
+	actualComp := Tftick(sampleNormal(float64(expectedComp), float64(compVar)))
 	if actualComp < 0 {
 		actualComp = Tftick(0.3)
-	} else if actualComp > maxComp {
-		actualComp = maxComp
 	}
 
-	return &ProcInternals{sla, maxComp, actualComp, procType}
+	return &ProcInternals{actualComp, willingToSpend, maxMem}
 }

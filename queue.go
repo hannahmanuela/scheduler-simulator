@@ -1,8 +1,6 @@
 package slasched
 
-import (
-	"math"
-)
+import "math"
 
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {
@@ -33,7 +31,7 @@ func (q *Queue) enq(p *Proc) {
 	}
 
 	for index, currProc := range q.q {
-		if currProc.getRelDeadline() > p.getRelDeadline() {
+		if currProc.willingToSpend() < p.willingToSpend() {
 			q.q = append(q.q[:index+1], q.q[index:]...)
 			q.q[index] = p
 			return
@@ -55,25 +53,35 @@ func (q *Queue) qlen() int {
 	return len(q.q)
 }
 
-func (q *Queue) getHOLSlack(currTime Tftick) Tftick {
+func (q *Queue) checkKill(newProc *Proc) (Tid, float32) {
 
-	if len(q.q) == 0 {
-		return Tftick(1000)
-	}
-
-	runningWaitTime := Tftick(0)
-	headSlack := q.q[0].getSlack(currTime)
-	extraSlack := Tftick(0)
+	minMoneyThrownAway := float32(math.MaxFloat32)
+	procId := Tid(-1)
 
 	for _, p := range q.q {
-		currExtra := p.getSlack(currTime) - runningWaitTime
-		if currExtra < extraSlack {
-			extraSlack = currExtra
+		if (p.maxMem() > newProc.maxMem()) && (p.willingToSpend() < newProc.willingToSpend()) {
+			wldThrow := float32(float32(p.compDone) * p.willingToSpend())
+			if wldThrow < minMoneyThrownAway {
+				procId = p.procId
+				minMoneyThrownAway = wldThrow
+			}
 		}
-		runningWaitTime += p.getMaxCompLeft()
 	}
 
-	holSlack := Tftick(math.Min(float64(headSlack), float64(extraSlack)))
+	return procId, minMoneyThrownAway
 
-	return holSlack
+}
+
+func (q *Queue) kill(pid Tid) {
+
+	tmp := make([]*Proc, 0)
+
+	for _, currProc := range q.q {
+		if currProc.procId != pid {
+			tmp = append(tmp, currProc)
+		}
+	}
+
+	q.q = tmp
+
 }

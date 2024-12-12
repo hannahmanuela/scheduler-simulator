@@ -21,10 +21,10 @@ const (
 	DATA_PROCESS_BG_MAX_COMP = 700 // 3.5 s (30% slack)
 
 	// mem usage, in MB
-	// PAGE_STATIC_MEM_USG     = 20
-	// PAGE_DYNAMIC_MEM_USG    = 300
-	// DATA_PROCESS_FG_MEM_USG = 1000
-	// DATA_PROCESS_BG_MEM_USG = 10000
+	PAGE_STATIC_MEM_USG     = 20
+	PAGE_DYNAMIC_MEM_USG    = 300
+	DATA_PROCESS_FG_MEM_USG = 1000
+	DATA_PROCESS_BG_MEM_USG = 10000
 )
 
 // the types of procs the website will have
@@ -48,17 +48,21 @@ func (pt ProcType) getExpectedProcDeviationVariance() float64 {
 	return []float64{0.1, 0.4, 2, 100}[pt]
 }
 
-// exected buffer between declared sla and average compute necessary, as a fraction of the sla
-func (pt ProcType) getExpectedSlaBuffer() float64 {
-	// page static: 1ms, page dynamic: 4ms, data process fg: 50ms, data process bg: 3.5s
-	return []float64{0.2, 0.2, 0.1, 0.7}[pt]
+func (pt ProcType) getExpectedComp() int {
+	// page static: 5ms, page dynamic: 20ms, data process fg: 500ms, data process bg: 5ms
+	return []int{1, 4, 100, 1000}[pt]
 }
 
 // // the amount memory a proc of the given type will use (for now this is static)
-// func (pt ProcType) getMemoryUsage() Tmem {
-// 	// page static, page dynamic, data process fg, data process bg
-// 	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
-// }
+func (pt ProcType) getMemoryUsage() Tmem {
+	// page static, page dynamic, data process fg, data process bg
+	return []Tmem{PAGE_STATIC_MEM_USG, PAGE_DYNAMIC_MEM_USG, DATA_PROCESS_FG_MEM_USG, DATA_PROCESS_BG_MEM_USG}[pt]
+}
+
+func (pt ProcType) getWillingToSpend() float32 {
+	// page static, page dynamic, data process fg, data process bg
+	return []float32{3, 3.5, 2, 1.5}[pt]
+}
 
 type Website interface {
 	genLoad(nProcs int) []*ProcInternals
@@ -66,7 +70,6 @@ type Website interface {
 
 // the website struct itself
 type SimpleWebsite struct {
-	// cacheClnt CacheClnt
 }
 
 func newSimpleWebsite() *SimpleWebsite {
@@ -86,10 +89,10 @@ func (website *SimpleWebsite) genLoad(nProcs int) []*ProcInternals {
 	numStatic, numDynamic, numProcessFg, numProcessBg := website.genNumberOfProcs(nProcs)
 
 	// gen all the proc types, for now this is manual
-	procs = append(procs, website.genPageStaticProcs(numStatic)...)
-	procs = append(procs, website.genPageDynamicProcs(numDynamic)...)
-	procs = append(procs, website.genDataProcessFgProcs(numProcessFg)...)
-	procs = append(procs, website.genDataProcessBgProcs(numProcessBg)...)
+	procs = append(procs, website.genProcsOfType(PAGE_STATIC, numStatic)...)
+	procs = append(procs, website.genProcsOfType(PAGE_DYNAMIC, numDynamic)...)
+	procs = append(procs, website.genProcsOfType(DATA_PROCESS_FG, numProcessFg)...)
+	procs = append(procs, website.genProcsOfType(DATA_PROCESS_BG, numProcessBg)...)
 
 	return procs
 }
@@ -118,35 +121,10 @@ func (website *SimpleWebsite) genNumberOfProcs(totalNumProcs int) (int, int, int
 
 }
 
-func (website *SimpleWebsite) genPageStaticProcs(numProcs int) []*ProcInternals {
+func (website *SimpleWebsite) genProcsOfType(typeWanted ProcType, numProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(PAGE_STATIC_SLA, PAGE_STATIC_MAX_COMP, PAGE_STATIC)
-		// fmt.Printf("created new static page proc: %v\n", procs[i])
-	}
-	return procs
-}
-
-func (website *SimpleWebsite) genPageDynamicProcs(numProcs int) []*ProcInternals {
-	procs := make([]*ProcInternals, numProcs)
-	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(PAGE_DYNAMIC_SLA, PAGE_DYNAMIC_MAX_COMP, PAGE_DYNAMIC)
-	}
-	return procs
-}
-
-func (website *SimpleWebsite) genDataProcessFgProcs(numProcs int) []*ProcInternals {
-	procs := make([]*ProcInternals, numProcs)
-	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(DATA_PROCESS_FG_SLA, DATA_PROCESS_FG_MAX_COMP, DATA_PROCESS_FG)
-	}
-	return procs
-}
-
-func (website *SimpleWebsite) genDataProcessBgProcs(numProcs int) []*ProcInternals {
-	procs := make([]*ProcInternals, numProcs)
-	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(DATA_PROCESS_BG_SLA, DATA_PROCESS_BG_MAX_COMP, DATA_PROCESS_BG)
+		procs[i] = newPrivProc(float32(typeWanted.getExpectedComp()), float32(typeWanted.getExpectedProcDeviationVariance()), typeWanted.getWillingToSpend(), typeWanted.getMemoryUsage())
 	}
 	return procs
 }

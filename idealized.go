@@ -3,67 +3,63 @@ package slasched
 import (
 	"fmt"
 	"math"
-	"sort"
+)
+
+const (
+	MONEY_WASTE_THRESHOLD = 0.5
 )
 
 type IdealDC struct {
 	currTickPtr             *Tftick
 	procQ                   *Queue
 	amtWorkPerTick          int
+	totalMem                Tmem
 	worldNumProcsGenPerTick int
 }
 
-func newIdealDC(amtWorkPerTick int, currTickPtr *Tftick, worldNumProcsGenPerTick int) *IdealDC {
+func newIdealDC(amtWorkPerTick int, totMem Tmem, currTickPtr *Tftick, worldNumProcsGenPerTick int) *IdealDC {
 	return &IdealDC{
 		currTickPtr:             currTickPtr,
 		procQ:                   newQueue(),
 		amtWorkPerTick:          amtWorkPerTick,
+		totalMem:                totMem,
 		worldNumProcsGenPerTick: worldNumProcsGenPerTick,
 	}
 
 }
 
-func (idc *IdealDC) addProc(newProc *Proc) {
-	idc.procQ.enq(newProc)
+func (idc *IdealDC) memFree() Tmem {
+	currMemUsed := idc.totalMem
+
+	for _, p := range idc.procQ.getQ() {
+		currMemUsed += p.maxMem()
+	}
+
+	return idc.totalMem - currMemUsed
 }
 
-func (idc *IdealDC) okToPlace(newProc *Proc) bool {
+func (idc *IdealDC) potPlaceProc(newProc *Proc) bool {
 
-	fullList := append(make([]*Proc, 0, len(idc.procQ.getQ())+1), idc.procQ.getQ()...)
-	fullList = append(fullList, newProc)
-	sort.Slice(fullList, func(i, j int) bool {
-		return fullList[i].deadline < fullList[j].deadline
-	})
-
-	coresToRunningWaitTime := make(map[int]Tftick)
-	for i := 0; i < idc.amtWorkPerTick; i++ {
-		coresToRunningWaitTime[i] = 0
+	// if it just fits in terms of memory do it
+	if newProc.maxMem() < idc.memFree() {
+		idc.procQ.enq(newProc)
+		return true
 	}
 
-	getAddMinRunningWaitTime := func(toAdd Tftick) Tftick {
-		minVal := Tftick(math.MaxFloat32)
-		minCore := -1
-		for i := 0; i < idc.amtWorkPerTick; i++ {
-			if coresToRunningWaitTime[i] < minVal {
-				minVal = coresToRunningWaitTime[i]
-				minCore = i
-			}
-		}
-		coresToRunningWaitTime[minCore] += toAdd
-		return minVal
-	}
-
-	for _, p := range fullList {
-
-		waitTime := getAddMinRunningWaitTime(p.getMaxCompLeft())
-		if float64(p.getSlack(*idc.currTickPtr)-waitTime) < 0.0 {
-			return false
+	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
+	procToKill, minMoneyWaste := idc.procQ.checkKill(newProc)
+	if procToKill > 0 {
+		if minMoneyWaste < MONEY_WASTE_THRESHOLD {
+			idc.procQ.kill(procToKill)
+			return true
 		}
 	}
 
-	return true
+	return false
+
 }
 
+// ok so I have a bunch of procs that all fit memory wise, so really what I'm doing
 func (idc *IdealDC) tick() {
 
 	toWrite := fmt.Sprintf("%v @ %v: WHOLE QUEUE %v\n", idc.worldNumProcsGenPerTick, idc.currTickPtr, idc.procQ.String())
@@ -100,7 +96,7 @@ func (idc *IdealDC) tick() {
 
 	for idc.procQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 {
 
-		// distribute rest of procs among cores
+		// run by amount of money willing to spend
 		coreToProc := make(map[int]*Proc, 0)
 		for i := 0; i < idc.amtWorkPerTick; i++ {
 			p := idc.procQ.deq()
@@ -129,15 +125,10 @@ func (idc *IdealDC) tick() {
 			totalTicksLeftToGive -= ticksUsed
 
 			if !done {
-				// TODO: check this
 				toReq = append(toReq, procToRun)
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *idc.currTickPtr + (1 - ticksLeftPerCore[currCore])
-
-				if procToRun.timeDone-procToRun.timeStarted > procToRun.deadline {
-					fmt.Printf("IDEAL PROC OVER: %v, time done: %v\n", procToRun.String(), procToRun.timeDone)
-				}
 			}
 
 		}
@@ -154,42 +145,3 @@ func (idc *IdealDC) tick() {
 	toWrite = fmt.Sprintf(", %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)))
 	logWrite(IDEAL_USAGE, toWrite)
 }
-
-// for currCore := 0; currCore < idc.amtWorkPerTick; currCore++ {
-
-// 	ticksLeftToGive := Tftick(1)
-// 	ranDesignated := false
-
-// inner:
-// 	for ticksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 {
-
-// 		var procToRun *Proc
-// 		if !ranDesignated {
-// 			procToRun = coreToProc[currCore]
-// 			ranDesignated = true
-// 		} else {
-// 			procToRun = idc.procQ.deq()
-// 		}
-
-// 		if procToRun == nil {
-// 			break inner
-// 		}
-
-// 		ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftToGive)
-
-// 		ticksLeftToGive -= ticksUsed
-// 		totalTicksLeftToGive -= ticksUsed
-
-// 		if !done {
-// 			// this works because the proc ran up until the end of the tick, so nothing else should be allowed to work steal it
-// 			toReq = append(toReq, procToRun)
-// 		} else {
-// 			// if the proc is done, update the ticksPassed to be exact for metrics etc
-// 			procToRun.timeDone = *idc.currTickPtr + (1 - ticksLeftToGive)
-
-// 			if procToRun.timeDone-procToRun.timeStarted > procToRun.deadline {
-// 				fmt.Printf("IDEAL PROC OVER: %v, time done: %v\n", procToRun.String(), procToRun.timeDone)
-// 			}
-// 		}
-// 	}
-// }

@@ -1,12 +1,11 @@
 package slasched
 
 import (
-	"fmt"
 	"math/rand"
 )
 
 const (
-	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
+	MEM_PER_MACHINE = 32000
 
 	IDLE_HEAP_THRESHOLD = 1
 
@@ -36,7 +35,7 @@ func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
 	}
-	w.idealDC = newIdealDC(numMachines*numCores, &w.currTick, nGenPerTick)
+	w.idealDC = newIdealDC(numMachines*numCores, Tmem(numMachines*MEM_PER_MACHINE), &w.currTick, nGenPerTick)
 	idleHeap := &IdleHeap{
 		heap: &MinHeap{},
 	}
@@ -94,5 +93,4 @@ func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
 		w.Tick(w.numProcsToGen)
 	}
-	fmt.Printf(" %v: idle \n %v: k-choices \n", w.gs.numFoundIdle, w.gs.numUsedKChoices)
 }
