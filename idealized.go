@@ -74,7 +74,7 @@ func (idc *IdealDC) tick() {
 		coresLeft[i] = true
 	}
 
-	toWrite = fmt.Sprintf("%v, %v, %v, %v", idc.worldNumProcsGenPerTick, int(*idc.currTickPtr), -1, idc.procQ.qlen())
+	toWrite = fmt.Sprintf("%v, %v", idc.worldNumProcsGenPerTick, int(*idc.currTickPtr))
 	logWrite(IDEAL_USAGE, toWrite)
 
 	putProcOnCoreWithMaxTimeLeft := func() int {
@@ -129,6 +129,9 @@ func (idc *IdealDC) tick() {
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *idc.currTickPtr + (1 - ticksLeftPerCore[currCore])
+
+				toWrite := fmt.Sprintf("%v, %.2f, %.2f, %.2f \n", idc.worldNumProcsGenPerTick, procToRun.willingToSpend(), float32(procToRun.timeDone-procToRun.timeStarted), float32(procToRun.compDone))
+				logWrite(DONE_PROCS, toWrite)
 			}
 
 		}

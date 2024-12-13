@@ -8,18 +8,6 @@ const (
 	FRACTION_DATA_PROCESS_FG = 0.047 // 10
 	FRACTION_DATA_PROCESS_BG = 0.003 // 05
 
-	// Tick = 5 ms
-	// slas for diff proc types
-	PAGE_STATIC_SLA     = 1    // 5 ms
-	PAGE_DYNAMIC_SLA    = 4    // 20 ms
-	DATA_PROCESS_FG_SLA = 100  // 500 ms
-	DATA_PROCESS_BG_SLA = 1000 // 5 s
-
-	PAGE_STATIC_MAX_COMP     = 0.8 // 4 ms (20% slack)
-	PAGE_DYNAMIC_MAX_COMP    = 3.6 // 18 ms (10% slack)
-	DATA_PROCESS_FG_MAX_COMP = 90  // 450 ms (10% slack)
-	DATA_PROCESS_BG_MAX_COMP = 700 // 3.5 s (30% slack)
-
 	// mem usage, in MB
 	PAGE_STATIC_MEM_USG     = 20
 	PAGE_DYNAMIC_MEM_USG    = 300
