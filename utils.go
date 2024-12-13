@@ -10,7 +10,7 @@ type Tmem int
 type Tftick float64
 
 func (f Tftick) String() string {
-	return fmt.Sprintf("%.6fT", f)
+	return fmt.Sprintf("%.2fT", f)
 }
 
 type PrintType int

@@ -81,29 +81,30 @@ func (gs *GlobalSched) MachinesString() string {
 	return str
 }
 
-func (gs *GlobalSched) placeProcs() {
+func (gs *GlobalSched) placeProcsIdeal() {
 	// setup
 	p := gs.getProc()
+
+	toReq := make([]*Proc, 0)
 
 	for p != nil {
 		// place given proc
 
 		// try placing on the ideal
-		procCopy := newProvProc(p.procId, *gs.currTickPtr, p.procInternals)
-		// TODO: add it to a q? (if not placed, as returned by func below)
-		gs.idealDC.potPlaceProc(procCopy)
+		// procCopy := newProvProc(p.procId, *gs.currTickPtr, p.procInternals)
+		placed := gs.idealDC.potPlaceProc(p)
 
-		machineToUse := gs.pickMachine(p)
-
-		if machineToUse == nil {
-			// TODO: add it to a q?
+		if !placed {
+			toReq = append(toReq, p)
 			p = gs.getProc()
 			continue
 		}
 
-		// place proc on chosen machine
-		machineToUse.sched.placeProc(p)
 		p = gs.getProc()
+	}
+
+	for _, p := range toReq {
+		gs.putProc(p)
 	}
 
 }

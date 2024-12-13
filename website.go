@@ -65,7 +65,7 @@ func (pt ProcType) getWillingToSpend() float32 {
 }
 
 type Website interface {
-	genLoad(nProcs int) []*ProcInternals
+	genLoad(nProcs int, tenantId Tid) []*ProcInternals
 }
 
 // the website struct itself
@@ -82,17 +82,17 @@ func newSimpleWebsite() *SimpleWebsite {
 // - process inputted user data (foreground, eg processes an uploading photo/video)
 // - process user data (background, eg run data warehouse update flows)
 
-func (website *SimpleWebsite) genLoad(nProcs int) []*ProcInternals {
+func (website *SimpleWebsite) genLoad(nProcs int, tenantId Tid) []*ProcInternals {
 	// nproc := int(website.poisson.Rand())
 	procs := make([]*ProcInternals, 0)
 
 	numStatic, numDynamic, numProcessFg, numProcessBg := website.genNumberOfProcs(nProcs)
 
 	// gen all the proc types, for now this is manual
-	procs = append(procs, website.genProcsOfType(PAGE_STATIC, numStatic)...)
-	procs = append(procs, website.genProcsOfType(PAGE_DYNAMIC, numDynamic)...)
-	procs = append(procs, website.genProcsOfType(DATA_PROCESS_FG, numProcessFg)...)
-	procs = append(procs, website.genProcsOfType(DATA_PROCESS_BG, numProcessBg)...)
+	procs = append(procs, website.genProcsOfType(PAGE_STATIC, numStatic, tenantId)...)
+	procs = append(procs, website.genProcsOfType(PAGE_DYNAMIC, numDynamic, tenantId)...)
+	procs = append(procs, website.genProcsOfType(DATA_PROCESS_FG, numProcessFg, tenantId)...)
+	procs = append(procs, website.genProcsOfType(DATA_PROCESS_BG, numProcessBg, tenantId)...)
 
 	return procs
 }
@@ -121,10 +121,10 @@ func (website *SimpleWebsite) genNumberOfProcs(totalNumProcs int) (int, int, int
 
 }
 
-func (website *SimpleWebsite) genProcsOfType(typeWanted ProcType, numProcs int) []*ProcInternals {
+func (website *SimpleWebsite) genProcsOfType(typeWanted ProcType, numProcs int, tenantId Tid) []*ProcInternals {
 	procs := make([]*ProcInternals, numProcs)
 	for i := 0; i < numProcs; i++ {
-		procs[i] = newPrivProc(float32(typeWanted.getExpectedComp()), float32(typeWanted.getExpectedProcDeviationVariance()), typeWanted.getWillingToSpend(), typeWanted.getMemoryUsage())
+		procs[i] = newPrivProc(float32(typeWanted.getExpectedComp()), float32(typeWanted.getExpectedProcDeviationVariance()), typeWanted.getWillingToSpend(), typeWanted.getMemoryUsage(), tenantId)
 	}
 	return procs
 }

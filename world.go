@@ -12,7 +12,7 @@ const (
 	VERBOSE_PROC_PRINTS      = false
 	VERBOSE_SCHED_INFO       = false
 	VERBOSE_USAGE_STATS      = true
-	VERBOSE_IDEAL_SCHED_INFO = false
+	VERBOSE_IDEAL_SCHED_INFO = true
 )
 
 const SEED = 12345
@@ -26,14 +26,18 @@ type World struct {
 	machines      map[Tid]*Machine
 	idealDC       *IdealDC
 	gs            *GlobalSched
-	app           Website
+	tenants       []*Ttenant
 }
 
-func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
+func newWorld(numMachines int, numCores int, nGenPerTick int, numTenants int) *World {
 	w := &World{
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
+	}
+	w.tenants = make([]*Ttenant, numTenants)
+	for tid := 0; tid < numTenants; tid++ {
+		w.tenants[tid] = newTenant()
 	}
 	w.idealDC = newIdealDC(numMachines*numCores, Tmem(numMachines*MEM_PER_MACHINE), &w.currTick, nGenPerTick)
 	idleHeap := &IdleHeap{
@@ -56,7 +60,10 @@ func (w *World) String() string {
 }
 
 func (w *World) genLoad(nProcs int) int {
-	userProcs := w.app.genLoad(nProcs)
+	userProcs := make([]*ProcInternals, 0)
+	for _, tn := range w.tenants {
+		userProcs = append(userProcs, tn.genLoad(w.numProcsToGen)...)
+	}
 	for _, up := range userProcs {
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
 		w.currProcNum += 1
@@ -65,10 +72,10 @@ func (w *World) genLoad(nProcs int) int {
 	return len(userProcs)
 }
 
-func (w *World) compute() {
-	for _, m := range w.machines {
-		m.sched.tick()
-	}
+func (w *World) computeIdeal() {
+	// for _, m := range w.machines {
+	// 	m.sched.tick()
+	// }
 	w.idealDC.tick()
 }
 
@@ -83,9 +90,9 @@ func (w *World) Tick(numProcs int) {
 	// enqueues things into the procq
 	w.genLoad(numProcs)
 	// dequeues things from procq to machines
-	w.gs.placeProcs()
+	w.gs.placeProcsIdeal()
 	// runs each machine for a tick
-	w.compute()
+	w.computeIdeal()
 	w.currTick += 1
 }
 

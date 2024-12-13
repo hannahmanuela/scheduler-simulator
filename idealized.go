@@ -29,7 +29,7 @@ func newIdealDC(amtWorkPerTick int, totMem Tmem, currTickPtr *Tftick, worldNumPr
 }
 
 func (idc *IdealDC) memFree() Tmem {
-	currMemUsed := idc.totalMem
+	currMemUsed := Tmem(0)
 
 	for _, p := range idc.procQ.getQ() {
 		currMemUsed += p.maxMem()

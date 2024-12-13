@@ -11,6 +11,7 @@ import (
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
 	procId        Tid
+	tenantId      Tid
 	timeStarted   Tftick
 	timeDone      Tftick
 	compDone      Tftick
@@ -19,12 +20,14 @@ type Proc struct {
 
 func (p *Proc) String() string {
 	return strconv.Itoa(int(p.procId)) + ": " +
-		", time started: " + p.timeStarted.String()
+		", time started: " + p.timeStarted.String() +
+		", willing to spend: " + strconv.FormatFloat(float64(p.willingToSpend()), 'f', 3, 32)
 }
 
 func newProvProc(procId Tid, currTick Tftick, privProc *ProcInternals) *Proc {
 	return &Proc{
 		procId:        procId,
+		tenantId:      privProc.tenantId,
 		timeStarted:   currTick,
 		timeDone:      0,
 		compDone:      0,
@@ -59,17 +62,18 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 
 // this is the internal view of a proc, ie what the client of the provider would create/run
 type ProcInternals struct {
+	tenantId       Tid
 	actualComp     Tftick
 	willingToSpend float32
 	maxMem         Tmem
 }
 
-func newPrivProc(expectedComp float32, compVar float32, willingToSpend float32, maxMem Tmem) *ProcInternals {
+func newPrivProc(expectedComp float32, compVar float32, willingToSpend float32, maxMem Tmem, tenantId Tid) *ProcInternals {
 
 	actualComp := Tftick(sampleNormal(float64(expectedComp), float64(compVar)))
 	if actualComp < 0 {
 		actualComp = Tftick(0.3)
 	}
 
-	return &ProcInternals{actualComp, willingToSpend, maxMem}
+	return &ProcInternals{tenantId, actualComp, willingToSpend, maxMem}
 }
