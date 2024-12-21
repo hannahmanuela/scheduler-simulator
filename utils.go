@@ -3,6 +3,7 @@ package slasched
 import (
 	"container/heap"
 	"fmt"
+	"math"
 	"os"
 )
 
@@ -76,6 +77,11 @@ func remove(h *MinHeap, toRemove Tid) {
 			break
 		}
 	}
+}
+
+func ParetoSample(alpha, xm float64) float64 {
+	rnd := r.ExpFloat64()
+	return xm * math.Exp(rnd/alpha)
 }
 
 func sampleNormal(mu, sigma float64) float64 {

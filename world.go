@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	MEM_PER_MACHINE = 32000
+	MEM_PER_MACHINE = 512000
 
 	IDLE_HEAP_THRESHOLD = 1
 
@@ -25,7 +25,7 @@ type World struct {
 	currProcNum   int
 	machines      map[Tid]*Machine
 	idealDC       *IdealDC
-	gs            *GlobalSched
+	gs            *GlobalSched // TODO: actually, I think this should be a hashring or some sort of auto sharding thing
 	tenants       []*Ttenant
 }
 

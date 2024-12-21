@@ -18,7 +18,7 @@ ideal_usage_metrics["utilization"] = (numMachines * coresPerMachine - ideal_usag
 fig, ax = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
 
 # 2. First subplot: Scatter plot for timeAsPercentage
-high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700"]  # Example: Red, Blue, Green, Yellow
+high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]  # Example: Red, Blue, Green, Yellow
 
 # Create the stripplot with the custom high-contrast palette
 sns.stripplot(data=ideal_procs_done, x="nGenPerTick", y="timeAsPercentage", hue="willingToSpend", 

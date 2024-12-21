@@ -68,12 +68,7 @@ type ProcInternals struct {
 	maxMem         Tmem
 }
 
-func newPrivProc(expectedComp float32, compVar float32, willingToSpend float32, maxMem Tmem, tenantId Tid) *ProcInternals {
+func newPrivProc(actualComp float32, willingToSpend float32, maxMem int, tenantId Tid) *ProcInternals {
 
-	actualComp := Tftick(sampleNormal(float64(expectedComp), float64(compVar)))
-	if actualComp < 0 {
-		actualComp = Tftick(0.3)
-	}
-
-	return &ProcInternals{tenantId, actualComp, willingToSpend, maxMem}
+	return &ProcInternals{tenantId, Tftick(actualComp), willingToSpend, Tmem(maxMem)}
 }
