@@ -1,6 +1,7 @@
 package slasched
 
 import (
+	"fmt"
 	"math/rand"
 )
 
@@ -9,10 +10,9 @@ const (
 
 	IDLE_HEAP_THRESHOLD = 1
 
-	VERBOSE_PROC_PRINTS      = false
 	VERBOSE_SCHED_INFO       = false
 	VERBOSE_USAGE_STATS      = true
-	VERBOSE_IDEAL_SCHED_INFO = true
+	VERBOSE_IDEAL_SCHED_INFO = false
 )
 
 const SEED = 12345
@@ -25,7 +25,8 @@ type World struct {
 	currProcNum   int
 	machines      map[Tid]*Machine
 	idealDC       *IdealDC
-	gs            *GlobalSched // TODO: actually, I think this should be a hashring or some sort of auto sharding thing
+	idealQ        *Queue
+	gs            *GlobalSched
 	tenants       []*Ttenant
 }
 
@@ -34,6 +35,7 @@ func newWorld(numMachines int, numCores int, nGenPerTick int, numTenants int) *W
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
+		idealQ:        newQueue(),
 	}
 	w.tenants = make([]*Ttenant, numTenants)
 	for tid := 0; tid < numTenants; tid++ {
@@ -68,31 +70,44 @@ func (w *World) genLoad(nProcs int) int {
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
 		w.currProcNum += 1
 		w.gs.putProc(provProc)
+		copyForIdeal := newProvProc(Tid(w.currProcNum), w.currTick, up)
+		w.idealQ.enq(copyForIdeal)
 	}
 	return len(userProcs)
 }
 
-func (w *World) computeIdeal() {
-	// for _, m := range w.machines {
-	// 	m.sched.tick()
-	// }
-	w.idealDC.tick()
-}
+func (w *World) placeProcsIdeal() {
 
-func (w *World) printAllProcs() {
-	for _, m := range w.machines {
-		m.sched.printAllProcs()
+	toReq := make([]*Proc, 0)
+
+	p := w.idealQ.deq()
+
+	for p != nil {
+		placed := w.idealDC.potPlaceProc(p)
+
+		if !placed {
+			toReq = append(toReq, p)
+		}
+		p = w.idealQ.deq()
 	}
+
+	for _, p := range toReq {
+		w.idealQ.enq(p)
+	}
+
 }
 
 func (w *World) Tick(numProcs int) {
-	w.printAllProcs()
-	// enqueues things into the procq
 	w.genLoad(numProcs)
-	// dequeues things from procq to machines
-	w.gs.placeProcsIdeal()
-	// runs each machine for a tick
-	w.computeIdeal()
+
+	w.placeProcsIdeal()
+	w.gs.placeProcs()
+
+	for _, m := range w.machines {
+		m.sched.tick()
+	}
+	w.idealDC.tick()
+
 	w.currTick += 1
 }
 
@@ -100,4 +115,5 @@ func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
 		w.Tick(w.numProcsToGen)
 	}
+	fmt.Printf("num found idle: %v, num used k choices: %v\n", w.gs.nFoundIdle, w.gs.nUsedKChoices)
 }

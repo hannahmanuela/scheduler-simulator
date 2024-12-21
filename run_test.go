@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	N_TICK = 1000
+	N_TICK = 200
 
 	N_MACHINES          = 10
 	N_CORES_PER_MACHINE = 8
@@ -17,8 +17,8 @@ const (
 	// this is per tenant
 	// TODO: I think next step is to make this more differentiated -- do pareto distribution? has a mean and an avg vaguely, I think
 	// is whats pareto distributed the number of procs or their runtime? or both?
-	N_PROCS_GEN_PER_TICK_START = 4
-	N_PROCS_GEN_PER_TICK_END   = 8
+	N_PROCS_GEN_PER_TICK_START = 10
+	N_PROCS_GEN_PER_TICK_END   = 12
 )
 
 func TestRunWorld(t *testing.T) {

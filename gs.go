@@ -1,16 +1,18 @@
 package slasched
 
 import (
-	"container/heap"
 	"fmt"
 	"math"
 	"sync"
 )
 
 type TIdleMachine struct {
-	memAvail Tmem
-	machine  Tid
+	memAvail           Tmem
+	highestCostRunning float32
+	machine            Tid
 }
+
+// TODO: basically we can think of this as a free list, should treat it accordingly (this is a well-known problem)
 type MinHeap []TIdleMachine
 
 func (h MinHeap) Len() int           { return len(h) }
@@ -26,22 +28,39 @@ func (h *MinHeap) Pop() any {
 	return x
 }
 
-func popNextLarger(h *MinHeap, memNeeded Tmem) (TIdleMachine, bool) {
-	var tempHeap MinHeap
+func useNextLarger(h *MinHeap, memNeeded Tmem) (TIdleMachine, bool) {
 
-	for h.Len() > 0 {
-		item := heap.Pop(h).(TIdleMachine)
+	highestCost := float32(math.MaxFloat32)
+	indToUse := -1
+
+	for ind := 0; ind < len(*h); ind++ {
+
+		item := (*h)[ind]
 
 		if item.memAvail > memNeeded {
-			return item, true
+			if item.highestCostRunning < highestCost {
+				highestCost = item.highestCostRunning
+				indToUse = ind
+			}
 		}
-		tempHeap = append(tempHeap, item)
 	}
 
-	for _, item := range tempHeap {
-		heap.Push(h, item)
+	if indToUse < 0 {
+		return TIdleMachine{}, false
+	} else {
+		toRet := (*h)[indToUse]
+
+		// if there is mem left, update value
+		if (*h)[indToUse].memAvail-memNeeded > IDLE_HEAP_THRESHOLD {
+			(*h)[indToUse].memAvail -= memNeeded
+		} else {
+			// else remove it from the list
+			*h = append((*h)[:indToUse], (*h)[indToUse+1:]...)
+		}
+
+		return toRet, true
 	}
-	return TIdleMachine{}, false
+
 }
 
 type IdleHeap struct {
@@ -57,6 +76,8 @@ type GlobalSched struct {
 	procq           *Queue
 	currTickPtr     *Tftick
 	nProcGenPerTick int
+	nFoundIdle      int
+	nUsedKChoices   int
 }
 
 func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap, idealDC *IdealDC) *GlobalSched {
@@ -68,6 +89,8 @@ func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTic
 		procq:           newQueue(),
 		currTickPtr:     currTickPtr,
 		nProcGenPerTick: numGenPerTick,
+		nFoundIdle:      0,
+		nUsedKChoices:   0,
 	}
 
 	return gs
@@ -81,7 +104,7 @@ func (gs *GlobalSched) MachinesString() string {
 	return str
 }
 
-func (gs *GlobalSched) placeProcsIdeal() {
+func (gs *GlobalSched) placeProcs() {
 	// setup
 	p := gs.getProc()
 
@@ -91,14 +114,14 @@ func (gs *GlobalSched) placeProcsIdeal() {
 		// place given proc
 
 		// try placing on the ideal
-		// procCopy := newProvProc(p.procId, *gs.currTickPtr, p.procInternals)
-		placed := gs.idealDC.potPlaceProc(p)
+		machineToUse := gs.pickMachine(p)
 
-		if !placed {
+		if machineToUse == nil {
 			toReq = append(toReq, p)
 			p = gs.getProc()
 			continue
 		}
+		machineToUse.sched.placeProc(p)
 
 		p = gs.getProc()
 	}
@@ -115,11 +138,14 @@ func (gs *GlobalSched) placeProcsIdeal() {
 func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
 	gs.idleMachines.lock.Lock()
-	machine, found := popNextLarger(gs.idleMachines.heap, procToPlace.maxMem())
+	machine, found := useNextLarger(gs.idleMachines.heap, procToPlace.maxMem())
 	gs.idleMachines.lock.Unlock()
 	if found {
+		gs.nFoundIdle += 1
 		return gs.machines[machine.machine]
 	}
+
+	gs.nUsedKChoices += 1
 
 	// if no idle machine, use power of k choices (for now k = number of machines :D )
 	var machineToUse *Machine

@@ -131,7 +131,7 @@ func (idc *IdealDC) tick() {
 				procToRun.timeDone = *idc.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
 				toWrite := fmt.Sprintf("%v, %.2f, %.2f, %.2f \n", idc.worldNumProcsGenPerTick, procToRun.willingToSpend(), float32(procToRun.timeDone-procToRun.timeStarted), float32(procToRun.compDone))
-				logWrite(DONE_PROCS, toWrite)
+				logWrite(IDEAL_PROCS_DONE, toWrite)
 			}
 
 		}

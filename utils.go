@@ -17,9 +17,8 @@ func (f Tftick) String() string {
 type PrintType int
 
 const (
-	CURR_PROCS PrintType = iota
-	ADDED_PROCS
-	DONE_PROCS
+	PROCS_DONE PrintType = iota
+	IDEAL_PROCS_DONE
 	SCHED
 	USAGE
 	IDEAL_USAGE
@@ -27,11 +26,11 @@ const (
 )
 
 func (pt PrintType) fileName() string {
-	return []string{"results/procs_current.txt", "results/procs_added.txt", "results/ideal_procs_done.txt", "results/sched.txt", "results/usage.txt", "results/ideal_usage.txt", "results/ideal_sched.txt"}[pt]
+	return []string{"results/procs_done.txt", "results/ideal_procs_done.txt", "results/sched.txt", "results/usage.txt", "results/ideal_usage.txt", "results/ideal_sched.txt"}[pt]
 }
 
 func (pt PrintType) should_print() bool {
-	return []bool{VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_USAGE_STATS, VERBOSE_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_IDEAL_SCHED_INFO}[pt]
+	return []bool{VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_IDEAL_SCHED_INFO}[pt]
 }
 
 func logWrite(printType PrintType, toWrite string) {
@@ -53,7 +52,7 @@ func logWrite(printType PrintType, toWrite string) {
 }
 
 func emptyFiles() {
-	types := []PrintType{CURR_PROCS, ADDED_PROCS, DONE_PROCS, SCHED, USAGE, IDEAL_USAGE, IDEAL_SCHED}
+	types := []PrintType{PROCS_DONE, IDEAL_PROCS_DONE, SCHED, USAGE, IDEAL_USAGE, IDEAL_SCHED}
 
 	for _, t := range types {
 		os.Truncate(t.fileName(), 0)

@@ -38,14 +38,6 @@ func (sd *Sched) tick() {
 	sd.simulateRunProcs()
 }
 
-func (sd *Sched) printAllProcs() {
-
-	for _, p := range sd.activeQ.getQ() {
-		toWrite := fmt.Sprintf("%v, %v, %v, %v, %v\n", int(*sd.currTickPtr), sd.machineId, p.procId, float64(p.procInternals.actualComp), float64(p.compDone))
-		logWrite(CURR_PROCS, toWrite)
-	}
-}
-
 func (sd *Sched) memFree() Tmem {
 
 	memUsed := Tmem(0)
@@ -85,8 +77,8 @@ func (sd *Sched) simulateRunProcs() {
 		coresLeft[i] = true
 	}
 
-	toWrite := fmt.Sprintf("%v, %v, %v, %v", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), -1, sd.activeQ.qlen())
-	logWrite(IDEAL_USAGE, toWrite)
+	toWrite := fmt.Sprintf("%v, %v, %v", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), sd.machineId)
+	logWrite(USAGE, toWrite)
 
 	putProcOnCoreWithMaxTimeLeft := func() int {
 		minVal := Tftick(math.MaxFloat32)
@@ -128,7 +120,7 @@ func (sd *Sched) simulateRunProcs() {
 			}
 
 			toWrite := fmt.Sprintf("   giving %v to proc %v\n", ticksLeftPerCore[currCore], procToRun.String())
-			logWrite(IDEAL_SCHED, toWrite)
+			logWrite(SCHED, toWrite)
 
 			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 
@@ -140,6 +132,9 @@ func (sd *Sched) simulateRunProcs() {
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *sd.currTickPtr + (1 - ticksLeftPerCore[currCore])
+
+				toWrite := fmt.Sprintf("%v, %.2f, %.2f, %.2f \n", sd.worldNumProcsGenPerTick, procToRun.willingToSpend(), float32(procToRun.timeDone-procToRun.timeStarted), float32(procToRun.compDone))
+				logWrite(PROCS_DONE, toWrite)
 			}
 
 		}
@@ -153,8 +148,15 @@ func (sd *Sched) simulateRunProcs() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf(", %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)))
+	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), sd.memFree())
 	logWrite(USAGE, toWrite)
+
+	highestCost := float32(0)
+	for _, p := range sd.activeQ.getQ() {
+		if p.willingToSpend() > highestCost {
+			highestCost = p.willingToSpend()
+		}
+	}
 
 	sd.idleHeap.lock.Lock()
 	// also if it is already in the heap, then replace it with the new value
@@ -162,8 +164,9 @@ func (sd *Sched) simulateRunProcs() {
 		remove(sd.idleHeap.heap, sd.machineId)
 	}
 	toPush := TIdleMachine{
-		memAvail: sd.memFree(),
-		machine:  sd.machineId,
+		memAvail:           sd.memFree(),
+		highestCostRunning: highestCost,
+		machine:            sd.machineId,
 	}
 	sd.idleHeap.heap.Push(toPush)
 	sd.idleHeap.lock.Unlock()
