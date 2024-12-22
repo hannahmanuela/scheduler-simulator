@@ -28,9 +28,10 @@ func (h *MinHeap) Pop() any {
 	return x
 }
 
-func useNextLarger(h *MinHeap, memNeeded Tmem) (TIdleMachine, bool) {
+func useNextLarger(h *MinHeap, memNeeded Tmem, procPaying float32) (TIdleMachine, bool) {
 
-	highestCost := float32(math.MaxFloat32)
+	minHighestCost := float32(math.MaxFloat32)
+	maxMemAvail := Tmem(0.0)
 	indToUse := -1
 
 	for ind := 0; ind < len(*h); ind++ {
@@ -38,21 +39,33 @@ func useNextLarger(h *MinHeap, memNeeded Tmem) (TIdleMachine, bool) {
 		item := (*h)[ind]
 
 		if item.memAvail > memNeeded {
-			if item.highestCostRunning < highestCost {
-				highestCost = item.highestCostRunning
+			if (item.highestCostRunning < minHighestCost) ||
+				((item.highestCostRunning == minHighestCost) && (item.memAvail > maxMemAvail)) {
+				minHighestCost = item.highestCostRunning
+				maxMemAvail = item.memAvail
 				indToUse = ind
 			}
 		}
 	}
 
 	if indToUse < 0 {
+		toWrite := "   found no good machine \n"
+		logWrite(SCHED, toWrite)
 		return TIdleMachine{}, false
 	} else {
 		toRet := (*h)[indToUse]
 
+		toWrite := fmt.Sprintf("   min highest cost: %v, max mem avail: %v, info to use: %v \n", minHighestCost, maxMemAvail, toRet)
+		logWrite(SCHED, toWrite)
+
 		// if there is mem left, update value
 		if (*h)[indToUse].memAvail-memNeeded > IDLE_HEAP_THRESHOLD {
 			(*h)[indToUse].memAvail -= memNeeded
+
+			// also if keeping it, update the highest cost
+			if (*h)[indToUse].highestCostRunning < procPaying {
+				(*h)[indToUse].highestCostRunning = procPaying
+			}
 		} else {
 			// else remove it from the list
 			*h = append((*h)[:indToUse], (*h)[indToUse+1:]...)
@@ -91,6 +104,16 @@ func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTic
 		nProcGenPerTick: numGenPerTick,
 		nFoundIdle:      0,
 		nUsedKChoices:   0,
+	}
+
+	// initally add all machines to idle heap
+	for i := 0; i < len(machines); i++ {
+		toPush := TIdleMachine{
+			memAvail:           MEM_PER_MACHINE,
+			highestCostRunning: -1,
+			machine:            Tid(i),
+		}
+		gs.idleMachines.heap.Push(toPush)
 	}
 
 	return gs
@@ -137,8 +160,11 @@ func (gs *GlobalSched) placeProcs() {
 // 2. if there are none, do the ok to place call on all machines? on some machines? just random would be the closest to strictly following what they do...
 func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
+	toWrite := fmt.Sprintf("%v, GS placing proc %v \n", int(*gs.currTickPtr), procToPlace.String())
+	logWrite(SCHED, toWrite)
+
 	gs.idleMachines.lock.Lock()
-	machine, found := useNextLarger(gs.idleMachines.heap, procToPlace.maxMem())
+	machine, found := useNextLarger(gs.idleMachines.heap, procToPlace.maxMem(), procToPlace.willingToSpend())
 	gs.idleMachines.lock.Unlock()
 	if found {
 		gs.nFoundIdle += 1
@@ -164,7 +190,7 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 		return nil
 	}
 
-	toWrite := fmt.Sprintf("%v, GS placing proc: %v, the machine to use is %v \n", int(*gs.currTickPtr), procToPlace.String(), machineToUse)
+	toWrite = fmt.Sprintf("   used k choices: the machine to use is %v \n", machineToUse)
 	logWrite(SCHED, toWrite)
 
 	return machineToUse

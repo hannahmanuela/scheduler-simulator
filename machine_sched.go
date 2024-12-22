@@ -62,6 +62,7 @@ func (sd *Sched) okToPlace(newProc *Proc) float32 {
 }
 
 func (sd *Sched) placeProc(newProc *Proc) {
+	newProc.timePlaced = *sd.currTickPtr
 	sd.activeQ.enq(newProc)
 }
 
@@ -97,6 +98,9 @@ func (sd *Sched) simulateRunProcs() {
 
 	toReq := make([]*Proc, 0)
 
+	toWrite = fmt.Sprintf("%v @ %v, machine %v; has q %v\n", sd.worldNumProcsGenPerTick, sd.currTickPtr.String(), sd.machineId, sd.activeQ.String())
+	logWrite(SCHED, toWrite)
+
 	for sd.activeQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 {
 
 		// run by amount of money willing to spend
@@ -119,9 +123,6 @@ func (sd *Sched) simulateRunProcs() {
 				continue
 			}
 
-			toWrite := fmt.Sprintf("   giving %v to proc %v\n", ticksLeftPerCore[currCore], procToRun.String())
-			logWrite(SCHED, toWrite)
-
 			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 
 			ticksLeftPerCore[currCore] -= ticksUsed
@@ -133,7 +134,7 @@ func (sd *Sched) simulateRunProcs() {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *sd.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
-				toWrite := fmt.Sprintf("%v, %.2f, %.2f, %.2f \n", sd.worldNumProcsGenPerTick, procToRun.willingToSpend(), float32(procToRun.timeDone-procToRun.timeStarted), float32(procToRun.compDone))
+				toWrite := fmt.Sprintf("%v, %v, %v, %v \n", sd.worldNumProcsGenPerTick, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String())
 				logWrite(PROCS_DONE, toWrite)
 			}
 

@@ -10,7 +10,7 @@ ideal_usage_metrics = pd.read_csv("ideal_usage.txt", index_col=None, names=["nGe
 ideal_procs_done = pd.read_csv("ideal_procs_done.txt", index_col=None, names=["nGenPerTick", "willingToSpend", "timePassed", "compDone"])
 
 actual_usage_metrics = pd.read_csv("usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineId", "ticksLeftOver", "memFree"])
-actual_procs_done = pd.read_csv("procs_done.txt", index_col=None, names=["nGenPerTick", "willingToSpend", "timePassed", "compDone"])
+actual_procs_done = pd.read_csv("procs_done.txt", index_col=None, names=["nGenPerTick", "willingToSpend", "timePassed", "compDone", "timeQedAtGS"])
 
 # 1. Compute timeAsPercentage for both ideal and actual data
 ideal_procs_done["timeAsPercentage"] = (ideal_procs_done["timePassed"] / ideal_procs_done["compDone"]) * 100
@@ -34,7 +34,7 @@ ax[0, 0].set_title("Ideal: Time Passed as % of Completion by Willing to Spend")
 ax[0, 0].set_ylabel("Time Passed as % of compDone")
 
 # 4. Second subplot: Violin plot for Utilization for Ideal data
-sns.violinplot(data=ideal_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
+sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
 
 ax[1, 0].set_title("Ideal: Distribution of Utilization by nGenPerTick")
 ax[1, 0].set_xlabel("nGenPerTick")
@@ -48,7 +48,7 @@ ax[0, 1].set_title("Actual: Time Passed as % of Completion by Willing to Spend")
 ax[0, 1].set_ylabel("Time Passed as % of compDone")
 
 # 6. Fourth subplot: Violin plot for Utilization for Actual data
-sns.violinplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 1])
+sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 1])
 
 ax[1, 1].set_title("Actual: Distribution of Utilization by nGenPerTick")
 ax[1, 1].set_xlabel("nGenPerTick")

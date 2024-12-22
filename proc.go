@@ -13,6 +13,7 @@ type Proc struct {
 	procId        Tid
 	tenantId      Tid
 	timeStarted   Tftick
+	timePlaced    Tftick
 	timeDone      Tftick
 	compDone      Tftick
 	procInternals *ProcInternals
@@ -21,6 +22,7 @@ type Proc struct {
 func (p *Proc) String() string {
 	return strconv.Itoa(int(p.procId)) + ": " +
 		", time started: " + p.timeStarted.String() +
+		", time placed: " + p.timePlaced.String() +
 		", willing to spend: " + strconv.FormatFloat(float64(p.willingToSpend()), 'f', 3, 32)
 }
 
