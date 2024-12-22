@@ -10,7 +10,7 @@ const (
 
 	IDLE_HEAP_THRESHOLD = 1
 
-	VERBOSE_SCHED_INFO       = true
+	VERBOSE_SCHED_INFO       = false
 	VERBOSE_USAGE_STATS      = true
 	VERBOSE_IDEAL_SCHED_INFO = false
 )
