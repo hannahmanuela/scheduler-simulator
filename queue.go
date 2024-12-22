@@ -31,7 +31,9 @@ func (q *Queue) enq(p *Proc) {
 	}
 
 	for index, currProc := range q.q {
-		if currProc.willingToSpend() < p.willingToSpend() {
+		if currProc.willingToSpend() < p.willingToSpend() ||
+			((currProc.willingToSpend() == p.willingToSpend()) && currProc.timePlaced > p.timePlaced) ||
+			((currProc.willingToSpend() == p.willingToSpend()) && (currProc.timePlaced == p.timePlaced) && currProc.compDone < p.compDone) {
 			q.q = append(q.q[:index+1], q.q[index:]...)
 			q.q[index] = p
 			return

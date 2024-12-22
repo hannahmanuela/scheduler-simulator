@@ -18,7 +18,7 @@ const (
 	// TODO: I think next step is to make this more differentiated -- do pareto distribution? has a mean and an avg vaguely, I think
 	// is whats pareto distributed the number of procs or their runtime? or both?
 	N_PROCS_GEN_PER_TICK_START = 10
-	N_PROCS_GEN_PER_TICK_END   = 10
+	N_PROCS_GEN_PER_TICK_END   = 12
 )
 
 func TestRunWorld(t *testing.T) {
