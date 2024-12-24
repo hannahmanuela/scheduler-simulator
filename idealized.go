@@ -67,28 +67,32 @@ func (idc *IdealDC) tick() {
 
 	totalTicksLeftToGive := Tftick(idc.amtWorkPerTick)
 	ticksLeftPerCore := make(map[int]Tftick, 0)
-	coresLeft := make(map[int]bool, 0)
+	coresWithTicksLeft := make(map[int]bool, 0)
+	coresLeftThisRound := make(map[int]bool, 0)
 
 	for i := 0; i < idc.amtWorkPerTick; i++ {
 		ticksLeftPerCore[i] = Tftick(1)
-		coresLeft[i] = true
+		coresWithTicksLeft[i] = true
 	}
 
 	toWrite = fmt.Sprintf("%v, %v", idc.worldNumProcsGenPerTick, int(*idc.currTickPtr))
 	logWrite(IDEAL_USAGE, toWrite)
 
+	// TODO: what if it doesn't fit?
 	putProcOnCoreWithMaxTimeLeft := func() int {
 		minVal := Tftick(math.MaxFloat32)
 		minCore := -1
 		for i := 0; i < idc.amtWorkPerTick; i++ {
-			if _, ok := coresLeft[i]; ok {
-				if ticksLeftPerCore[i] < minVal {
-					minVal = ticksLeftPerCore[i]
-					minCore = i
+			if _, ok := coresLeftThisRound[i]; ok {
+				if _, ok := coresWithTicksLeft[i]; ok {
+					if ticksLeftPerCore[i] < minVal {
+						minVal = ticksLeftPerCore[i]
+						minCore = i
+					}
 				}
 			}
 		}
-		delete(coresLeft, minCore)
+		delete(coresLeftThisRound, minCore)
 		return minCore
 	}
 
@@ -96,16 +100,29 @@ func (idc *IdealDC) tick() {
 
 	for idc.procQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 {
 
+		for i := 0; i < idc.amtWorkPerTick; i++ {
+			coresLeftThisRound[i] = true
+		}
+
 		// run by amount of money willing to spend
-		coreToProc := make(map[int]*Proc, 0)
+		toWrite := fmt.Sprintf("  q len before %v \n", idc.procQ.qlen())
+		logWrite(IDEAL_SCHED, toWrite)
+		coreToProc := make(map[int]*Proc, idc.amtWorkPerTick)
 		for i := 0; i < idc.amtWorkPerTick; i++ {
 			p := idc.procQ.deq()
 			if p == nil {
 				continue
 			}
 			coreToUse := putProcOnCoreWithMaxTimeLeft()
-			coreToProc[coreToUse] = p
+			if coreToUse == -1 {
+				idc.procQ.enq(p)
+				coreToProc[coreToUse] = nil
+			} else {
+				coreToProc[coreToUse] = p
+			}
 		}
+		toWrite = fmt.Sprintf("  q len after %v \n", idc.procQ.qlen())
+		logWrite(IDEAL_SCHED, toWrite)
 
 		// run all the cores once
 		for currCore := 0; currCore < idc.amtWorkPerTick; currCore++ {
@@ -116,7 +133,7 @@ func (idc *IdealDC) tick() {
 				continue
 			}
 
-			toWrite := fmt.Sprintf("   giving %v to proc %v\n", ticksLeftPerCore[currCore], procToRun.String())
+			toWrite := fmt.Sprintf("   core %v giving %v to proc %v; q len is now %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String(), idc.procQ.qlen())
 			logWrite(IDEAL_SCHED, toWrite)
 
 			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
@@ -124,13 +141,20 @@ func (idc *IdealDC) tick() {
 			ticksLeftPerCore[currCore] -= ticksUsed
 			totalTicksLeftToGive -= ticksUsed
 
+			if ticksLeftPerCore[currCore] < Tftick(TICK_SCHED_THRESHOLD) {
+				delete(coresWithTicksLeft, currCore)
+			}
+
 			if !done {
 				toReq = append(toReq, procToRun)
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *idc.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
-				toWrite := fmt.Sprintf("%v, %.2f, %.2f, %.2f \n", idc.worldNumProcsGenPerTick, procToRun.willingToSpend(), float32(procToRun.timeDone-procToRun.timeStarted), float32(procToRun.compDone))
+				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
+				logWrite(IDEAL_SCHED, toWrite)
+
+				toWrite = fmt.Sprintf("%v, %.2f, %.2f, %.2f \n", idc.worldNumProcsGenPerTick, procToRun.willingToSpend(), float32(procToRun.timeDone-procToRun.timeStarted), float32(procToRun.compDone))
 				logWrite(IDEAL_PROCS_DONE, toWrite)
 			}
 

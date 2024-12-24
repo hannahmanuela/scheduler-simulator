@@ -86,7 +86,7 @@ type GlobalSched struct {
 	k_choices       int
 	idleMachines    *IdleHeap
 	idealDC         *IdealDC
-	procq           *Queue
+	multiq          map[float32]*Queue
 	currTickPtr     *Tftick
 	nProcGenPerTick int
 	nFoundIdle      int
@@ -99,7 +99,7 @@ func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTic
 		k_choices:       int(len(machines) / 3),
 		idleMachines:    idleHeap,
 		idealDC:         idealDC,
-		procq:           newQueue(),
+		multiq:          make(map[float32]*Queue, N_PRIORITIES),
 		currTickPtr:     currTickPtr,
 		nProcGenPerTick: numGenPerTick,
 		nFoundIdle:      0,
@@ -136,7 +136,6 @@ func (gs *GlobalSched) placeProcs() {
 	for p != nil {
 		// place given proc
 
-		// try placing on the ideal
 		machineToUse := gs.pickMachine(p)
 
 		if machineToUse == nil {
@@ -155,9 +154,6 @@ func (gs *GlobalSched) placeProcs() {
 
 }
 
-// admission control:
-// 1. first look for machines that simply currently have the space (using interval tree of immediately available compute)
-// 2. if there are none, do the ok to place call on all machines? on some machines? just random would be the closest to strictly following what they do...
 func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
 	toWrite := fmt.Sprintf("%v, GS placing proc %v \n", int(*gs.currTickPtr), procToPlace.String())
@@ -197,9 +193,35 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 }
 
 func (gs *GlobalSched) getProc() *Proc {
-	return gs.procq.deq()
+
+	minRatio := float32(math.MaxFloat32)
+	bestPrio := float32(-1)
+
+	for prio, q := range gs.multiq {
+		// ratio
+		headProc := q.peek()
+		if headProc == nil {
+			continue
+		}
+		ratio := float32((*gs.currTickPtr)-headProc.timeStarted) / headProc.willingToSpend()
+		if ratio < minRatio {
+			minRatio = ratio
+			bestPrio = prio
+		}
+	}
+
+	if bestPrio < 0 {
+		return nil
+	}
+
+	return gs.multiq[bestPrio].deq()
 }
 
 func (gs *GlobalSched) putProc(proc *Proc) {
-	gs.procq.enq(proc)
+
+	if _, ok := gs.multiq[proc.willingToSpend()]; !ok {
+		gs.multiq[proc.willingToSpend()] = newQueue()
+	}
+
+	gs.multiq[proc.willingToSpend()].enq(proc)
 }

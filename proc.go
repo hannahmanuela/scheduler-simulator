@@ -23,6 +23,7 @@ func (p *Proc) String() string {
 	return strconv.Itoa(int(p.procId)) + ": " +
 		", time started: " + p.timeStarted.String() +
 		", time placed: " + p.timePlaced.String() +
+		", actual comp " + p.procInternals.actualComp.String() +
 		", willing to spend: " + strconv.FormatFloat(float64(p.willingToSpend()), 'f', 3, 32)
 }
 

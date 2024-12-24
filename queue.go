@@ -15,13 +15,21 @@ func newQueue() *Queue {
 func (q *Queue) String() string {
 	str := ""
 	for _, p := range q.q {
-		str += p.String() + "; "
+		str += p.String() + ";\n"
 	}
 	return str
 }
 
 func (q *Queue) getQ() []*Proc {
 	return q.q
+}
+
+func (q *Queue) peek() *Proc {
+	if len(q.q) == 0 {
+		return nil
+	}
+
+	return q.q[0]
 }
 
 func (q *Queue) enq(p *Proc) {
@@ -31,9 +39,9 @@ func (q *Queue) enq(p *Proc) {
 	}
 
 	for index, currProc := range q.q {
-		if currProc.willingToSpend() < p.willingToSpend() ||
-			((currProc.willingToSpend() == p.willingToSpend()) && currProc.timePlaced > p.timePlaced) ||
-			((currProc.willingToSpend() == p.willingToSpend()) && (currProc.timePlaced == p.timePlaced) && currProc.compDone < p.compDone) {
+		if p.willingToSpend() > currProc.willingToSpend() ||
+			((currProc.willingToSpend() == p.willingToSpend()) && p.timePlaced < currProc.timePlaced) ||
+			((currProc.willingToSpend() == p.willingToSpend()) && (currProc.timePlaced == p.timePlaced) && p.compDone > currProc.compDone) {
 			q.q = append(q.q[:index+1], q.q[index:]...)
 			q.q[index] = p
 			return
@@ -54,6 +62,20 @@ func (q *Queue) deq() *Proc {
 func (q *Queue) qlen() int {
 	return len(q.q)
 }
+
+// func (q *Queue) remove(procToRemove *Proc) {
+
+// 	newQ := make([]*Proc, len(q.q)-1)
+
+// 	for i, p := range q.q {
+// 		if p == procToRemove {
+// 			newQ = append(q.q[:i], q.q[i+1:]...)
+// 		}
+// 	}
+
+// 	q.q = newQ
+
+// }
 
 func (q *Queue) checkKill(newProc *Proc) (Tid, float32) {
 
