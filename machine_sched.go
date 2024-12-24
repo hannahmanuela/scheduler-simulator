@@ -71,11 +71,12 @@ func (sd *Sched) simulateRunProcs() {
 
 	totalTicksLeftToGive := Tftick(sd.numCores)
 	ticksLeftPerCore := make(map[int]Tftick, 0)
-	coresLeft := make(map[int]bool, 0)
+	coresWithTicksLeft := make(map[int]bool, 0)
+	coresLeftThisRound := make(map[int]bool, 0)
 
 	for i := 0; i < sd.numCores; i++ {
 		ticksLeftPerCore[i] = Tftick(1)
-		coresLeft[i] = true
+		coresWithTicksLeft[i] = true
 	}
 
 	toWrite := fmt.Sprintf("%v, %v, %v", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), sd.machineId)
@@ -85,14 +86,16 @@ func (sd *Sched) simulateRunProcs() {
 		minVal := Tftick(math.MaxFloat32)
 		minCore := -1
 		for i := 0; i < sd.numCores; i++ {
-			if _, ok := coresLeft[i]; ok {
-				if ticksLeftPerCore[i] < minVal {
-					minVal = ticksLeftPerCore[i]
-					minCore = i
+			if _, ok := coresLeftThisRound[i]; ok {
+				if _, ok := coresWithTicksLeft[i]; ok {
+					if ticksLeftPerCore[i] < minVal {
+						minVal = ticksLeftPerCore[i]
+						minCore = i
+					}
 				}
 			}
 		}
-		delete(coresLeft, minCore)
+		delete(coresLeftThisRound, minCore)
 		return minCore
 	}
 
@@ -103,7 +106,13 @@ func (sd *Sched) simulateRunProcs() {
 
 	for sd.activeQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 {
 
+		for i := 0; i < sd.numCores; i++ {
+			coresLeftThisRound[i] = true
+		}
+
 		// run by amount of money willing to spend
+		toWrite := fmt.Sprintf("  q len before %v \n", sd.activeQ.qlen())
+		logWrite(SCHED, toWrite)
 		coreToProc := make(map[int]*Proc, 0)
 		for i := 0; i < sd.numCores; i++ {
 			p := sd.activeQ.deq()
@@ -111,8 +120,15 @@ func (sd *Sched) simulateRunProcs() {
 				continue
 			}
 			coreToUse := putProcOnCoreWithMaxTimeLeft()
-			coreToProc[coreToUse] = p
+			if coreToUse == -1 {
+				sd.activeQ.enq(p)
+				coreToProc[coreToUse] = nil
+			} else {
+				coreToProc[coreToUse] = p
+			}
 		}
+		toWrite = fmt.Sprintf("  q len after %v \n", sd.activeQ.qlen())
+		logWrite(SCHED, toWrite)
 
 		// run all the cores once
 		for currCore := 0; currCore < sd.numCores; currCore++ {
@@ -123,10 +139,17 @@ func (sd *Sched) simulateRunProcs() {
 				continue
 			}
 
+			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
+			logWrite(SCHED, toWrite)
+
 			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 
 			ticksLeftPerCore[currCore] -= ticksUsed
 			totalTicksLeftToGive -= ticksUsed
+
+			if ticksLeftPerCore[currCore] < TICK_SCHED_THRESHOLD {
+				delete(coresWithTicksLeft, currCore)
+			}
 
 			if !done {
 				toReq = append(toReq, procToRun)
@@ -134,10 +157,12 @@ func (sd *Sched) simulateRunProcs() {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *sd.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
-				toWrite := fmt.Sprintf("%v, %v, %v, %v \n", sd.worldNumProcsGenPerTick, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String())
+				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
+				logWrite(SCHED, toWrite)
+
+				toWrite = fmt.Sprintf("%v, %v, %v, %v \n", sd.worldNumProcsGenPerTick, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String())
 				logWrite(PROCS_DONE, toWrite)
 			}
-
 		}
 
 	}

@@ -133,7 +133,7 @@ func (idc *IdealDC) tick() {
 				continue
 			}
 
-			toWrite := fmt.Sprintf("   core %v giving %v to proc %v; q len is now %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String(), idc.procQ.qlen())
+			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
 			logWrite(IDEAL_SCHED, toWrite)
 
 			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])

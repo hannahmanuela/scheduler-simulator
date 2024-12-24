@@ -10,9 +10,9 @@ const (
 
 	IDLE_HEAP_THRESHOLD = 1
 
-	VERBOSE_SCHED_INFO       = false
+	VERBOSE_SCHED_INFO       = true
 	VERBOSE_USAGE_STATS      = true
-	VERBOSE_IDEAL_SCHED_INFO = false
+	VERBOSE_IDEAL_SCHED_INFO = true
 )
 
 const SEED = 12345
@@ -68,10 +68,10 @@ func (w *World) genLoad(nProcs int) int {
 	}
 	for _, up := range userProcs {
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.currProcNum += 1
 		w.gs.putProc(provProc)
 		copyForIdeal := newProvProc(Tid(w.currProcNum), w.currTick, up)
 		w.idealQ.enq(copyForIdeal)
+		w.currProcNum += 1
 	}
 	return len(userProcs)
 }

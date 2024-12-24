@@ -9,14 +9,14 @@ import (
 const (
 	N_TICK = 100
 
-	N_MACHINES          = 10
+	N_MACHINES          = 1
 	N_CORES_PER_MACHINE = 8
 
-	N_TENANTS = 8
+	N_TENANTS = 10
 
 	// this is per tenant
-	N_PROCS_GEN_PER_TICK_START = 10
-	N_PROCS_GEN_PER_TICK_END   = 15
+	N_PROCS_GEN_PER_TICK_START = 1
+	N_PROCS_GEN_PER_TICK_END   = 1
 )
 
 func TestRunWorld(t *testing.T) {

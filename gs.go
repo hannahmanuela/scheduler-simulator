@@ -1,7 +1,6 @@
 package slasched
 
 import (
-	"fmt"
 	"math"
 	"sync"
 )
@@ -49,14 +48,14 @@ func useNextLarger(h *MinHeap, memNeeded Tmem, procPaying float32) (TIdleMachine
 	}
 
 	if indToUse < 0 {
-		toWrite := "   found no good machine \n"
-		logWrite(SCHED, toWrite)
+		// toWrite := "   found no good machine \n"
+		// logWrite(SCHED, toWrite)
 		return TIdleMachine{}, false
 	} else {
 		toRet := (*h)[indToUse]
 
-		toWrite := fmt.Sprintf("   min highest cost: %v, max mem avail: %v, info to use: %v \n", minHighestCost, maxMemAvail, toRet)
-		logWrite(SCHED, toWrite)
+		// toWrite := fmt.Sprintf("   min highest cost: %v, max mem avail: %v, info to use: %v \n", minHighestCost, maxMemAvail, toRet)
+		// logWrite(SCHED, toWrite)
 
 		// if there is mem left, update value
 		if (*h)[indToUse].memAvail-memNeeded > IDLE_HEAP_THRESHOLD {
@@ -156,8 +155,8 @@ func (gs *GlobalSched) placeProcs() {
 
 func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
-	toWrite := fmt.Sprintf("%v, GS placing proc %v \n", int(*gs.currTickPtr), procToPlace.String())
-	logWrite(SCHED, toWrite)
+	// toWrite := fmt.Sprintf("%v, GS placing proc %v \n", int(*gs.currTickPtr), procToPlace.String())
+	// logWrite(SCHED, toWrite)
 
 	gs.idleMachines.lock.Lock()
 	machine, found := useNextLarger(gs.idleMachines.heap, procToPlace.maxMem(), procToPlace.willingToSpend())
@@ -186,8 +185,8 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 		return nil
 	}
 
-	toWrite = fmt.Sprintf("   used k choices: the machine to use is %v \n", machineToUse)
-	logWrite(SCHED, toWrite)
+	// toWrite = fmt.Sprintf("   used k choices: the machine to use is %v \n", machineToUse)
+	// logWrite(SCHED, toWrite)
 
 	return machineToUse
 }
