@@ -62,7 +62,25 @@ func (sd *Sched) okToPlace(newProc *Proc) float32 {
 }
 
 func (sd *Sched) placeProc(newProc *Proc) {
+
 	newProc.timePlaced = *sd.currTickPtr
+
+	if newProc.maxMem() < sd.memFree() {
+		sd.activeQ.enq(newProc)
+
+		toWrite := fmt.Sprintf("placing pid %v, ok b/c mem fits \n", newProc.procId)
+		logWrite(SCHED, toWrite)
+
+		return
+	}
+
+	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
+	procToKill, _ := sd.activeQ.checkKill(newProc)
+
+	toWrite := fmt.Sprintf("killing pid %v to place pid %v \n", procToKill, newProc.procId)
+	logWrite(SCHED, toWrite)
+
+	sd.activeQ.kill(procToKill)
 	sd.activeQ.enq(newProc)
 }
 
@@ -127,7 +145,7 @@ func (sd *Sched) simulateRunProcs() {
 				coreToProc[coreToUse] = p
 			}
 		}
-		toWrite = fmt.Sprintf("  q len after %v \n", sd.activeQ.qlen())
+		toWrite = fmt.Sprintf("  q len after %v; assignment: %v \n", sd.activeQ.qlen(), coreToProc)
 		logWrite(SCHED, toWrite)
 
 		// run all the cores once

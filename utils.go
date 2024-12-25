@@ -14,6 +14,10 @@ func (f Tftick) String() string {
 	return fmt.Sprintf("%.2f", f)
 }
 
+func mapPriorityToDollars(priority int) float32 {
+	return []float32{0.3, 0.7, 1.0, 1.5, 2}[priority]
+}
+
 type PrintType int
 
 const (
@@ -93,7 +97,10 @@ func pickRandomElements[T any](list []T, k int) []T {
 		k = len(list)
 	}
 
-	// Use the Fisher-Yates shuffle algorithm to shuffle the list
+	if k < len(list) {
+		return list
+	}
+
 	for i := len(list) - 1; i > 0; i-- {
 		j := r.Intn(i + 1)
 		list[i], list[j] = list[j], list[i]

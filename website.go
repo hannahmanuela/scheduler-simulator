@@ -29,11 +29,6 @@ func newSimpleWebsite() *SimpleWebsite {
 	return &SimpleWebsite{}
 }
 
-// 0 is the cheapest, 5 the most expensive
-func mapPriorityToDollars(priority int) float32 {
-	return []float32{0.3, 0.7, 1.0, 1.5, 2}[priority]
-}
-
 func (website *SimpleWebsite) genLoad(nProcs int, tenantId Tid) []*ProcInternals {
 	// nproc := int(website.poisson.Rand())
 	procs := make([]*ProcInternals, nProcs)

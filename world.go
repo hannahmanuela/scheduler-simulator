@@ -10,9 +10,9 @@ const (
 
 	IDLE_HEAP_THRESHOLD = 1
 
-	VERBOSE_SCHED_INFO       = true
+	VERBOSE_SCHED_INFO       = false
 	VERBOSE_USAGE_STATS      = true
-	VERBOSE_IDEAL_SCHED_INFO = true
+	VERBOSE_IDEAL_SCHED_INFO = false
 )
 
 const SEED = 12345
@@ -25,7 +25,7 @@ type World struct {
 	currProcNum   int
 	machines      map[Tid]*Machine
 	idealDC       *IdealDC
-	idealQ        *Queue
+	idealMultiQ   MultiQueue
 	gs            *GlobalSched
 	tenants       []*Ttenant
 }
@@ -35,7 +35,7 @@ func newWorld(numMachines int, numCores int, nGenPerTick int, numTenants int) *W
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
-		idealQ:        newQueue(),
+		idealMultiQ:   NewMultiQ(),
 	}
 	w.tenants = make([]*Ttenant, numTenants)
 	for tid := 0; tid < numTenants; tid++ {
@@ -68,19 +68,23 @@ func (w *World) genLoad(nProcs int) int {
 	}
 	for _, up := range userProcs {
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.gs.putProc(provProc)
+		w.gs.multiq.enq(provProc)
 		copyForIdeal := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.idealQ.enq(copyForIdeal)
+		w.idealMultiQ.enq(copyForIdeal)
 		w.currProcNum += 1
 	}
 	return len(userProcs)
 }
 
+// this needs to model placement ordering like GS does...
 func (w *World) placeProcsIdeal() {
 
 	toReq := make([]*Proc, 0)
 
-	p := w.idealQ.deq()
+	toWrite := fmt.Sprintf("q before placing procs: %v \n", w.idealMultiQ.qMap)
+	logWrite(IDEAL_SCHED, toWrite)
+
+	p := w.idealMultiQ.deq(w.currTick)
 
 	for p != nil {
 		placed := w.idealDC.potPlaceProc(p)
@@ -88,11 +92,11 @@ func (w *World) placeProcsIdeal() {
 		if !placed {
 			toReq = append(toReq, p)
 		}
-		p = w.idealQ.deq()
+		p = w.idealMultiQ.deq(w.currTick)
 	}
 
 	for _, p := range toReq {
-		w.idealQ.enq(p)
+		w.idealMultiQ.enq(p)
 	}
 
 }

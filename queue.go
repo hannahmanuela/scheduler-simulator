@@ -1,6 +1,9 @@
 package slasched
 
-import "math"
+import (
+	"math"
+	"strconv"
+)
 
 // note: currently we are keeping queues ordered (by expected finishing "time")
 type Queue struct {
@@ -107,5 +110,65 @@ func (q *Queue) kill(pid Tid) {
 	}
 
 	q.q = tmp
+
+}
+
+type MultiQueue struct {
+	qMap map[float32]*Queue
+}
+
+func NewMultiQ() MultiQueue {
+	mq := MultiQueue{
+		qMap: make(map[float32]*Queue, N_PRIORITIES),
+	}
+
+	for prio := 0; prio < N_PRIORITIES; prio++ {
+		price := mapPriorityToDollars(prio)
+		mq.qMap[price] = newQueue()
+	}
+	return mq
+}
+
+func (mq MultiQueue) String() string {
+	str := ""
+	for prio := 0; prio < N_PRIORITIES; prio++ {
+		price := mapPriorityToDollars(prio)
+		if _, ok := mq.qMap[price]; !ok {
+			str += strconv.FormatFloat(float64(price), 'f', 3, 32) + mq.qMap[price].String() + ";\n"
+		}
+	}
+	return str
+}
+
+func (mq MultiQueue) deq(currTick Tftick) *Proc {
+
+	minRatio := float32(math.MaxFloat32)
+	bestPrice := float32(-1)
+
+	for prio := 0; prio < N_PRIORITIES; prio++ {
+		price := mapPriorityToDollars(prio)
+		q := mq.qMap[price]
+		// ratio
+		headProc := q.peek()
+		if headProc == nil {
+			continue
+		}
+		ratio := float32(currTick-headProc.timeStarted) / headProc.willingToSpend()
+		if ratio <= minRatio {
+			minRatio = ratio
+			bestPrice = price
+		}
+	}
+
+	if bestPrice < 0 {
+		return nil
+	}
+
+	return mq.qMap[bestPrice].deq()
+}
+
+func (mq MultiQueue) enq(proc *Proc) {
+
+	mq.qMap[proc.willingToSpend()].enq(proc)
 
 }

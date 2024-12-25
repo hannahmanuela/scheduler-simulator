@@ -42,17 +42,28 @@ func (idc *IdealDC) potPlaceProc(newProc *Proc) bool {
 
 	// if it just fits in terms of memory do it
 	if newProc.maxMem() < idc.memFree() {
+
+		toWrite := fmt.Sprintf("placing pid %v, ok b/c mem fits \n", newProc.procId)
+		logWrite(IDEAL_SCHED, toWrite)
+
+		newProc.timePlaced = *idc.currTickPtr
 		idc.procQ.enq(newProc)
 		return true
 	}
 
 	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
 	procToKill, minMoneyWaste := idc.procQ.checkKill(newProc)
-	if procToKill > 0 {
-		if minMoneyWaste < MONEY_WASTE_THRESHOLD {
-			idc.procQ.kill(procToKill)
-			return true
-		}
+	toWrite := fmt.Sprintf("  min money waste: %v \n", minMoneyWaste)
+	logWrite(IDEAL_SCHED, toWrite)
+	if minMoneyWaste < MONEY_WASTE_THRESHOLD {
+
+		toWrite := fmt.Sprintf("killing pid %v to place pid %v \n", procToKill, newProc.procId)
+		logWrite(IDEAL_SCHED, toWrite)
+
+		newProc.timePlaced = *idc.currTickPtr
+		idc.procQ.kill(procToKill)
+		idc.procQ.enq(newProc)
+		return true
 	}
 
 	return false
@@ -98,7 +109,7 @@ func (idc *IdealDC) tick() {
 
 	toReq := make([]*Proc, 0)
 
-	for idc.procQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 {
+	for idc.procQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && len(coresWithTicksLeft) > 0 {
 
 		for i := 0; i < idc.amtWorkPerTick; i++ {
 			coresLeftThisRound[i] = true
@@ -121,7 +132,7 @@ func (idc *IdealDC) tick() {
 				coreToProc[coreToUse] = p
 			}
 		}
-		toWrite = fmt.Sprintf("  q len after %v \n", idc.procQ.qlen())
+		toWrite = fmt.Sprintf("  q len after %v; assignment: %v \n", idc.procQ.qlen(), coreToProc)
 		logWrite(IDEAL_SCHED, toWrite)
 
 		// run all the cores once
@@ -154,7 +165,7 @@ func (idc *IdealDC) tick() {
 				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
 				logWrite(IDEAL_SCHED, toWrite)
 
-				toWrite = fmt.Sprintf("%v, %.2f, %.2f, %.2f \n", idc.worldNumProcsGenPerTick, procToRun.willingToSpend(), float32(procToRun.timeDone-procToRun.timeStarted), float32(procToRun.compDone))
+				toWrite = fmt.Sprintf("%v, %v, %v, %v \n", idc.worldNumProcsGenPerTick, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String())
 				logWrite(IDEAL_PROCS_DONE, toWrite)
 			}
 
@@ -169,6 +180,6 @@ func (idc *IdealDC) tick() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf(", %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)))
+	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), idc.memFree())
 	logWrite(IDEAL_USAGE, toWrite)
 }

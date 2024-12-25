@@ -24,6 +24,7 @@ func (p *Proc) String() string {
 		", time started: " + p.timeStarted.String() +
 		", time placed: " + p.timePlaced.String() +
 		", actual comp " + p.procInternals.actualComp.String() +
+		", comp done " + p.compDone.String() +
 		", willing to spend: " + strconv.FormatFloat(float64(p.willingToSpend()), 'f', 3, 32)
 }
 

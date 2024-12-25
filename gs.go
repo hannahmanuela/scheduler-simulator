@@ -1,6 +1,7 @@
 package slasched
 
 import (
+	"fmt"
 	"math"
 	"sync"
 )
@@ -85,7 +86,7 @@ type GlobalSched struct {
 	k_choices       int
 	idleMachines    *IdleHeap
 	idealDC         *IdealDC
-	multiq          map[float32]*Queue
+	multiq          MultiQueue
 	currTickPtr     *Tftick
 	nProcGenPerTick int
 	nFoundIdle      int
@@ -98,7 +99,7 @@ func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTic
 		k_choices:       int(len(machines) / 3),
 		idleMachines:    idleHeap,
 		idealDC:         idealDC,
-		multiq:          make(map[float32]*Queue, N_PRIORITIES),
+		multiq:          NewMultiQ(),
 		currTickPtr:     currTickPtr,
 		nProcGenPerTick: numGenPerTick,
 		nFoundIdle:      0,
@@ -127,8 +128,12 @@ func (gs *GlobalSched) MachinesString() string {
 }
 
 func (gs *GlobalSched) placeProcs() {
+
+	toWrite := fmt.Sprintf("q before placing procs: %v \n", gs.multiq.qMap)
+	logWrite(SCHED, toWrite)
+
 	// setup
-	p := gs.getProc()
+	p := gs.multiq.deq(*gs.currTickPtr)
 
 	toReq := make([]*Proc, 0)
 
@@ -139,16 +144,16 @@ func (gs *GlobalSched) placeProcs() {
 
 		if machineToUse == nil {
 			toReq = append(toReq, p)
-			p = gs.getProc()
+			p = gs.multiq.deq(*gs.currTickPtr)
 			continue
 		}
 		machineToUse.sched.placeProc(p)
 
-		p = gs.getProc()
+		p = gs.multiq.deq(*gs.currTickPtr)
 	}
 
 	for _, p := range toReq {
-		gs.putProc(p)
+		gs.multiq.enq(p)
 	}
 
 }
@@ -172,16 +177,19 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	var machineToUse *Machine
 	machineToTry := pickRandomElements(Values(gs.machines), gs.k_choices)
 
-	lowestKill := float32(math.MaxFloat32)
+	minMoneyWaste := float32(math.MaxFloat32)
 
 	for _, m := range machineToTry {
-		killNeeded := m.sched.okToPlace(procToPlace)
-		if killNeeded < lowestKill {
+		moneyWaste := m.sched.okToPlace(procToPlace)
+		toWrite := fmt.Sprintf("  min money waste: %v \n", moneyWaste)
+		logWrite(SCHED, toWrite)
+		if moneyWaste < minMoneyWaste {
+			minMoneyWaste = moneyWaste
 			machineToUse = m
 		}
 	}
 
-	if lowestKill > MONEY_WASTE_THRESHOLD {
+	if minMoneyWaste > MONEY_WASTE_THRESHOLD {
 		return nil
 	}
 
@@ -189,38 +197,4 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	// logWrite(SCHED, toWrite)
 
 	return machineToUse
-}
-
-func (gs *GlobalSched) getProc() *Proc {
-
-	minRatio := float32(math.MaxFloat32)
-	bestPrio := float32(-1)
-
-	for prio, q := range gs.multiq {
-		// ratio
-		headProc := q.peek()
-		if headProc == nil {
-			continue
-		}
-		ratio := float32((*gs.currTickPtr)-headProc.timeStarted) / headProc.willingToSpend()
-		if ratio < minRatio {
-			minRatio = ratio
-			bestPrio = prio
-		}
-	}
-
-	if bestPrio < 0 {
-		return nil
-	}
-
-	return gs.multiq[bestPrio].deq()
-}
-
-func (gs *GlobalSched) putProc(proc *Proc) {
-
-	if _, ok := gs.multiq[proc.willingToSpend()]; !ok {
-		gs.multiq[proc.willingToSpend()] = newQueue()
-	}
-
-	gs.multiq[proc.willingToSpend()].enq(proc)
 }
