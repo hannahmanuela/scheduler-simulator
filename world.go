@@ -10,6 +10,9 @@ const (
 
 	IDLE_HEAP_THRESHOLD = 1
 
+	K_CHOICES_DOWN = 3
+	K_CHOICES_UP   = 3
+
 	VERBOSE_SCHED_INFO       = false
 	VERBOSE_USAGE_STATS      = true
 	VERBOSE_IDEAL_SCHED_INFO = false
@@ -26,30 +29,43 @@ type World struct {
 	machines      map[Tid]*Machine
 	idealDC       *IdealDC
 	idealMultiQ   MultiQueue
-	gs            *GlobalSched
+	GSSs          []*GlobalSched
+	roundRobinInd int
 	tenants       []*Ttenant
 }
 
-func newWorld(numMachines int, numCores int, nGenPerTick int, numTenants int) *World {
+func newWorld(numMachines int, numCores int, nGenPerTick int, numTenants int, nGSSs int) *World {
+
 	w := &World{
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
 		idealMultiQ:   NewMultiQ(),
+		roundRobinInd: 0,
 	}
+
 	w.tenants = make([]*Ttenant, numTenants)
 	for tid := 0; tid < numTenants; tid++ {
 		w.tenants[tid] = newTenant()
 	}
+
 	w.idealDC = newIdealDC(numMachines*numCores, Tmem(numMachines*MEM_PER_MACHINE), &w.currTick, nGenPerTick)
-	idleHeap := &IdleHeap{
-		heap: &MinHeap{},
+
+	w.GSSs = make([]*GlobalSched, nGSSs)
+	idleHeaps := make([]*IdleHeap, nGSSs)
+	for i := 0; i < nGSSs; i++ {
+		idleHeap := &IdleHeap{
+			heap: &MinHeap{},
+		}
+		idleHeaps[i] = idleHeap
+		w.GSSs[i] = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap, w.idealDC)
 	}
+
 	for i := 0; i < numMachines; i++ {
 		mid := Tid(i)
-		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick, nGenPerTick)
+		w.machines[Tid(i)] = newMachine(mid, idleHeaps, numCores, &w.currTick, nGenPerTick)
 	}
-	w.gs = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap, w.idealDC)
+
 	return w
 }
 
@@ -68,7 +84,13 @@ func (w *World) genLoad(nProcs int) int {
 	}
 	for _, up := range userProcs {
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.gs.multiq.enq(provProc)
+
+		w.GSSs[w.roundRobinInd].multiq.enq(provProc)
+		w.roundRobinInd += 1
+		if w.roundRobinInd >= len(w.GSSs) {
+			w.roundRobinInd = 0
+		}
+
 		copyForIdeal := newProvProc(Tid(w.currProcNum), w.currTick, up)
 		w.idealMultiQ.enq(copyForIdeal)
 		w.currProcNum += 1
@@ -105,7 +127,10 @@ func (w *World) Tick(numProcs int) {
 	w.genLoad(numProcs)
 
 	w.placeProcsIdeal()
-	w.gs.placeProcs()
+
+	for _, gs := range w.GSSs {
+		gs.placeProcs()
+	}
 
 	for _, m := range w.machines {
 		m.sched.tick()
@@ -119,5 +144,12 @@ func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
 		w.Tick(w.numProcsToGen)
 	}
-	fmt.Printf("num found idle: %v, num used k choices: %v\n", w.gs.nFoundIdle, w.gs.nUsedKChoices)
+
+	numIdle := make([]int, len(w.GSSs))
+	numKChoices := make([]int, len(w.GSSs))
+	for i, gs := range w.GSSs {
+		numIdle[i] = gs.nFoundIdle
+		numKChoices[i] = gs.nUsedKChoices
+	}
+	fmt.Printf("num found idle: %v, num used k choices: %v\n", numIdle, numKChoices)
 }

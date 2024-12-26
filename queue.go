@@ -140,6 +140,14 @@ func (mq MultiQueue) String() string {
 	return str
 }
 
+func (mq MultiQueue) len() int {
+	totalLen := 0
+	for prio := 0; prio < N_PRIORITIES; prio++ {
+		totalLen += mq.qMap[mapPriorityToDollars(prio)].qlen()
+	}
+	return totalLen
+}
+
 func (mq MultiQueue) deq(currTick Tftick) *Proc {
 
 	minRatio := float32(math.MaxFloat32)

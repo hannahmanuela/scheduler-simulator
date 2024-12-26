@@ -58,18 +58,20 @@ func useNextLarger(h *MinHeap, memNeeded Tmem, procPaying float32) (TIdleMachine
 		// toWrite := fmt.Sprintf("   min highest cost: %v, max mem avail: %v, info to use: %v \n", minHighestCost, maxMemAvail, toRet)
 		// logWrite(SCHED, toWrite)
 
-		// if there is mem left, update value
-		if (*h)[indToUse].memAvail-memNeeded > IDLE_HEAP_THRESHOLD {
-			(*h)[indToUse].memAvail -= memNeeded
+		// if there is mem left, update value --> not anymore, this will be updated by machine after placement so that it's kept up to date with jobs finishing
 
-			// also if keeping it, update the highest cost
-			if (*h)[indToUse].highestCostRunning < procPaying {
-				(*h)[indToUse].highestCostRunning = procPaying
-			}
-		} else {
-			// else remove it from the list
-			*h = append((*h)[:indToUse], (*h)[indToUse+1:]...)
-		}
+		// if (*h)[indToUse].memAvail-memNeeded > IDLE_HEAP_THRESHOLD {
+		// 	(*h)[indToUse].memAvail -= memNeeded
+
+		// 	// also if keeping it, update the highest cost
+		// 	if (*h)[indToUse].highestCostRunning < procPaying {
+		// 		(*h)[indToUse].highestCostRunning = procPaying
+		// 	}
+		// } else {
+		// 	// else remove it from the list
+		// 	*h = append((*h)[:indToUse], (*h)[indToUse+1:]...)
+		// 	removed = true
+		// }
 
 		return toRet, true
 	}
@@ -83,7 +85,6 @@ type IdleHeap struct {
 
 type GlobalSched struct {
 	machines        map[Tid]*Machine
-	k_choices       int
 	idleMachines    *IdleHeap
 	idealDC         *IdealDC
 	multiq          MultiQueue
@@ -96,7 +97,6 @@ type GlobalSched struct {
 func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap, idealDC *IdealDC) *GlobalSched {
 	gs := &GlobalSched{
 		machines:        machines,
-		k_choices:       int(len(machines) / 3),
 		idleMachines:    idleHeap,
 		idealDC:         idealDC,
 		multiq:          NewMultiQ(),
@@ -104,16 +104,6 @@ func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTic
 		nProcGenPerTick: numGenPerTick,
 		nFoundIdle:      0,
 		nUsedKChoices:   0,
-	}
-
-	// initally add all machines to idle heap
-	for i := 0; i < len(machines); i++ {
-		toPush := TIdleMachine{
-			memAvail:           MEM_PER_MACHINE,
-			highestCostRunning: -1,
-			machine:            Tid(i),
-		}
-		gs.idleMachines.heap.Push(toPush)
 	}
 
 	return gs
@@ -140,14 +130,23 @@ func (gs *GlobalSched) placeProcs() {
 	for p != nil {
 		// place given proc
 
-		machineToUse := gs.pickMachine(p)
+		machineToUse, usedIdle := gs.pickMachine(p)
 
 		if machineToUse == nil {
 			toReq = append(toReq, p)
 			p = gs.multiq.deq(*gs.currTickPtr)
 			continue
 		}
-		machineToUse.sched.placeProc(p)
+		shardRespForIdle, idleVal := machineToUse.sched.placeProc(p, usedIdle)
+
+		if shardRespForIdle {
+			if contains(gs.idleMachines.heap, machineToUse.sched.machineId) {
+				remove(gs.idleMachines.heap, machineToUse.sched.machineId)
+			}
+			if idleVal.memAvail > IDLE_HEAP_THRESHOLD {
+				gs.idleMachines.heap.Push(idleVal)
+			}
+		}
 
 		p = gs.multiq.deq(*gs.currTickPtr)
 	}
@@ -158,7 +157,7 @@ func (gs *GlobalSched) placeProcs() {
 
 }
 
-func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
+func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, bool) {
 
 	// toWrite := fmt.Sprintf("%v, GS placing proc %v \n", int(*gs.currTickPtr), procToPlace.String())
 	// logWrite(SCHED, toWrite)
@@ -168,14 +167,20 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	gs.idleMachines.lock.Unlock()
 	if found {
 		gs.nFoundIdle += 1
-		return gs.machines[machine.machine]
+		return gs.machines[machine.machine], true
 	}
+
+	// actualMemFree := make([]Tmem, len(gs.machines))
+	// for i, m := range gs.machines {
+	// 	actualMemFree[i] = m.sched.memFree()
+	// }
+	// fmt.Printf("%v found no good machine: memNeeded %v idle heap: %v, actual mems free: %v \n", *gs.currTickPtr, procToPlace.maxMem(), gs.idleMachines.heap, actualMemFree)
 
 	gs.nUsedKChoices += 1
 
 	// if no idle machine, use power of k choices (for now k = number of machines :D )
 	var machineToUse *Machine
-	machineToTry := pickRandomElements(Values(gs.machines), gs.k_choices)
+	machineToTry := pickRandomElements(Values(gs.machines), K_CHOICES_DOWN)
 
 	minMoneyWaste := float32(math.MaxFloat32)
 
@@ -190,11 +195,11 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	}
 
 	if minMoneyWaste > MONEY_WASTE_THRESHOLD {
-		return nil
+		return nil, false
 	}
 
 	// toWrite = fmt.Sprintf("   used k choices: the machine to use is %v \n", machineToUse)
 	// logWrite(SCHED, toWrite)
 
-	return machineToUse
+	return machineToUse, false
 }
