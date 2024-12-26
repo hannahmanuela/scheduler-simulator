@@ -8,12 +8,13 @@ import (
 const (
 	MEM_PER_MACHINE = 512000
 
-	IDLE_HEAP_THRESHOLD = 1
+	IDLE_HEAP_MEM_THRESHOLD  = 1
+	IDLE_HEAP_QLEN_THRESHOLD = 2
 
 	K_CHOICES_DOWN = 3
 	K_CHOICES_UP   = 3
 
-	VERBOSE_SCHED_INFO       = false
+	VERBOSE_SCHED_INFO       = true
 	VERBOSE_USAGE_STATS      = true
 	VERBOSE_IDEAL_SCHED_INFO = false
 )
@@ -52,13 +53,13 @@ func newWorld(numMachines int, numCores int, nGenPerTick int, numTenants int, nG
 	w.idealDC = newIdealDC(numMachines*numCores, Tmem(numMachines*MEM_PER_MACHINE), &w.currTick, nGenPerTick)
 
 	w.GSSs = make([]*GlobalSched, nGSSs)
-	idleHeaps := make([]*IdleHeap, nGSSs)
+	idleHeaps := make(map[Tid]*IdleHeap, nGSSs)
 	for i := 0; i < nGSSs; i++ {
 		idleHeap := &IdleHeap{
 			heap: &MinHeap{},
 		}
-		idleHeaps[i] = idleHeap
-		w.GSSs[i] = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap, w.idealDC)
+		idleHeaps[Tid(i)] = idleHeap
+		w.GSSs[i] = newGolbalSched(i, w.machines, &w.currTick, nGenPerTick, idleHeap, w.idealDC)
 	}
 
 	for i := 0; i < numMachines; i++ {
@@ -103,9 +104,6 @@ func (w *World) placeProcsIdeal() {
 
 	toReq := make([]*Proc, 0)
 
-	toWrite := fmt.Sprintf("q before placing procs: %v \n", w.idealMultiQ.qMap)
-	logWrite(IDEAL_SCHED, toWrite)
-
 	p := w.idealMultiQ.deq(w.currTick)
 
 	for p != nil {
@@ -130,6 +128,8 @@ func (w *World) Tick(numProcs int) {
 
 	for _, gs := range w.GSSs {
 		gs.placeProcs()
+		toWrite := fmt.Sprintf("%v, GS %v has heap %v \n", w.currTick, gs.gsId, gs.idleMachines.heap)
+		logWrite(SCHED, toWrite)
 	}
 
 	for _, m := range w.machines {

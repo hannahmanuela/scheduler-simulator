@@ -109,6 +109,36 @@ func pickRandomElements[T any](list []T, k int) []T {
 	return list[:k]
 }
 
+func pickRandomElementsMap[K comparable, V any](inpMap map[K]V, k int) map[K]V {
+
+	if k > len(inpMap) {
+		k = len(inpMap)
+	}
+
+	if k < len(inpMap) {
+		return inpMap
+	}
+
+	keys := make([]K, 0, len(inpMap))
+	for key := range inpMap {
+		keys = append(keys, key)
+	}
+
+	randKeys := make([]K, k)
+	for i := 0; i < k; i++ {
+		j := r.Intn(len(inpMap))
+		randKeys[i] = keys[j]
+	}
+
+	result := make(map[K]V)
+	for i := 0; i < k && i < len(keys); i++ {
+		key := randKeys[i]
+		result[key] = inpMap[key]
+	}
+
+	return result
+}
+
 func Values[M ~map[K]V, K comparable, V any](m M) []V {
 	r := make([]V, 0, len(m))
 	for _, v := range m {

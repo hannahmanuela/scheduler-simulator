@@ -7,9 +7,9 @@ import (
 )
 
 type TIdleMachine struct {
-	memAvail           Tmem
-	highestCostRunning float32
 	machine            Tid
+	highestCostRunning float32
+	memAvail           Tmem
 }
 
 // TODO: basically we can think of this as a free list, should treat it accordingly (this is a well-known problem)
@@ -28,7 +28,9 @@ func (h *MinHeap) Pop() any {
 	return x
 }
 
-func useNextLarger(h *MinHeap, memNeeded Tmem, procPaying float32) (TIdleMachine, bool) {
+func useBestIdle(h *MinHeap, memNeeded Tmem) (TIdleMachine, bool) {
+
+	// under mem pressures: choose based off memory fitting
 
 	minHighestCost := float32(math.MaxFloat32)
 	maxMemAvail := Tmem(0.0)
@@ -84,6 +86,7 @@ type IdleHeap struct {
 }
 
 type GlobalSched struct {
+	gsId            Tid
 	machines        map[Tid]*Machine
 	idleMachines    *IdleHeap
 	idealDC         *IdealDC
@@ -94,8 +97,9 @@ type GlobalSched struct {
 	nUsedKChoices   int
 }
 
-func newGolbalSched(machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap, idealDC *IdealDC) *GlobalSched {
+func newGolbalSched(id int, machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap, idealDC *IdealDC) *GlobalSched {
 	gs := &GlobalSched{
+		gsId:            Tid(id),
 		machines:        machines,
 		idleMachines:    idleHeap,
 		idealDC:         idealDC,
@@ -119,8 +123,10 @@ func (gs *GlobalSched) MachinesString() string {
 
 func (gs *GlobalSched) placeProcs() {
 
-	toWrite := fmt.Sprintf("q before placing procs: %v \n", gs.multiq.qMap)
-	logWrite(SCHED, toWrite)
+	// toWrite := fmt.Sprintf("%v, %v: q before placing procs: %v \n", *gs.currTickPtr, gs.gsId, gs.multiq.qMap)
+	// logWrite(SCHED, toWrite)
+
+	logWrite(SCHED, "\n")
 
 	// setup
 	p := gs.multiq.deq(*gs.currTickPtr)
@@ -130,20 +136,27 @@ func (gs *GlobalSched) placeProcs() {
 	for p != nil {
 		// place given proc
 
-		machineToUse, usedIdle := gs.pickMachine(p)
+		machineToUse := gs.pickMachine(p)
+
+		toWrite := fmt.Sprintf("%v, GS %v placing proc %v; curr idle heap: %v \n", int(*gs.currTickPtr), gs.gsId, p.procId, gs.idleMachines.heap)
+		logWrite(SCHED, toWrite)
 
 		if machineToUse == nil {
+			logWrite(SCHED, "    -> nothing avail \n")
 			toReq = append(toReq, p)
 			p = gs.multiq.deq(*gs.currTickPtr)
 			continue
 		}
-		shardRespForIdle, idleVal := machineToUse.sched.placeProc(p, usedIdle)
 
-		if shardRespForIdle {
+		shouldStoreIdleInfo, idleVal := machineToUse.sched.placeProc(p, gs.gsId)
+		toWrite = fmt.Sprintf("    -> chose %v; after placing should store: %v, new idle val: %v \n", machineToUse.mid, shouldStoreIdleInfo, idleVal)
+		logWrite(SCHED, toWrite)
+
+		if shouldStoreIdleInfo {
 			if contains(gs.idleMachines.heap, machineToUse.sched.machineId) {
 				remove(gs.idleMachines.heap, machineToUse.sched.machineId)
 			}
-			if idleVal.memAvail > IDLE_HEAP_THRESHOLD {
+			if idleVal.memAvail > IDLE_HEAP_MEM_THRESHOLD {
 				gs.idleMachines.heap.Push(idleVal)
 			}
 		}
@@ -157,17 +170,14 @@ func (gs *GlobalSched) placeProcs() {
 
 }
 
-func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, bool) {
-
-	// toWrite := fmt.Sprintf("%v, GS placing proc %v \n", int(*gs.currTickPtr), procToPlace.String())
-	// logWrite(SCHED, toWrite)
+func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
 	gs.idleMachines.lock.Lock()
-	machine, found := useNextLarger(gs.idleMachines.heap, procToPlace.maxMem(), procToPlace.willingToSpend())
+	machine, found := useBestIdle(gs.idleMachines.heap, procToPlace.maxMem())
 	gs.idleMachines.lock.Unlock()
 	if found {
 		gs.nFoundIdle += 1
-		return gs.machines[machine.machine], true
+		return gs.machines[machine.machine]
 	}
 
 	// actualMemFree := make([]Tmem, len(gs.machines))
@@ -195,11 +205,11 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) (*Machine, bool) {
 	}
 
 	if minMoneyWaste > MONEY_WASTE_THRESHOLD {
-		return nil, false
+		return nil
 	}
 
 	// toWrite = fmt.Sprintf("   used k choices: the machine to use is %v \n", machineToUse)
 	// logWrite(SCHED, toWrite)
 
-	return machineToUse, false
+	return machineToUse
 }

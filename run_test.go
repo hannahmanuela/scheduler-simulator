@@ -17,7 +17,7 @@ const (
 
 	// this is per tenant
 	N_PROCS_GEN_PER_TICK_START = 1
-	N_PROCS_GEN_PER_TICK_END   = 10
+	N_PROCS_GEN_PER_TICK_END   = 1
 )
 
 func TestRunWorld(t *testing.T) {
