@@ -9,6 +9,7 @@ import (
 type TIdleMachine struct {
 	machine            Tid
 	highestCostRunning float32
+	qlen               int
 	memAvail           Tmem
 }
 
@@ -32,49 +33,49 @@ func useBestIdle(h *MinHeap, memNeeded Tmem) (TIdleMachine, bool) {
 
 	// under mem pressures: choose based off memory fitting
 
-	minHighestCost := float32(math.MaxFloat32)
-	maxMemAvail := Tmem(0.0)
-	indToUse := -1
+	// if there are many where it would fit, pick based off qlen and highestCostRunning
+
+	possMachines := make([]TIdleMachine, 0)
 
 	for ind := 0; ind < len(*h); ind++ {
-
-		item := (*h)[ind]
-
-		if item.memAvail > memNeeded {
-			if (item.highestCostRunning < minHighestCost) ||
-				((item.highestCostRunning == minHighestCost) && (item.memAvail > maxMemAvail)) {
-				minHighestCost = item.highestCostRunning
-				maxMemAvail = item.memAvail
-				indToUse = ind
-			}
+		idleMachine := (*h)[ind]
+		if idleMachine.memAvail > memNeeded {
+			possMachines = append(possMachines, idleMachine)
 		}
 	}
 
+	// minHighestCost := float32(math.MaxFloat32)
+	minQlen := math.MaxInt
+	indToUse := -1
+
+	for ind, idleMachine := range possMachines {
+		// trade qlen and priority off?
+		if idleMachine.qlen < minQlen {
+			indToUse = ind
+			minQlen = idleMachine.qlen
+		}
+		// if idleMachine.qlen < minQlen && idleMachine.highestCostRunning < minHighestCost {
+		// 	indToUse = ind
+		// 	minQlen = idleMachine.qlen
+		// 	minHighestCost = idleMachine.highestCostRunning
+		// } else if idleMachine.qlen < minQlen && idleMachine.highestCostRunning > minHighestCost {
+		// 	// current is running more expensive procs but has a shorter q
+		// 	diffInQlen := minQlen-idleMachine.qlen
+		// 	diffInCostRunning := idleMachine.highestCostRunning - minHighestCost
+		// 	if diffInQlen > diffInCostRunning {
+		// 		indToUse = ind
+		// 		minQlen = idleMachine.qlen
+		// 		minHighestCost = idleMachine.highestCostRunning
+		// 	}
+		// } else if idleMachine.qlen > minQlen && idleMachine.highestCostRunning < minHighestCost {
+		// 	// current is running a less expensive proc but has a longer q
+		// }
+	}
+
 	if indToUse < 0 {
-		// toWrite := "   found no good machine \n"
-		// logWrite(SCHED, toWrite)
 		return TIdleMachine{}, false
 	} else {
-		toRet := (*h)[indToUse]
-
-		// toWrite := fmt.Sprintf("   min highest cost: %v, max mem avail: %v, info to use: %v \n", minHighestCost, maxMemAvail, toRet)
-		// logWrite(SCHED, toWrite)
-
-		// if there is mem left, update value --> not anymore, this will be updated by machine after placement so that it's kept up to date with jobs finishing
-
-		// if (*h)[indToUse].memAvail-memNeeded > IDLE_HEAP_THRESHOLD {
-		// 	(*h)[indToUse].memAvail -= memNeeded
-
-		// 	// also if keeping it, update the highest cost
-		// 	if (*h)[indToUse].highestCostRunning < procPaying {
-		// 		(*h)[indToUse].highestCostRunning = procPaying
-		// 	}
-		// } else {
-		// 	// else remove it from the list
-		// 	*h = append((*h)[:indToUse], (*h)[indToUse+1:]...)
-		// 	removed = true
-		// }
-
+		toRet := possMachines[indToUse]
 		return toRet, true
 	}
 

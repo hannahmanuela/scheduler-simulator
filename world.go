@@ -14,7 +14,7 @@ const (
 	K_CHOICES_DOWN = 3
 	K_CHOICES_UP   = 3
 
-	VERBOSE_SCHED_INFO       = true
+	VERBOSE_SCHED_INFO       = false
 	VERBOSE_USAGE_STATS      = true
 	VERBOSE_IDEAL_SCHED_INFO = false
 )

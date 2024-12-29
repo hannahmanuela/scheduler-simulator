@@ -51,6 +51,7 @@ func newSched(numCores int, idleHeaps map[Tid]*IdleHeap, mid Tid, currTickPtr *T
 	toPush := TIdleMachine{
 		memAvail:           MEM_PER_MACHINE,
 		highestCostRunning: -1,
+		qlen:               0,
 		machine:            Tid(sd.machineId),
 	}
 	heapToUse.heap.Push(toPush)
@@ -135,7 +136,12 @@ func (sd *Sched) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
 		sd.currHeapGSS = fromGs
 	}
 
-	return true, TIdleMachine{sd.machineId, maxCostRunning, sd.memFree()}
+	return true, TIdleMachine{
+		machine:            sd.machineId,
+		highestCostRunning: maxCostRunning,
+		qlen:               sd.activeQ.qlen(),
+		memAvail:           sd.memFree(),
+	}
 }
 
 // do numCores ticks of computation (only on procs in the activeQ)
@@ -228,6 +234,11 @@ func (sd *Sched) simulateRunProcs() {
 				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
 				logWrite(SCHED, toWrite)
 
+				if (procToRun.timeDone - procToRun.timeStarted) > procToRun.compDone {
+					toWrite := fmt.Sprintf("   ---> OVER %v \n", procToRun.String())
+					logWrite(SCHED, toWrite)
+				}
+
 				toWrite = fmt.Sprintf("%v, %v, %v, %v \n", sd.worldNumProcsGenPerTick, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String())
 				logWrite(PROCS_DONE, toWrite)
 			}
@@ -294,6 +305,7 @@ func (sd *Sched) simulateRunProcs() {
 	toPush := TIdleMachine{
 		machine:            sd.machineId,
 		highestCostRunning: highestCost,
+		qlen:               sd.activeQ.qlen(),
 		memAvail:           sd.memFree(),
 	}
 	heapToUse.heap.Push(toPush)
