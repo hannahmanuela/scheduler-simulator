@@ -23,6 +23,25 @@ func (q *Queue) String() string {
 	return str
 }
 
+func (q *Queue) SummaryString() string {
+	numPerPrice := make(map[float32]int, N_PRIORITIES)
+
+	for prio := 0; prio < N_PRIORITIES; prio++ {
+		numPerPrice[mapPriorityToDollars(prio)] = 0
+	}
+
+	for _, p := range q.q {
+		numPerPrice[p.willingToSpend()] += 1
+	}
+
+	str := ""
+	for prio := 0; prio < N_PRIORITIES; prio++ {
+		str += strconv.FormatFloat(float64(mapPriorityToDollars(prio)), 'f', 3, 32) + ": " + strconv.Itoa(numPerPrice[mapPriorityToDollars(prio)]) + "\n"
+	}
+
+	return str
+}
+
 func (q *Queue) getQ() []*Proc {
 	return q.q
 }
