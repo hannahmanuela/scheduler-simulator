@@ -11,7 +11,6 @@ import (
 // this is the external view of a clients proc, that includes provider-created/maintained metadata, etc
 type Proc struct {
 	procId        Tid
-	tenantId      Tid
 	timeStarted   Tftick
 	timePlaced    Tftick
 	timeDone      Tftick
@@ -31,7 +30,6 @@ func (p *Proc) String() string {
 func newProvProc(procId Tid, currTick Tftick, privProc *ProcInternals) *Proc {
 	return &Proc{
 		procId:        procId,
-		tenantId:      privProc.tenantId,
 		timeStarted:   currTick,
 		timeDone:      0,
 		compDone:      0,
@@ -66,13 +64,12 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 
 // this is the internal view of a proc, ie what the client of the provider would create/run
 type ProcInternals struct {
-	tenantId       Tid
 	actualComp     Tftick
 	willingToSpend float32
 	maxMem         Tmem
 }
 
-func newPrivProc(actualComp float32, willingToSpend float32, maxMem int, tenantId Tid) *ProcInternals {
+func newPrivProc(actualComp float32, willingToSpend float32, maxMem int) *ProcInternals {
 
-	return &ProcInternals{tenantId, Tftick(actualComp), willingToSpend, Tmem(maxMem)}
+	return &ProcInternals{Tftick(actualComp), willingToSpend, Tmem(maxMem)}
 }

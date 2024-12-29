@@ -2,31 +2,43 @@ package slasched
 
 import (
 	"fmt"
+	"sync"
 	"testing"
-	"time"
 )
 
 const (
 	N_TICK = 200
 
-	N_GSSs              = 2
-	N_MACHINES          = 10
+	N_GSSs              = 4
+	N_MACHINES          = 100
 	N_CORES_PER_MACHINE = 8
 
-	N_TENANTS = 10
-
-	// this is per tenant
-	N_PROCS_GEN_PER_TICK_START = 1
-	N_PROCS_GEN_PER_TICK_END   = 5
+	// this is overall
+	N_PROCS_GEN_PER_TICK_START = 50
+	N_PROCS_GEN_PER_TICK_END   = 200
 )
 
 func TestRunWorld(t *testing.T) {
 	emptyFiles()
-	for nProcsToGen := N_PROCS_GEN_PER_TICK_START; nProcsToGen <= N_PROCS_GEN_PER_TICK_END; nProcsToGen += 1 {
+	for nProcsToGen := N_PROCS_GEN_PER_TICK_START; nProcsToGen <= N_PROCS_GEN_PER_TICK_END; nProcsToGen += 20 {
+
 		fmt.Printf("---- Running with %v procs per ticks ----\n", nProcsToGen)
-		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_TENANTS, N_GSSs)
-		time.Sleep(100 * time.Millisecond)
-		w.Run(N_TICK)
+
+		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_GSSs)
+		iw := newIdealWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w.Run(N_TICK)
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			iw.Run(N_TICK)
+		}()
+		wg.Wait()
 	}
 
 }

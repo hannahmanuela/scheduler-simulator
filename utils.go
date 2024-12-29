@@ -14,8 +14,27 @@ func (f Tftick) String() string {
 	return fmt.Sprintf("%.2f", f)
 }
 
+func mapPriorityToPctToGen(priority int) int {
+	return []int{35, 25, 2, 15, 5}[priority]
+}
+
 func mapPriorityToDollars(priority int) float32 {
 	return []float32{0.3, 0.7, 1.0, 1.5, 2}[priority]
+}
+
+func genRandPriority() int {
+
+	sample := r.Intn(100)
+	currSum := 0
+
+	for prio := 0; prio < N_PRIORITIES; prio++ {
+		currSum += mapPriorityToPctToGen(prio)
+		if sample < currSum {
+			return prio
+		}
+	}
+
+	return N_PRIORITIES - 1
 }
 
 type PrintType int

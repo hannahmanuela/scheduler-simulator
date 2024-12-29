@@ -90,7 +90,6 @@ type GlobalSched struct {
 	gsId            Tid
 	machines        map[Tid]*Machine
 	idleMachines    *IdleHeap
-	idealDC         *IdealDC
 	multiq          MultiQueue
 	currTickPtr     *Tftick
 	nProcGenPerTick int
@@ -98,12 +97,11 @@ type GlobalSched struct {
 	nUsedKChoices   int
 }
 
-func newGolbalSched(id int, machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap, idealDC *IdealDC) *GlobalSched {
+func newGolbalSched(id int, machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap) *GlobalSched {
 	gs := &GlobalSched{
 		gsId:            Tid(id),
 		machines:        machines,
 		idleMachines:    idleHeap,
-		idealDC:         idealDC,
 		multiq:          NewMultiQ(),
 		currTickPtr:     currTickPtr,
 		nProcGenPerTick: numGenPerTick,

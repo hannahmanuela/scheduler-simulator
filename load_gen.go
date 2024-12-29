@@ -17,20 +17,19 @@ const (
 	PARETO_ALPHA = 25
 )
 
-type Website interface {
-	genLoad(nProcs int, tenantId Tid) []*ProcInternals
+type LoadGen interface {
+	genLoad(nProcs int) []*ProcInternals
 }
 
 // the website struct itself
-type SimpleWebsite struct {
+type LoadGenT struct {
 }
 
-func newSimpleWebsite() *SimpleWebsite {
-	return &SimpleWebsite{}
+func newLoadGen() *LoadGenT {
+	return &LoadGenT{}
 }
 
-func (website *SimpleWebsite) genLoad(nProcs int, tenantId Tid) []*ProcInternals {
-	// nproc := int(website.poisson.Rand())
+func (lg *LoadGenT) genLoad(nProcs int) []*ProcInternals {
 	procs := make([]*ProcInternals, nProcs)
 
 	for i := 0; i < nProcs; i++ {
@@ -38,12 +37,12 @@ func (website *SimpleWebsite) genLoad(nProcs int, tenantId Tid) []*ProcInternals
 		minComp := math.Max(math.Min(sampleNormal(AVG_COMP, STD_DEV_COMP), MAX_COMP), MIN_COMP)
 		actualComp := ParetoSample(PARETO_ALPHA, float64(minComp))
 
-		priority := r.Intn(N_PRIORITIES)
+		priority := genRandPriority()
 		willingToSpend := mapPriorityToDollars(priority)
 
 		maxMem := MIN_MEM + r.Intn(MAX_MEM-MIN_MEM)
 
-		procs[i] = newPrivProc(float32(actualComp), willingToSpend, maxMem, tenantId)
+		procs[i] = newPrivProc(float32(actualComp), willingToSpend, maxMem)
 	}
 
 	return procs
