@@ -24,19 +24,23 @@ func (q *Queue) String() string {
 }
 
 func (q *Queue) SummaryString() string {
-	numPerPrice := make(map[float32]int, N_PRIORITIES)
+	procsPerPrice := make(map[float32][]Tid, N_PRIORITIES)
 
 	for prio := 0; prio < N_PRIORITIES; prio++ {
-		numPerPrice[mapPriorityToDollars(prio)] = 0
+		procsPerPrice[mapPriorityToDollars(prio)] = make([]Tid, 0)
 	}
 
 	for _, p := range q.q {
-		numPerPrice[p.willingToSpend()] += 1
+		procsPerPrice[p.willingToSpend()] = append(procsPerPrice[p.willingToSpend()], p.procId)
 	}
 
 	str := ""
 	for prio := 0; prio < N_PRIORITIES; prio++ {
-		str += strconv.FormatFloat(float64(mapPriorityToDollars(prio)), 'f', 3, 32) + ": " + strconv.Itoa(numPerPrice[mapPriorityToDollars(prio)]) + "\n"
+		str += strconv.FormatFloat(float64(mapPriorityToDollars(prio)), 'f', 3, 32) + ": "
+		for _, id := range procsPerPrice[mapPriorityToDollars(prio)] {
+			str += strconv.Itoa(int(id)) + ", "
+		}
+		str += "\n"
 	}
 
 	return str

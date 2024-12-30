@@ -84,20 +84,20 @@ func (idc *IdealDC) tick() {
 
 	// TODO: what if it doesn't fit?
 	putProcOnCoreWithMaxTimeLeft := func() int {
-		minVal := Tftick(math.MaxFloat32)
-		minCore := -1
+		maxVal := Tftick(0.0)
+		coreToUse := -1
 		for i := 0; i < idc.amtWorkPerTick; i++ {
 			if _, ok := coresLeftThisRound[i]; ok {
 				if _, ok := coresWithTicksLeft[i]; ok {
-					if ticksLeftPerCore[i] < minVal {
-						minVal = ticksLeftPerCore[i]
-						minCore = i
+					if ticksLeftPerCore[i] > maxVal {
+						maxVal = ticksLeftPerCore[i]
+						coreToUse = i
 					}
 				}
 			}
 		}
-		delete(coresLeftThisRound, minCore)
-		return minCore
+		delete(coresLeftThisRound, coreToUse)
+		return coreToUse
 	}
 
 	toReq := make([]*Proc, 0)
@@ -170,6 +170,9 @@ func (idc *IdealDC) tick() {
 	for _, p := range toReq {
 		idc.procQ.enq(p)
 	}
+
+	toWrite = fmt.Sprintf("cores with ticks left: %v, ticks left over: %v\n", coresWithTicksLeft, ticksLeftPerCore)
+	logWrite(IDEAL_SCHED, toWrite)
 
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0

@@ -181,20 +181,20 @@ func (sd *Sched) simulateRunProcs() {
 	logWrite(USAGE, toWrite)
 
 	putProcOnCoreWithMaxTimeLeft := func() int {
-		minVal := Tftick(math.MaxFloat32)
-		minCore := -1
+		maxVal := Tftick(0.0)
+		coreToUse := -1
 		for i := 0; i < sd.numCores; i++ {
 			if _, ok := coresLeftThisRound[i]; ok {
 				if _, ok := coresWithTicksLeft[i]; ok {
-					if ticksLeftPerCore[i] < minVal {
-						minVal = ticksLeftPerCore[i]
-						minCore = i
+					if ticksLeftPerCore[i] > maxVal {
+						maxVal = ticksLeftPerCore[i]
+						coreToUse = i
 					}
 				}
 			}
 		}
-		delete(coresLeftThisRound, minCore)
-		return minCore
+		delete(coresLeftThisRound, coreToUse)
+		return coreToUse
 	}
 
 	toReq := make([]*Proc, 0)
@@ -202,7 +202,7 @@ func (sd *Sched) simulateRunProcs() {
 	toWrite = fmt.Sprintf("\n==> %v @ %v, machine %v (on heap: %v, mem free: %v); has q: \n%v", sd.worldNumProcsGenPerTick, sd.currTickPtr.String(), sd.machineId, sd.currHeapGSS, sd.memFree(), sd.activeQ.SummaryString())
 	logWrite(SCHED, toWrite)
 
-	for sd.activeQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 {
+	for sd.activeQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && len(coresWithTicksLeft) > 0 {
 
 		for i := 0; i < sd.numCores; i++ {
 			coresLeftThisRound[i] = true
@@ -233,8 +233,8 @@ func (sd *Sched) simulateRunProcs() {
 				continue
 			}
 
-			// toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
-			// logWrite(SCHED, toWrite)
+			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
+			logWrite(SCHED, toWrite)
 
 			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 
