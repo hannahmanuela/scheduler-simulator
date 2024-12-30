@@ -48,6 +48,7 @@ sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1,
 ax[1, 0].set_title("Ideal: Distribution of Utilization by nGenPerTick")
 ax[1, 0].set_xlabel("nGenPerTick")
 ax[1, 0].set_ylabel("Utilization")
+ax[1, 0].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
 
 # 6. Third subplot: Strip plot for Time Passed as % of Completion for Actual data
 sns.stripplot(data=actual_procs_done, x="nGenPerTick", y="timeAsPercentage", hue="willingToSpend", 
@@ -62,6 +63,7 @@ sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1
 ax[1, 1].set_title("Actual: Distribution of Utilization by nGenPerTick")
 ax[1, 1].set_xlabel("nGenPerTick")
 ax[1, 1].set_ylabel("Utilization")
+ax[1, 1].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
 
 # 8. Fifth subplot: Violin plot for Memory Utilization for Ideal data
 sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 0])
@@ -69,6 +71,7 @@ sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=a
 ax[2, 0].set_title("Ideal: Distribution of Memory Utilization by nGenPerTick")
 ax[2, 0].set_xlabel("nGenPerTick")
 ax[2, 0].set_ylabel("Memory Utilization")
+ax[2, 0].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
 
 # 9. Sixth subplot: Violin plot for Memory Utilization for Actual data
 sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 1])
@@ -76,6 +79,7 @@ sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=
 ax[2, 1].set_title("Actual: Distribution of Memory Utilization by nGenPerTick")
 ax[2, 1].set_xlabel("nGenPerTick")
 ax[2, 1].set_ylabel("Memory Utilization")
+ax[2, 1].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
 
 # Set the same y-axis limits for each row (ideal and actual)
 # For Time Passed as % of Completion (Ideal and Actual)
