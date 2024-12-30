@@ -50,8 +50,6 @@ func (idc *IdealDC) potPlaceProc(newProc *Proc) bool {
 
 	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
 	procToKill, minMoneyWaste := idc.procQ.checkKill(newProc)
-	toWrite := fmt.Sprintf("  min money waste: %v \n", minMoneyWaste)
-	logWrite(IDEAL_SCHED, toWrite)
 	if minMoneyWaste < MONEY_WASTE_THRESHOLD {
 
 		newProc.timePlaced = *idc.currTickPtr
@@ -67,8 +65,8 @@ func (idc *IdealDC) potPlaceProc(newProc *Proc) bool {
 // ok so I have a bunch of procs that all fit memory wise, so really what I'm doing
 func (idc *IdealDC) tick() {
 
-	// toWrite := fmt.Sprintf("%v @ %v: WHOLE QUEUE %v\n", idc.worldNumProcsGenPerTick, idc.currTickPtr, idc.procQ.String())
-	// logWrite(IDEAL_SCHED, toWrite)
+	toWrite := fmt.Sprintf("%v @ %v; mem free: %v: WHOLE QUEUE %v\n", idc.worldNumProcsGenPerTick, idc.currTickPtr, idc.memFree(), idc.procQ.String())
+	logWrite(IDEAL_SCHED, toWrite)
 
 	totalTicksLeftToGive := Tftick(idc.amtWorkPerTick)
 	ticksLeftPerCore := make(map[int]Tftick, 0)
@@ -80,7 +78,8 @@ func (idc *IdealDC) tick() {
 		coresWithTicksLeft[i] = true
 	}
 
-	toWrite := fmt.Sprintf("%v, %v", idc.worldNumProcsGenPerTick, int(*idc.currTickPtr))
+	ogMemFree := idc.memFree()
+	toWrite = fmt.Sprintf("%v, %v", idc.worldNumProcsGenPerTick, int(*idc.currTickPtr))
 	logWrite(IDEAL_USAGE, toWrite)
 
 	// TODO: what if it doesn't fit?
@@ -134,8 +133,8 @@ func (idc *IdealDC) tick() {
 				continue
 			}
 
-			// toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
-			// logWrite(IDEAL_SCHED, toWrite)
+			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
+			logWrite(IDEAL_SCHED, toWrite)
 
 			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 
@@ -152,8 +151,13 @@ func (idc *IdealDC) tick() {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *idc.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
-				// toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
-				// logWrite(IDEAL_SCHED, toWrite)
+				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
+				logWrite(IDEAL_SCHED, toWrite)
+
+				if (procToRun.timeDone - procToRun.timeStarted) > procToRun.compDone {
+					toWrite := fmt.Sprintf("   ---> OVER %v \n", procToRun.String())
+					logWrite(IDEAL_SCHED, toWrite)
+				}
 
 				toWrite = fmt.Sprintf("%v, %v, %v, %v \n", idc.worldNumProcsGenPerTick, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String())
 				logWrite(IDEAL_PROCS_DONE, toWrite)
@@ -170,6 +174,6 @@ func (idc *IdealDC) tick() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), idc.memFree())
+	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
 	logWrite(IDEAL_USAGE, toWrite)
 }

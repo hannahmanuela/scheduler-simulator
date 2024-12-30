@@ -95,6 +95,8 @@ func (sd *Sched) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
 
 	newProc.timePlaced = *sd.currTickPtr
 
+	ogMemFree := sd.memFree()
+
 	if newProc.maxMem() < sd.memFree() {
 		sd.activeQ.enq(newProc)
 
@@ -111,6 +113,24 @@ func (sd *Sched) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
 		if p.willingToSpend() > maxCostRunning {
 			maxCostRunning = p.willingToSpend()
 		}
+	}
+
+	// if not from GS whose list we're in and change in mem is large, update the list
+	if (float32(sd.memFree()) < 0.9*float32(ogMemFree)) && (sd.currHeapGSS >= 0) && (sd.currHeapGSS != fromGs) {
+		heapToUse := sd.idleHeaps[sd.currHeapGSS]
+		heapToUse.lock.Lock()
+		// also if it is already in the heap, then replace it with the new value
+		if contains(heapToUse.heap, sd.machineId) {
+			remove(heapToUse.heap, sd.machineId)
+		}
+		toPush := TIdleMachine{
+			machine:            sd.machineId,
+			highestCostRunning: maxCostRunning,
+			qlen:               sd.activeQ.qlen(),
+			memAvail:           sd.memFree(),
+		}
+		heapToUse.heap.Push(toPush)
+		heapToUse.lock.Unlock()
 	}
 
 	// don't want the GSS to take out idleness into account if we are already somewhere else

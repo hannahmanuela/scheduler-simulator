@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	MEM_PER_MACHINE = 128000
+	MEM_PER_MACHINE = 64000
 
 	IDLE_HEAP_MEM_THRESHOLD  = 1
 	IDLE_HEAP_QLEN_THRESHOLD = 2
@@ -28,6 +28,8 @@ type World struct {
 	numProcsToGen int
 	currProcNum   int
 	machines      map[Tid]*Machine
+	idealDC       *IdealDC
+	idealMultiQ   MultiQueue
 	GSSs          []*GlobalSched
 	roundRobinInd int
 	loadGen       LoadGen
@@ -39,10 +41,13 @@ func newWorld(numMachines int, numCores int, nGenPerTick int, nGSSs int) *World 
 		currTick:      Tftick(0),
 		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
+		idealMultiQ:   NewMultiQ(),
 		roundRobinInd: 0,
 	}
 
 	w.loadGen = newLoadGen()
+
+	w.idealDC = newIdealDC(numMachines*numCores, Tmem(numMachines*MEM_PER_MACHINE), &w.currTick, nGenPerTick)
 
 	w.GSSs = make([]*GlobalSched, nGSSs)
 	idleHeaps := make(map[Tid]*IdleHeap, nGSSs)
@@ -83,13 +88,39 @@ func (w *World) genLoad(nProcs int) int {
 			w.roundRobinInd = 0
 		}
 
+		copyForIdeal := newProvProc(Tid(w.currProcNum), w.currTick, up)
+		w.idealMultiQ.enq(copyForIdeal)
 		w.currProcNum += 1
 	}
 	return len(userProcs)
 }
 
+// this needs to model placement ordering like GS does...
+func (w *World) placeProcsIdeal() {
+
+	toReq := make([]*Proc, 0)
+
+	p := w.idealMultiQ.deq(w.currTick)
+
+	for p != nil {
+		placed := w.idealDC.potPlaceProc(p)
+
+		if !placed {
+			toReq = append(toReq, p)
+		}
+		p = w.idealMultiQ.deq(w.currTick)
+	}
+
+	for _, p := range toReq {
+		w.idealMultiQ.enq(p)
+	}
+
+}
+
 func (w *World) Tick(numProcs int) {
 	w.genLoad(numProcs)
+
+	w.placeProcsIdeal()
 
 	for _, gs := range w.GSSs {
 		gs.placeProcs()
@@ -100,6 +131,7 @@ func (w *World) Tick(numProcs int) {
 	for _, m := range w.machines {
 		m.sched.tick()
 	}
+	w.idealDC.tick()
 
 	w.currTick += 1
 }

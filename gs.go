@@ -195,8 +195,6 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
 	for _, m := range machineToTry {
 		moneyWaste := m.sched.okToPlace(procToPlace)
-		toWrite := fmt.Sprintf("  min money waste: %v \n", moneyWaste)
-		logWrite(SCHED, toWrite)
 		if moneyWaste < minMoneyWaste {
 			minMoneyWaste = moneyWaste
 			machineToUse = m

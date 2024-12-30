@@ -4,7 +4,7 @@ import seaborn as sns  # Seaborn is a great library for creating scatter plots
 
 numMachines = 100
 coresPerMachine = 8
-totalMemoryPerMachine = 256000
+totalMemoryPerMachine = 64000
 
 # Load the data
 ideal_usage_metrics = pd.read_csv("ideal_usage.txt", index_col=None, names=["nGenPerTick", "tick", "ticksLeftOver", "memFree"])

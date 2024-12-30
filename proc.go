@@ -22,9 +22,11 @@ func (p *Proc) String() string {
 	return strconv.Itoa(int(p.procId)) + ": " +
 		", time started: " + p.timeStarted.String() +
 		", time placed: " + p.timePlaced.String() +
+		", time done: " + p.timeDone.String() +
 		", actual comp " + p.procInternals.actualComp.String() +
 		", comp done " + p.compDone.String() +
-		", willing to spend: " + strconv.FormatFloat(float64(p.willingToSpend()), 'f', 3, 32)
+		", willing to spend: " + strconv.FormatFloat(float64(p.willingToSpend()), 'f', 3, 32) +
+		", max mem: " + strconv.Itoa(int(p.maxMem()))
 }
 
 func newProvProc(procId Tid, currTick Tftick, privProc *ProcInternals) *Proc {

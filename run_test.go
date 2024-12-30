@@ -2,7 +2,6 @@ package slasched
 
 import (
 	"fmt"
-	"sync"
 	"testing"
 )
 
@@ -14,8 +13,8 @@ const (
 	N_CORES_PER_MACHINE = 8
 
 	// this is overall
-	N_PROCS_GEN_PER_TICK_START = 50
-	N_PROCS_GEN_PER_TICK_END   = 200
+	N_PROCS_GEN_PER_TICK_START = 190
+	N_PROCS_GEN_PER_TICK_END   = 190
 )
 
 func TestRunWorld(t *testing.T) {
@@ -25,20 +24,7 @@ func TestRunWorld(t *testing.T) {
 		fmt.Printf("---- Running with %v procs per ticks ----\n", nProcsToGen)
 
 		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_GSSs)
-		iw := newIdealWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen)
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			w.Run(N_TICK)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			iw.Run(N_TICK)
-		}()
-		wg.Wait()
+		w.Run(N_TICK)
 	}
 
 }
