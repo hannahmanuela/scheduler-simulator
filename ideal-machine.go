@@ -9,7 +9,7 @@ const (
 	MONEY_WASTE_THRESHOLD = 0.5
 )
 
-type IdealDC struct {
+type BigIdealMachine struct {
 	currTickPtr             *Tftick
 	procQ                   *Queue
 	amtWorkPerTick          int
@@ -17,8 +17,8 @@ type IdealDC struct {
 	worldNumProcsGenPerTick int
 }
 
-func newIdealDC(amtWorkPerTick int, totMem Tmem, currTickPtr *Tftick, worldNumProcsGenPerTick int) *IdealDC {
-	return &IdealDC{
+func newBigIdealMachine(amtWorkPerTick int, totMem Tmem, currTickPtr *Tftick, worldNumProcsGenPerTick int) *BigIdealMachine {
+	return &BigIdealMachine{
 		currTickPtr:             currTickPtr,
 		procQ:                   newQueue(),
 		amtWorkPerTick:          amtWorkPerTick,
@@ -28,7 +28,7 @@ func newIdealDC(amtWorkPerTick int, totMem Tmem, currTickPtr *Tftick, worldNumPr
 
 }
 
-func (idc *IdealDC) memFree() Tmem {
+func (idc *BigIdealMachine) memFree() Tmem {
 	currMemUsed := Tmem(0)
 
 	for _, p := range idc.procQ.getQ() {
@@ -38,7 +38,7 @@ func (idc *IdealDC) memFree() Tmem {
 	return idc.totalMem - currMemUsed
 }
 
-func (idc *IdealDC) potPlaceProc(newProc *Proc) bool {
+func (idc *BigIdealMachine) potPlaceProc(newProc *Proc) bool {
 
 	// if it just fits in terms of memory do it
 	if newProc.maxMem() < idc.memFree() {
@@ -63,7 +63,7 @@ func (idc *IdealDC) potPlaceProc(newProc *Proc) bool {
 }
 
 // ok so I have a bunch of procs that all fit memory wise, so really what I'm doing
-func (idc *IdealDC) tick() {
+func (idc *BigIdealMachine) tick() {
 
 	toWrite := fmt.Sprintf("%v @ %v; mem free: %v: WHOLE QUEUE %v\n", idc.worldNumProcsGenPerTick, idc.currTickPtr, idc.memFree(), idc.procQ.String())
 	logWrite(IDEAL_SCHED, toWrite)

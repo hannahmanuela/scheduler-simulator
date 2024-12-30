@@ -9,7 +9,12 @@ const (
 	TICK_SCHED_THRESHOLD = 0.001 // amount of ticks after which I stop scheduling; given that 1 tick = 5ms (see website.go)
 )
 
-type Sched struct {
+type Tid int
+
+type Ttickmap map[Tid]Tftick
+type Tprocmap map[Tid]int
+
+type Machine struct {
 	machineId               Tid
 	numCores                int
 	activeQ                 *Queue
@@ -19,8 +24,9 @@ type Sched struct {
 	worldNumProcsGenPerTick int
 }
 
-func newSched(numCores int, idleHeaps map[Tid]*IdleHeap, mid Tid, currTickPtr *Tftick, nGenPerTick int) *Sched {
-	sd := &Sched{
+func newMachine(mid Tid, idleHeaps map[Tid]*IdleHeap, numCores int, currTickPtr *Tftick, nGenPerTick int) *Machine {
+
+	sd := &Machine{
 		machineId:               mid,
 		numCores:                numCores,
 		activeQ:                 newQueue(),
@@ -60,15 +66,15 @@ func newSched(numCores int, idleHeaps map[Tid]*IdleHeap, mid Tid, currTickPtr *T
 	return sd
 }
 
-func (sd *Sched) String() string {
+func (sd *Machine) String() string {
 	return fmt.Sprintf("machine scheduler: %v", sd.machineId)
 }
 
-func (sd *Sched) tick() {
+func (sd *Machine) tick() {
 	sd.simulateRunProcs()
 }
 
-func (sd *Sched) memFree() Tmem {
+func (sd *Machine) memFree() Tmem {
 
 	memUsed := Tmem(0)
 
@@ -78,7 +84,7 @@ func (sd *Sched) memFree() Tmem {
 	return MEM_PER_MACHINE - memUsed
 }
 
-func (sd *Sched) okToPlace(newProc *Proc) float32 {
+func (sd *Machine) okToPlace(newProc *Proc) float32 {
 
 	// if it just fits in terms of memory do it
 	if newProc.maxMem() < sd.memFree() {
@@ -91,7 +97,7 @@ func (sd *Sched) okToPlace(newProc *Proc) float32 {
 	return minMoneyWaste
 }
 
-func (sd *Sched) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
+func (sd *Machine) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
 
 	newProc.timePlaced = *sd.currTickPtr
 
@@ -165,7 +171,7 @@ func (sd *Sched) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
 }
 
 // do numCores ticks of computation (only on procs in the activeQ)
-func (sd *Sched) simulateRunProcs() {
+func (sd *Machine) simulateRunProcs() {
 
 	totalTicksLeftToGive := Tftick(sd.numCores)
 	ticksLeftPerCore := make(map[int]Tftick, 0)

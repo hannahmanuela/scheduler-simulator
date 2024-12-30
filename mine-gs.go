@@ -54,22 +54,6 @@ func useBestIdle(h *MinHeap, memNeeded Tmem) (TIdleMachine, bool) {
 			indToUse = ind
 			minQlen = idleMachine.qlen
 		}
-		// if idleMachine.qlen < minQlen && idleMachine.highestCostRunning < minHighestCost {
-		// 	indToUse = ind
-		// 	minQlen = idleMachine.qlen
-		// 	minHighestCost = idleMachine.highestCostRunning
-		// } else if idleMachine.qlen < minQlen && idleMachine.highestCostRunning > minHighestCost {
-		// 	// current is running more expensive procs but has a shorter q
-		// 	diffInQlen := minQlen-idleMachine.qlen
-		// 	diffInCostRunning := idleMachine.highestCostRunning - minHighestCost
-		// 	if diffInQlen > diffInCostRunning {
-		// 		indToUse = ind
-		// 		minQlen = idleMachine.qlen
-		// 		minHighestCost = idleMachine.highestCostRunning
-		// 	}
-		// } else if idleMachine.qlen > minQlen && idleMachine.highestCostRunning < minHighestCost {
-		// 	// current is running a less expensive proc but has a longer q
-		// }
 	}
 
 	if indToUse < 0 {
@@ -147,13 +131,13 @@ func (gs *GlobalSched) placeProcs() {
 			continue
 		}
 
-		shouldStoreIdleInfo, idleVal := machineToUse.sched.placeProc(p, gs.gsId)
-		toWrite = fmt.Sprintf("    -> chose %v; after placing should store: %v, new idle val: %v \n", machineToUse.mid, shouldStoreIdleInfo, idleVal)
+		shouldStoreIdleInfo, idleVal := machineToUse.placeProc(p, gs.gsId)
+		toWrite = fmt.Sprintf("    -> chose %v; after placing should store: %v, new idle val: %v \n", machineToUse.machineId, shouldStoreIdleInfo, idleVal)
 		logWrite(SCHED, toWrite)
 
 		if shouldStoreIdleInfo {
-			if contains(gs.idleMachines.heap, machineToUse.sched.machineId) {
-				remove(gs.idleMachines.heap, machineToUse.sched.machineId)
+			if contains(gs.idleMachines.heap, machineToUse.machineId) {
+				remove(gs.idleMachines.heap, machineToUse.machineId)
 			}
 			if idleVal.memAvail > IDLE_HEAP_MEM_THRESHOLD {
 				gs.idleMachines.heap.Push(idleVal)
@@ -194,7 +178,7 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 	minMoneyWaste := float32(math.MaxFloat32)
 
 	for _, m := range machineToTry {
-		moneyWaste := m.sched.okToPlace(procToPlace)
+		moneyWaste := m.okToPlace(procToPlace)
 		if moneyWaste < minMoneyWaste {
 			minMoneyWaste = moneyWaste
 			machineToUse = m
