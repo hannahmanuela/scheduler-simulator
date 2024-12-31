@@ -70,7 +70,7 @@ type IdleHeap struct {
 	lock sync.RWMutex
 }
 
-type GlobalSched struct {
+type MineGSS struct {
 	gsId            Tid
 	machines        map[Tid]*Machine
 	idleMachines    *IdleHeap
@@ -81,8 +81,8 @@ type GlobalSched struct {
 	nUsedKChoices   int
 }
 
-func newGolbalSched(id int, machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap) *GlobalSched {
-	gs := &GlobalSched{
+func newMineGSS(id int, machines map[Tid]*Machine, currTickPtr *Tftick, numGenPerTick int, idleHeap *IdleHeap) *MineGSS {
+	gs := &MineGSS{
 		gsId:            Tid(id),
 		machines:        machines,
 		idleMachines:    idleHeap,
@@ -96,7 +96,7 @@ func newGolbalSched(id int, machines map[Tid]*Machine, currTickPtr *Tftick, numG
 	return gs
 }
 
-func (gs *GlobalSched) MachinesString() string {
+func (gs *MineGSS) MachinesString() string {
 	str := "machines: \n"
 	for _, m := range gs.machines {
 		str += "   " + m.String()
@@ -104,7 +104,7 @@ func (gs *GlobalSched) MachinesString() string {
 	return str
 }
 
-func (gs *GlobalSched) placeProcs() {
+func (gs *MineGSS) placeProcs() {
 
 	// toWrite := fmt.Sprintf("%v, %v: q before placing procs: %v \n", *gs.currTickPtr, gs.gsId, gs.multiq.qMap)
 	// logWrite(SCHED, toWrite)
@@ -153,7 +153,7 @@ func (gs *GlobalSched) placeProcs() {
 
 }
 
-func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
+func (gs *MineGSS) pickMachine(procToPlace *Proc) *Machine {
 
 	gs.idleMachines.lock.Lock()
 	machine, found := useBestIdle(gs.idleMachines.heap, procToPlace.maxMem())
@@ -171,7 +171,7 @@ func (gs *GlobalSched) pickMachine(procToPlace *Proc) *Machine {
 
 	gs.nUsedKChoices += 1
 
-	// if no idle machine, use power of k choices (for now k = number of machines :D )
+	// if no idle machine, use power of k choices
 	var machineToUse *Machine
 	machineToTry := pickRandomElements(Values(gs.machines), K_CHOICES_DOWN)
 

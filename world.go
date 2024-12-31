@@ -13,9 +13,10 @@ const (
 	K_CHOICES_DOWN = 3
 	K_CHOICES_UP   = 3
 
-	VERBOSE_SCHED_INFO       = false
-	VERBOSE_USAGE_STATS      = true
-	VERBOSE_IDEAL_SCHED_INFO = false
+	VERBOSE_USAGE_STATS       = true
+	VERBOSE_SCHED_INFO        = false
+	VERBOSE_IDEAL_SCHED_INFO  = false
+	VERBOSE_HERMOD_SCHED_INFO = true
 )
 
 const SEED = 12345
@@ -27,9 +28,9 @@ type World struct {
 	numProcsToGen int
 	currProcNum   int
 
-	idealLB *IdealLB
-	mineLB  *MineLB
-	// hermodLB HermodLB
+	idealLB  *IdealLB
+	mineLB   *MineLB
+	hermodLB *HermodLB
 
 	loadGen LoadGen
 }
@@ -43,7 +44,7 @@ func newWorld(numMachines int, numCores int, nGenPerTick int, nGSSs int) *World 
 
 	w.mineLB = newMineLB(numMachines, numCores, nGenPerTick, nGSSs, &w.currTick)
 	w.idealLB = newIdealLB(numMachines, numCores, nGenPerTick, &w.currTick)
-	// TODO: hermod lb
+	w.hermodLB = newHermodLB(numMachines, numCores, nGenPerTick, nGSSs, &w.currTick)
 
 	w.loadGen = newLoadGen()
 
@@ -56,12 +57,13 @@ func (w *World) genLoad(nProcs int) []*ProcInternals {
 
 	for _, up := range userProcs {
 		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.mineLB.placeProc(provProc)
+		w.mineLB.enqProc(provProc)
 
 		copyForIdeal := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.idealLB.placeProc(copyForIdeal)
+		w.idealLB.enqProc(copyForIdeal)
 
-		// TODO: hermod
+		copyForHermod := newProvProc(Tid(w.currProcNum), w.currTick, up)
+		w.hermodLB.enqProc(copyForHermod)
 
 		w.currProcNum += 1
 	}
@@ -73,11 +75,11 @@ func (w *World) Tick(numProcs int) {
 
 	w.mineLB.placeProcs()
 	w.idealLB.placeProcs()
-	// TODO: hermod
+	w.hermodLB.placeProcs()
 
 	w.mineLB.tick()
 	w.idealLB.tick()
-	// TODO: hermod
+	w.hermodLB.tick()
 
 	w.currTick += 1
 }

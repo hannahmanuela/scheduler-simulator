@@ -183,6 +183,7 @@ func (sd *Machine) simulateRunProcs() {
 		coresWithTicksLeft[i] = true
 	}
 
+	ogMemFree := sd.memFree()
 	toWrite := fmt.Sprintf("%v, %v, %v", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), sd.machineId)
 	logWrite(USAGE, toWrite)
 
@@ -279,7 +280,7 @@ func (sd *Machine) simulateRunProcs() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), sd.memFree())
+	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
 	logWrite(USAGE, toWrite)
 
 	highestCost := float32(0)

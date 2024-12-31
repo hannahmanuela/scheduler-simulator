@@ -13,8 +13,8 @@ const (
 	N_CORES_PER_MACHINE = 8
 
 	// this is overall
-	N_PROCS_GEN_PER_TICK_START = 150
-	N_PROCS_GEN_PER_TICK_END   = 250
+	N_PROCS_GEN_PER_TICK_START = 170
+	N_PROCS_GEN_PER_TICK_END   = 170
 )
 
 func TestRunWorld(t *testing.T) {

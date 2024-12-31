@@ -42,18 +42,21 @@ type PrintType int
 const (
 	PROCS_DONE PrintType = iota
 	IDEAL_PROCS_DONE
+	HERMOD_PROCS_DONE
 	SCHED
+	IDEAL_SCHED
+	HERMOD_SCHED
 	USAGE
 	IDEAL_USAGE
-	IDEAL_SCHED
+	HERMOD_USAGE
 )
 
 func (pt PrintType) fileName() string {
-	return []string{"results/procs_done.txt", "results/ideal_procs_done.txt", "results/sched.txt", "results/usage.txt", "results/ideal_usage.txt", "results/ideal_sched.txt"}[pt]
+	return []string{"results/procs_done.txt", "results/ideal_procs_done.txt", "results/hermod_procs_done.txt", "results/sched.txt", "results/ideal_sched.txt", "results/hermod_sched.txt", "results/usage.txt", "results/ideal_usage.txt", "results/hermod_usage.txt"}[pt]
 }
 
 func (pt PrintType) should_print() bool {
-	return []bool{VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_IDEAL_SCHED_INFO}[pt]
+	return []bool{VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_SCHED_INFO, VERBOSE_IDEAL_SCHED_INFO, VERBOSE_HERMOD_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS}[pt]
 }
 
 func logWrite(printType PrintType, toWrite string) {
@@ -75,7 +78,7 @@ func logWrite(printType PrintType, toWrite string) {
 }
 
 func emptyFiles() {
-	types := []PrintType{PROCS_DONE, IDEAL_PROCS_DONE, SCHED, USAGE, IDEAL_USAGE, IDEAL_SCHED}
+	types := []PrintType{PROCS_DONE, IDEAL_PROCS_DONE, HERMOD_PROCS_DONE, SCHED, IDEAL_SCHED, HERMOD_SCHED, USAGE, IDEAL_USAGE, HERMOD_USAGE}
 
 	for _, t := range types {
 		os.Truncate(t.fileName(), 0)
@@ -114,10 +117,6 @@ func pickRandomElements[T any](list []T, k int) []T {
 
 	if k > len(list) {
 		k = len(list)
-	}
-
-	if k < len(list) {
-		return list
 	}
 
 	for i := len(list) - 1; i > 0; i-- {

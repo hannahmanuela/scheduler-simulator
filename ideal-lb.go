@@ -17,7 +17,7 @@ func newIdealLB(numMachines int, numCores int, nGenPerTick int, currrTickPtr *Tf
 	return ilb
 }
 
-func (ilb *IdealLB) placeProc(proc *Proc) {
+func (ilb *IdealLB) enqProc(proc *Proc) {
 
 	ilb.multiQ.enq(proc)
 

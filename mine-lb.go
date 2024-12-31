@@ -4,7 +4,7 @@ type MineLB struct {
 	currTickPtr *Tftick
 
 	machines      map[Tid]*Machine
-	GSSs          []*GlobalSched
+	GSSs          []*MineGSS
 	roundRobinInd int
 }
 
@@ -13,7 +13,7 @@ func newMineLB(numMachines int, numCores int, nGenPerTick int, nGSSs int, currTi
 	mlb := &MineLB{
 		currTickPtr:   currTickPtr,
 		machines:      map[Tid]*Machine{},
-		GSSs:          make([]*GlobalSched, nGSSs),
+		GSSs:          make([]*MineGSS, nGSSs),
 		roundRobinInd: 0,
 	}
 
@@ -23,7 +23,7 @@ func newMineLB(numMachines int, numCores int, nGenPerTick int, nGSSs int, currTi
 			heap: &MinHeap{},
 		}
 		idleHeaps[Tid(i)] = idleHeap
-		mlb.GSSs[i] = newGolbalSched(i, mlb.machines, mlb.currTickPtr, nGenPerTick, idleHeap)
+		mlb.GSSs[i] = newMineGSS(i, mlb.machines, mlb.currTickPtr, nGenPerTick, idleHeap)
 	}
 
 	for i := 0; i < numMachines; i++ {
@@ -34,7 +34,7 @@ func newMineLB(numMachines int, numCores int, nGenPerTick int, nGSSs int, currTi
 	return mlb
 }
 
-func (mlb *MineLB) placeProc(provProc *Proc) {
+func (mlb *MineLB) enqProc(provProc *Proc) {
 
 	mlb.GSSs[mlb.roundRobinInd].multiq.enq(provProc)
 	mlb.roundRobinInd += 1
