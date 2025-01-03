@@ -14,12 +14,12 @@ const (
 
 	// this is overall
 	N_PROCS_GEN_PER_TICK_START = 170
-	N_PROCS_GEN_PER_TICK_END   = 170
+	N_PROCS_GEN_PER_TICK_END   = 230
 )
 
 func TestRunWorld(t *testing.T) {
 	emptyFiles()
-	for nProcsToGen := N_PROCS_GEN_PER_TICK_START; nProcsToGen <= N_PROCS_GEN_PER_TICK_END; nProcsToGen += 20 {
+	for nProcsToGen := N_PROCS_GEN_PER_TICK_START; nProcsToGen <= N_PROCS_GEN_PER_TICK_END; nProcsToGen += 30 {
 
 		fmt.Printf("---- Running with %v procs per ticks ----\n", nProcsToGen)
 

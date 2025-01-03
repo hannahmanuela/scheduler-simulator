@@ -16,7 +16,7 @@ const (
 	VERBOSE_USAGE_STATS       = true
 	VERBOSE_SCHED_INFO        = false
 	VERBOSE_IDEAL_SCHED_INFO  = false
-	VERBOSE_HERMOD_SCHED_INFO = true
+	VERBOSE_HERMOD_SCHED_INFO = false
 )
 
 const SEED = 12345

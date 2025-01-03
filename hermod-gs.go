@@ -54,15 +54,11 @@ func (hgs *HermodGS) placeProcs() {
 	hgs.procQ = toReq
 }
 
-// TODO: rn not really considering that its a benefit to have one 100% used machine rather than two 50%
-// I think this is kind of what the different load settings are about?
-
 func (hgs *HermodGS) pickMachine(procToPlace *Proc) *HermodMachine {
 
 	// power of k choices - do hermod hybrid load balancing thing among the sampled machines
 
 	// right now always doing high load scenario stuff
-	// ig that's what we're targeting
 
 	var machineToUse *HermodMachine
 	machinesToTry := pickRandomElements(Values(hgs.machines), K_CHOICES_DOWN)
