@@ -27,7 +27,7 @@ func (elb *EDFLB) enqProc(proc *Proc) {
 
 	topPrice := mapPriorityToDollars(N_PRIORITIES - 1)
 
-	newDl := float32(proc.procInternals.actualComp) * (topPrice / proc.procInternals.willingToSpend)
+	newDl := float32(proc.procInternals.compGuess) * (topPrice / proc.procInternals.willingToSpend)
 	edfP := &EDFProc{p: proc, dl: newDl}
 
 	elb.enq(edfP)

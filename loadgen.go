@@ -37,12 +37,14 @@ func (lg *LoadGenT) genLoad(nProcs int) []*ProcInternals {
 		minComp := math.Max(math.Min(sampleNormal(AVG_COMP, STD_DEV_COMP), MAX_COMP), MIN_COMP)
 		actualComp := ParetoSample(PARETO_ALPHA, float64(minComp))
 
+		expectedValOfPareto := (PARETO_ALPHA * minComp) / (PARETO_ALPHA - 1)
+
 		priority := genRandPriority()
 		willingToSpend := mapPriorityToDollars(priority)
 
 		maxMem := MIN_MEM + r.Intn(MAX_MEM-MIN_MEM)
 
-		procs[i] = newPrivProc(float32(actualComp), willingToSpend, maxMem)
+		procs[i] = newPrivProc(float32(actualComp), float32(expectedValOfPareto), willingToSpend, maxMem)
 	}
 
 	return procs

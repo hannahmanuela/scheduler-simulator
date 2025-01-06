@@ -67,11 +67,12 @@ func (p *Proc) runTillOutOrDone(toRun Tftick) (Tftick, bool) {
 // this is the internal view of a proc, ie what the client of the provider would create/run
 type ProcInternals struct {
 	actualComp     Tftick
+	compGuess      Tftick
 	willingToSpend float32
 	maxMem         Tmem
 }
 
-func newPrivProc(actualComp float32, willingToSpend float32, maxMem int) *ProcInternals {
+func newPrivProc(actualComp float32, compGuess float32, willingToSpend float32, maxMem int) *ProcInternals {
 
-	return &ProcInternals{Tftick(actualComp), willingToSpend, Tmem(maxMem)}
+	return &ProcInternals{Tftick(actualComp), Tftick(compGuess), willingToSpend, Tmem(maxMem)}
 }
