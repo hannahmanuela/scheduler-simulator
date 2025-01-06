@@ -1,6 +1,7 @@
 package slasched
 
 import (
+	"fmt"
 	"math/rand"
 )
 
@@ -17,6 +18,7 @@ const (
 	VERBOSE_SCHED_INFO        = false
 	VERBOSE_IDEAL_SCHED_INFO  = false
 	VERBOSE_HERMOD_SCHED_INFO = false
+	VERBOSE_EDF_SCHED_INFO    = false
 )
 
 const SEED = 12345
@@ -28,23 +30,45 @@ type World struct {
 	numProcsToGen int
 	currProcNum   int
 
-	idealLB  *IdealLB
-	mineLB   *MineLB
-	hermodLB *HermodLB
+	LBs []LB
 
 	loadGen LoadGen
 }
 
-func newWorld(numMachines int, numCores int, nGenPerTick int, nGSSs int) *World {
+type LB interface {
+	placeProcs()
+	tick()
+	enqProc(*Proc)
+}
+
+type LBType int
+
+const (
+	MINE LBType = iota
+	IDEAL
+	HERMOD
+	EDF
+)
+
+func (lbt LBType) newLB(numMachines int, numCores int, nGenPerTick int, nGSSs int, currTickPtr *Tftick) LB {
+	return []LB{newMineLB(numMachines, numCores, nGenPerTick, nGSSs, currTickPtr), newIdealLB(numMachines, numCores, nGenPerTick, currTickPtr), newHermodLB(numMachines, numCores, nGenPerTick, nGSSs, currTickPtr), newEDFLB(numMachines, numCores, nGenPerTick, currTickPtr)}[lbt]
+}
+
+func (lbt LBType) string() string {
+	return []string{"mine", "ideal", "hermod", "edf"}[lbt]
+}
+
+func newWorld(numMachines int, numCores int, nGenPerTick int, nGSSs int, lbsDoing []LBType) *World {
 
 	w := &World{
 		currTick:      Tftick(0),
 		numProcsToGen: nGenPerTick,
 	}
 
-	w.mineLB = newMineLB(numMachines, numCores, nGenPerTick, nGSSs, &w.currTick)
-	w.idealLB = newIdealLB(numMachines, numCores, nGenPerTick, &w.currTick)
-	w.hermodLB = newHermodLB(numMachines, numCores, nGenPerTick, nGSSs, &w.currTick)
+	for _, lbTypeToInclude := range lbsDoing {
+		w.LBs = append(w.LBs, lbTypeToInclude.newLB(numMachines, numCores, nGenPerTick, nGSSs, &w.currTick))
+		fmt.Printf("making lb of type %v\n", lbTypeToInclude.string())
+	}
 
 	w.loadGen = newLoadGen()
 
@@ -56,14 +80,11 @@ func (w *World) genLoad(nProcs int) []*ProcInternals {
 	userProcs := w.loadGen.genLoad(nProcs)
 
 	for _, up := range userProcs {
-		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.mineLB.enqProc(provProc)
 
-		copyForIdeal := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.idealLB.enqProc(copyForIdeal)
-
-		copyForHermod := newProvProc(Tid(w.currProcNum), w.currTick, up)
-		w.hermodLB.enqProc(copyForHermod)
+		for _, lb := range w.LBs {
+			provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
+			lb.enqProc(provProc)
+		}
 
 		w.currProcNum += 1
 	}
@@ -73,13 +94,13 @@ func (w *World) genLoad(nProcs int) []*ProcInternals {
 func (w *World) Tick(numProcs int) {
 	w.genLoad(numProcs)
 
-	w.mineLB.placeProcs()
-	w.idealLB.placeProcs()
-	w.hermodLB.placeProcs()
+	for _, lb := range w.LBs {
+		lb.placeProcs()
+	}
 
-	w.mineLB.tick()
-	w.idealLB.tick()
-	w.hermodLB.tick()
+	for _, lb := range w.LBs {
+		lb.tick()
+	}
 
 	w.currTick += 1
 }

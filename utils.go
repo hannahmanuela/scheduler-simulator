@@ -43,20 +43,23 @@ const (
 	PROCS_DONE PrintType = iota
 	IDEAL_PROCS_DONE
 	HERMOD_PROCS_DONE
+	EDF_PROCS_DONE
 	SCHED
 	IDEAL_SCHED
 	HERMOD_SCHED
+	EDF_SCHED
 	USAGE
 	IDEAL_USAGE
 	HERMOD_USAGE
+	EDF_USAGE
 )
 
 func (pt PrintType) fileName() string {
-	return []string{"results/procs_done.txt", "results/ideal_procs_done.txt", "results/hermod_procs_done.txt", "results/sched.txt", "results/ideal_sched.txt", "results/hermod_sched.txt", "results/usage.txt", "results/ideal_usage.txt", "results/hermod_usage.txt"}[pt]
+	return []string{"results/procs_done.txt", "results/ideal_procs_done.txt", "results/hermod_procs_done.txt", "results/edf_procs_done.txt", "results/sched.txt", "results/ideal_sched.txt", "results/hermod_sched.txt", "results/edf_sched.txt", "results/usage.txt", "results/ideal_usage.txt", "results/hermod_usage.txt", "results/edf_usage.txt"}[pt]
 }
 
 func (pt PrintType) should_print() bool {
-	return []bool{VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_SCHED_INFO, VERBOSE_IDEAL_SCHED_INFO, VERBOSE_HERMOD_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS}[pt]
+	return []bool{VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_SCHED_INFO, VERBOSE_IDEAL_SCHED_INFO, VERBOSE_HERMOD_SCHED_INFO, VERBOSE_EDF_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS}[pt]
 }
 
 func logWrite(printType PrintType, toWrite string) {
@@ -78,7 +81,7 @@ func logWrite(printType PrintType, toWrite string) {
 }
 
 func emptyFiles() {
-	types := []PrintType{PROCS_DONE, IDEAL_PROCS_DONE, HERMOD_PROCS_DONE, SCHED, IDEAL_SCHED, HERMOD_SCHED, USAGE, IDEAL_USAGE, HERMOD_USAGE}
+	types := []PrintType{PROCS_DONE, IDEAL_PROCS_DONE, EDF_PROCS_DONE, HERMOD_PROCS_DONE, SCHED, IDEAL_SCHED, HERMOD_SCHED, EDF_SCHED, USAGE, IDEAL_USAGE, HERMOD_USAGE, EDF_USAGE}
 
 	for _, t := range types {
 		os.Truncate(t.fileName(), 0)
