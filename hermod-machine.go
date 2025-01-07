@@ -5,14 +5,6 @@ import (
 	"math"
 )
 
-// what it's going to need to do:
-
-// take in procs [NOT stored in a queue]
-
-// run numCores ticks over them -- using PS
-
-// report util, latency
-
 type HermodMachine struct {
 	machineId               Tid
 	currTickPtr             *Tftick

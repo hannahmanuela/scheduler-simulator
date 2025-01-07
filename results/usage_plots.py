@@ -51,102 +51,128 @@ print("num edf finished: ", len(edf_procs_done))
 
 
 
+
 # plots I will need to draw:
 
-# ===========================
+# =================================================================================
 # ideal vs edf, latency
-# ===========================
+# =================================================================================
+
+# fig, ax = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+
+# high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
+
+
+# ideal_percentiles = ideal_procs_done.groupby(['nGenPerTick', 'price']).agg(
+#     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
+# ).reset_index()
+
+# edf_percentiles = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
+#     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
+# ).reset_index()
+
+
+# sns.lineplot(data=ideal_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 0])
+# ax[0, 0].set_title("Priority: 99 pctile job latency as pct of runtime")
+# ax[0, 0].set_ylabel("latency as pct of runtime")
+
+
+# sns.lineplot(data=edf_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
+# ax[0, 1].set_title("EDF: 99 pctile job latency as pct of runtime")
+# ax[0, 1].set_ylabel("latency as pct of runtime")
+
+
+# ideal_percentile_runtime = ideal_procs_done.groupby(['nGenPerTick', 'price']).agg(
+#     percentile_99=('compDone', lambda x: np.percentile(x, 99))
+# ).reset_index()
+
+# edf_percentile_runtime = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
+#     percentile_99=('compDone', lambda x: np.percentile(x, 99))
+# ).reset_index()
+
+# # print(edf_num_done)
+
+# sns.lineplot(data=ideal_percentile_runtime, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1, 0])
+# ax[1, 0].set_title("Priority: 99th pctile runtime")
+# ax[1, 0].set_ylabel("runtime")
+# ax[1, 0].set_xlabel("load")
+
+
+# sns.lineplot(data=edf_percentile_runtime, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1, 1])
+# ax[1, 1].set_title("EDF: 99th pctile runtime")
+# ax[1, 1].set_ylabel("runtime")
+# ax[1, 1].set_xlabel("load")
+
+
+# plt.tight_layout()
+# plt.savefig('ideal_edf_latency.png')
+# plt.show()
+
+
+
+
+
+
+
+# =================================================================================
+# hermod vs mine, latency
+# =================================================================================
+
 
 fig, ax = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
 
 high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
 
 
-ideal_percentiles = ideal_procs_done.groupby(['nGenPerTick', 'price']).agg(
+hermod_percentiles = hermod_procs_done.groupby(['nGenPerTick', 'price']).agg(
     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
 ).reset_index()
 
-edf_percentiles = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
+mine_percentiles = actual_procs_done.groupby(['nGenPerTick', 'price']).agg(
     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
 ).reset_index()
 
-
-sns.lineplot(data=ideal_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 0])
-ax[0, 0].set_title("Priority: 99 pctile job latency as pct of runtime")
+sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 0])
+ax[0, 0].set_title("Hermod: Job latency as pct of runtime")
 ax[0, 0].set_ylabel("latency as pct of runtime")
+ax[0, 0].set_xlabel("load")
 
 
-sns.lineplot(data=edf_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
-ax[0, 1].set_title("EDF: 99 pctile job latency as pct of runtime")
+sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
+ax[0, 1].set_title("XX: Job latency as pct of runtime")
 ax[0, 1].set_ylabel("latency as pct of runtime")
+ax[0, 1].set_xlabel("load")
 
 
-ideal_percentile_runtime = ideal_procs_done.groupby(['nGenPerTick', 'price']).agg(
-    percentile_99=('compDone', lambda x: np.percentile(x, 99))
-).reset_index()
+hermod_percentile_runtime = hermod_procs_done.groupby(['nGenPerTick', 'price'])['compDone'].mean().reset_index()
 
-edf_percentile_runtime = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
-    percentile_99=('compDone', lambda x: np.percentile(x, 99))
-).reset_index()
+mine_percentile_runtime = actual_procs_done.groupby(['nGenPerTick', 'price'])['compDone'].mean().reset_index()
 
-# print(edf_num_done)
-
-sns.lineplot(data=ideal_percentile_runtime, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1, 0])
-ax[1, 0].set_title("Priority: 99th pctile runtime")
+sns.lineplot(data=hermod_percentile_runtime, x='nGenPerTick', y='compDone', hue='price', palette=high_contrast_palette, ax=ax[1, 0])
+ax[1, 0].set_title("Hermod: Avg runtime")
 ax[1, 0].set_ylabel("runtime")
 ax[1, 0].set_xlabel("load")
 
 
-sns.lineplot(data=edf_percentile_runtime, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1, 1])
-ax[1, 1].set_title("EDF: 99th pctile runtime")
+sns.lineplot(data=mine_percentile_runtime, x='nGenPerTick', y='compDone', hue='price', palette=high_contrast_palette, ax=ax[1, 1])
+ax[1, 1].set_title("XX: Avg runtime")
 ax[1, 1].set_ylabel("runtime")
 ax[1, 1].set_xlabel("load")
 
-
 plt.tight_layout()
-plt.savefig('ideal_edf_latency.png')
+plt.savefig('hermod_xx_latency.png')
 plt.show()
 
 
 
-# ===========================
-# hermod vs mine, latency
-# ===========================
-
-
-# fig, ax = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
-
-# high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
-
-
-# hermod_percentiles = hermod_procs_done.groupby(['nGenPerTick', 'price']).agg(
-#     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
-# ).reset_index()
-
-# mine_percentiles = actual_procs_done.groupby(['nGenPerTick', 'price']).agg(
-#     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
-# ).reset_index()
-
-# sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0])
-# ax[0].set_title("Priority: Job latency as pct of runtime")
-# ax[0].set_ylabel("latency as pct of runtime")
-
-
-# sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1])
-# ax[1].set_title("EDF: Job latency as pct of runtime")
-# ax[1].set_ylabel("latency as pct of runtime")
-
-
-# plt.tight_layout()
-# plt.savefig('hermod_xx_latency.png')
-# plt.show()
 
 
 
 
-# ===========================
+
+# =================================================================================
 # ideal vs mine, latency & util
-# ===========================
+# =================================================================================
 
 # fig, ax = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
 

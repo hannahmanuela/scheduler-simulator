@@ -25,16 +25,6 @@ const SEED = 12345
 
 var r = rand.New(rand.NewSource(SEED))
 
-type World struct {
-	currTick      Tftick
-	numProcsToGen int
-	currProcNum   int
-
-	LBs []LB
-
-	loadGen LoadGen
-}
-
 type LB interface {
 	placeProcs()
 	tick()
@@ -56,6 +46,16 @@ func (lbt LBType) newLB(numMachines int, numCores int, nGenPerTick int, nGSSs in
 
 func (lbt LBType) string() string {
 	return []string{"mine", "ideal", "hermod", "edf"}[lbt]
+}
+
+type World struct {
+	currTick      Tftick
+	numProcsToGen int
+	currProcNum   int
+
+	LBs []LB
+
+	loadGen LoadGen
 }
 
 func newWorld(numMachines int, numCores int, nGenPerTick int, nGSSs int, lbsDoing []LBType) *World {
