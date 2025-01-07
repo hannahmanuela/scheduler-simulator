@@ -280,7 +280,7 @@ func (sd *Machine) simulateRunProcs() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
+	toWrite = fmt.Sprintf(", %.3f, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
 	logWrite(USAGE, toWrite)
 
 	highestCost := float32(0)

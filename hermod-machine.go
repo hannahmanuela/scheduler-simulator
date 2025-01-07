@@ -97,7 +97,11 @@ func (hm *HermodMachine) tick() {
 		}
 	}
 
-	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
+	if totalTicksLeftToGive < 0.00002 {
+		totalTicksLeftToGive = 0
+	}
+
+	toWrite = fmt.Sprintf(", %.3f, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
 	logWrite(HERMOD_USAGE, toWrite)
 
 }

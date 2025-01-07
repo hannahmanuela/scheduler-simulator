@@ -5,7 +5,7 @@ import numpy as np
 
 numMachines = 100
 coresPerMachine = 8
-totalMemoryPerMachine = 64000
+totalMemoryPerMachine = 512000
 
 
 
@@ -48,8 +48,8 @@ print("num edf finished: ", len(edf_procs_done))
 
 
 
-
-
+actual_usage_metrics = actual_usage_metrics.where(actual_usage_metrics['tick'] > 5).dropna()
+hermod_usage_metrics = hermod_usage_metrics.where(hermod_usage_metrics['tick'] > 5).dropna()
 
 
 # plots I will need to draw:
@@ -119,7 +119,7 @@ print("num edf finished: ", len(edf_procs_done))
 # =================================================================================
 
 
-fig, ax = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+fig, ax = plt.subplots(3, 2, figsize=(9, 6))
 
 high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
 
@@ -136,28 +136,47 @@ sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='p
 ax[0, 0].set_title("Hermod: Job latency as pct of runtime")
 ax[0, 0].set_ylabel("latency as pct of runtime")
 ax[0, 0].set_xlabel("load")
+ax[0, 0].grid(True)
 
 
 sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
 ax[0, 1].set_title("XX: Job latency as pct of runtime")
 ax[0, 1].set_ylabel("latency as pct of runtime")
 ax[0, 1].set_xlabel("load")
+ax[0, 1].grid(True)
 
 
-hermod_percentile_runtime = hermod_procs_done.groupby(['nGenPerTick', 'price'])['compDone'].mean().reset_index()
+hermod_ticks_of_work_done = hermod_procs_done.groupby(['nGenPerTick'])['compDone'].sum().reset_index()
 
-mine_percentile_runtime = actual_procs_done.groupby(['nGenPerTick', 'price'])['compDone'].mean().reset_index()
+mine_ticks_of_work_done = actual_procs_done.groupby(['nGenPerTick'])['compDone'].sum().reset_index()
 
-sns.lineplot(data=hermod_percentile_runtime, x='nGenPerTick', y='compDone', hue='price', palette=high_contrast_palette, ax=ax[1, 0])
-ax[1, 0].set_title("Hermod: Avg runtime")
+sns.lineplot(data=hermod_ticks_of_work_done, x='nGenPerTick', y='compDone', ax=ax[1, 0])
+ax[1, 0].set_title("Hermod: Sum runtimes done")
 ax[1, 0].set_ylabel("runtime")
 ax[1, 0].set_xlabel("load")
+ax[1, 0].grid(True)
 
 
-sns.lineplot(data=mine_percentile_runtime, x='nGenPerTick', y='compDone', hue='price', palette=high_contrast_palette, ax=ax[1, 1])
-ax[1, 1].set_title("XX: Avg runtime")
+sns.lineplot(data=mine_ticks_of_work_done, x='nGenPerTick', y='compDone', ax=ax[1, 1])
+ax[1, 1].set_title("XX: Sum runtimes done")
 ax[1, 1].set_ylabel("runtime")
 ax[1, 1].set_xlabel("load")
+ax[1, 1].grid(True)
+
+sns.boxplot(data=hermod_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[2, 0])
+ax[2, 0].set_title("Hermod: Distribution of Comp Utilization")
+ax[2, 0].set_xlabel("Load")
+ax[2, 0].set_ylabel("Comp util")
+# ax[2, 0].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
+ax[2, 0].grid(True)
+
+
+sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[2, 1])
+ax[2, 1].set_title("XX: Distribution of Comp Utilization")
+ax[2, 1].set_xlabel("Load")
+ax[2, 1].set_ylabel("Comp util")
+# ax[2, 1].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
+ax[2, 1].grid(True)
 
 plt.tight_layout()
 plt.savefig('hermod_xx_latency.png')
