@@ -93,12 +93,14 @@ edf_percentile_runtime = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
 
 sns.lineplot(data=ideal_percentile_runtime, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1, 0])
 ax[1, 0].set_title("Priority: 99th pctile runtime")
-ax[1, 0].set_ylabel("latency as pct of runtime")
+ax[1, 0].set_ylabel("runtime")
+ax[1, 0].set_xlabel("load")
 
 
 sns.lineplot(data=edf_percentile_runtime, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1, 1])
 ax[1, 1].set_title("EDF: 99th pctile runtime")
-ax[1, 1].set_ylabel("latency as pct of runtime")
+ax[1, 1].set_ylabel("runtime")
+ax[1, 1].set_xlabel("load")
 
 
 plt.tight_layout()
