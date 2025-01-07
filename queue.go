@@ -105,20 +105,20 @@ func (q *Queue) qlen() int {
 
 func (q *Queue) checkKill(newProc *Proc) (Tid, float32) {
 
-	minMoneyThrownAway := float32(math.MaxFloat32)
+	minTimeToProfit := float32(math.MaxFloat32)
 	procId := Tid(-1)
 
 	for _, p := range q.q {
 		if (p.maxMem() > newProc.maxMem()) && (p.willingToSpend() < newProc.willingToSpend()) {
-			wldThrow := float32(float32(p.compDone) * p.willingToSpend())
-			if wldThrow < minMoneyThrownAway {
+			timeToProfit := float32(float32(p.compDone)*p.willingToSpend()) / (newProc.willingToSpend() - p.willingToSpend())
+			if timeToProfit < minTimeToProfit {
 				procId = p.procId
-				minMoneyThrownAway = wldThrow
+				minTimeToProfit = timeToProfit
 			}
 		}
 	}
 
-	return procId, minMoneyThrownAway
+	return procId, minTimeToProfit
 
 }
 

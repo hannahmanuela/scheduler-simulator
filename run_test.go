@@ -6,15 +6,15 @@ import (
 )
 
 const (
-	N_TICK = 200
+	N_TICK = 100
 
 	N_GSSs              = 4
 	N_MACHINES          = 100
 	N_CORES_PER_MACHINE = 8
 
 	// this is overall
-	N_PROCS_GEN_PER_TICK_START = 150
-	N_PROCS_GEN_PER_TICK_END   = 250
+	N_PROCS_GEN_PER_TICK_START = 190
+	N_PROCS_GEN_PER_TICK_END   = 275
 )
 
 func TestRunWorld(t *testing.T) {

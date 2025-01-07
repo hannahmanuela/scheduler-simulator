@@ -2,11 +2,16 @@ package slasched
 
 import (
 	"math"
+	"strconv"
 )
 
 type EDFProc struct {
 	p  *Proc
 	dl float32
+}
+
+func (edfp *EDFProc) String() string {
+	return edfp.p.String() + ", dl: " + strconv.FormatFloat(float64(edfp.dl), 'f', 3, 32)
 }
 
 type EDFLB struct {
@@ -27,7 +32,7 @@ func (elb *EDFLB) enqProc(proc *Proc) {
 
 	topPrice := mapPriorityToDollars(N_PRIORITIES - 1)
 
-	newDl := float32(proc.procInternals.compGuess) * (topPrice / proc.procInternals.willingToSpend)
+	newDl := float32(proc.timeStarted) + float32(proc.procInternals.compGuess)*(topPrice/proc.procInternals.willingToSpend)
 	edfP := &EDFProc{p: proc, dl: newDl}
 
 	elb.enq(edfP)

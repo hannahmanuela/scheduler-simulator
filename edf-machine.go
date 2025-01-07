@@ -35,8 +35,8 @@ func (edfm *BigEDFMachine) potPlaceProc(newProc *EDFProc) bool {
 	}
 
 	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
-	procToKill, minMoneyWaste := edfm.checkKill(newProc)
-	if minMoneyWaste < MONEY_WASTE_THRESHOLD {
+	procToKill, timeToProfit := edfm.checkKill(newProc)
+	if timeToProfit < TIME_TO_PROFIT_THRESHOLD {
 
 		newProc.p.timePlaced = *edfm.currTickPtr
 		edfm.kill(procToKill)
@@ -63,7 +63,7 @@ func (edfm *BigEDFMachine) tick() {
 	toWrite := fmt.Sprintf("%v @ %v; mem free: %v: WHOLE QUEUE ", edfm.worldNumProcsGenPerTick, edfm.currTickPtr, MEM_PER_MACHINE)
 	logWrite(EDF_SCHED, toWrite)
 	for _, p := range edfm.procQ {
-		toWrite := fmt.Sprintf("%v, dl: %.2f; \n", p.p.String(), p.dl)
+		toWrite := fmt.Sprintf("%v, dl: %.2f; \n", p.String(), p.dl)
 		logWrite(EDF_SCHED, toWrite)
 	}
 	logWrite(EDF_SCHED, "\n")
@@ -78,6 +78,7 @@ func (edfm *BigEDFMachine) tick() {
 		coresWithTicksLeft[i] = true
 	}
 
+	ogMemFree := edfm.memFree()
 	toWrite = fmt.Sprintf("%v, %v", edfm.worldNumProcsGenPerTick, int(*edfm.currTickPtr))
 	logWrite(EDF_USAGE, toWrite)
 
@@ -131,7 +132,7 @@ func (edfm *BigEDFMachine) tick() {
 				continue
 			}
 
-			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.p.String())
+			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
 			logWrite(EDF_SCHED, toWrite)
 
 			ticksUsed, done := procToRun.p.runTillOutOrDone(ticksLeftPerCore[currCore])
@@ -149,11 +150,11 @@ func (edfm *BigEDFMachine) tick() {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.p.timeDone = *edfm.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
-				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.p.String())
+				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
 				logWrite(EDF_SCHED, toWrite)
 
 				if (procToRun.p.timeDone - procToRun.p.timeStarted) > procToRun.p.compDone {
-					toWrite := fmt.Sprintf("   ---> OVER %v \n", procToRun.p.String())
+					toWrite := fmt.Sprintf("   ---> OVER %v \n", procToRun.String())
 					logWrite(EDF_SCHED, toWrite)
 				}
 
@@ -175,7 +176,7 @@ func (edfm *BigEDFMachine) tick() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), MEM_PER_MACHINE)
+	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
 	logWrite(EDF_USAGE, toWrite)
 }
 

@@ -12,16 +12,16 @@ totalMemoryPerMachine = 64000
 
 # Load the data
 ideal_usage_metrics = pd.read_csv("ideal_usage.txt", index_col=None, names=["nGenPerTick", "tick", "ticksLeftOver", "memFree"])
-ideal_procs_done = pd.read_csv("ideal_procs_done.txt", index_col=None, names=["nGenPerTick", "willingToSpend", "timePassed", "compDone"])
+ideal_procs_done = pd.read_csv("ideal_procs_done.txt", index_col=None, names=["nGenPerTick", "price", "timePassed", "compDone"])
 
 actual_usage_metrics = pd.read_csv("usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineId", "ticksLeftOver", "memFree"])
-actual_procs_done = pd.read_csv("procs_done.txt", index_col=None, names=["nGenPerTick", "willingToSpend", "timePassed", "compDone"])
+actual_procs_done = pd.read_csv("procs_done.txt", index_col=None, names=["nGenPerTick", "price", "timePassed", "compDone"])
 
 hermod_usage_metrics = pd.read_csv("hermod_usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineId", "ticksLeftOver", "memFree"])
-hermod_procs_done = pd.read_csv("hermod_procs_done.txt", index_col=None, names=["nGenPerTick", "willingToSpend", "timePassed", "compDone"])
+hermod_procs_done = pd.read_csv("hermod_procs_done.txt", index_col=None, names=["nGenPerTick", "price", "timePassed", "compDone"])
 
 edf_usage_metrics = pd.read_csv("edf_usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineId", "ticksLeftOver", "memFree"])
-edf_procs_done = pd.read_csv("edf_procs_done.txt", index_col=None, names=["nGenPerTick", "willingToSpend", "timePassed", "compDone"])
+edf_procs_done = pd.read_csv("edf_procs_done.txt", index_col=None, names=["nGenPerTick", "price", "timePassed", "compDone"])
 
 # 1. Compute timeAsPercentage for both ideal and actual data
 ideal_procs_done["timeAsPercentage"] = (ideal_procs_done["timePassed"] / ideal_procs_done["compDone"]) * 100
@@ -57,27 +57,48 @@ print("num edf finished: ", len(edf_procs_done))
 # ideal vs edf, latency
 # ===========================
 
-fig, ax = plt.subplots(2, 1, figsize=(15, 9), sharex=True)
+fig, ax = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
 
 high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
 
 
-ideal_percentiles = ideal_procs_done.groupby(['nGenPerTick', 'willingToSpend']).agg(
+ideal_percentiles = ideal_procs_done.groupby(['nGenPerTick', 'price']).agg(
     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
 ).reset_index()
 
-edf_percentiles = edf_procs_done.groupby(['nGenPerTick', 'willingToSpend']).agg(
+edf_percentiles = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
 ).reset_index()
 
-sns.lineplot(data=ideal_percentiles, x='nGenPerTick', y='percentile_99', hue='willingToSpend', palette=high_contrast_palette, ax=ax[0])
-ax[0].set_title("Priority: Job latency as pct of runtime")
-ax[0].set_ylabel("latency as pct of runtime")
+
+sns.lineplot(data=ideal_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 0])
+ax[0, 0].set_title("Priority: 99 pctile job latency as pct of runtime")
+ax[0, 0].set_ylabel("latency as pct of runtime")
 
 
-sns.lineplot(data=edf_percentiles, x='nGenPerTick', y='percentile_99', hue='willingToSpend', palette=high_contrast_palette, ax=ax[1])
-ax[1].set_title("EDF: Job latency as pct of runtime")
-ax[1].set_ylabel("latency as pct of runtime")
+sns.lineplot(data=edf_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
+ax[0, 1].set_title("EDF: 99 pctile job latency as pct of runtime")
+ax[0, 1].set_ylabel("latency as pct of runtime")
+
+
+ideal_percentile_runtime = ideal_procs_done.groupby(['nGenPerTick', 'price']).agg(
+    percentile_99=('compDone', lambda x: np.percentile(x, 99))
+).reset_index()
+
+edf_percentile_runtime = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
+    percentile_99=('compDone', lambda x: np.percentile(x, 99))
+).reset_index()
+
+# print(edf_num_done)
+
+sns.lineplot(data=ideal_percentile_runtime, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1, 0])
+ax[1, 0].set_title("Priority: 99th pctile runtime")
+ax[1, 0].set_ylabel("latency as pct of runtime")
+
+
+sns.lineplot(data=edf_percentile_runtime, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1, 1])
+ax[1, 1].set_title("EDF: 99th pctile runtime")
+ax[1, 1].set_ylabel("latency as pct of runtime")
 
 
 plt.tight_layout()
@@ -87,118 +108,103 @@ plt.show()
 
 
 # ===========================
-# hermod vs edf, latency
+# hermod vs mine, latency
 # ===========================
 
 
+# fig, ax = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
 
-
-
-
-
-
-
-
-
-
-# Create the figure with nine subplots (3 rows, 3 columns)
-# fig, ax = plt.subplots(3, 3, figsize=(15, 9), sharex=True)
-
-# # High contrast color palette
 # high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
 
-# # 4. First subplot: Strip plot for Time Passed as % of Completion for Ideal data
-# sns.stripplot(data=ideal_procs_done, x="nGenPerTick", y="timeAsPercentage", hue="willingToSpend", 
-#               jitter=True, palette=high_contrast_palette, ax=ax[0, 0])
 
-# ax[0, 0].set_title("Ideal: Time Passed as % of Completion by Willing to Spend")
+# hermod_percentiles = hermod_procs_done.groupby(['nGenPerTick', 'price']).agg(
+#     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
+# ).reset_index()
+
+# mine_percentiles = actual_procs_done.groupby(['nGenPerTick', 'price']).agg(
+#     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
+# ).reset_index()
+
+# sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0])
+# ax[0].set_title("Priority: Job latency as pct of runtime")
+# ax[0].set_ylabel("latency as pct of runtime")
+
+
+# sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1])
+# ax[1].set_title("EDF: Job latency as pct of runtime")
+# ax[1].set_ylabel("latency as pct of runtime")
+
+
+# plt.tight_layout()
+# plt.savefig('hermod_xx_latency.png')
+# plt.show()
+
+
+
+
+# ===========================
+# ideal vs mine, latency & util
+# ===========================
+
+# fig, ax = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
+
+# high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
+
+
+# sns.stripplot(data=ideal_procs_done, x="nGenPerTick", y="timeAsPercentage", hue="price", 
+#               jitter=True, palette=high_contrast_palette, ax=ax[0, 0])
+# ax[0, 0].set_title("Ideal: Job latency as pct of runtime")
 # ax[0, 0].set_ylabel("Time Passed as % of compDone")
 
-# # 5. Second subplot: Violin plot for Utilization for Ideal data
-# sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
 
-# ax[1, 0].set_title("Ideal: Distribution of Utilization by nGenPerTick")
-# ax[1, 0].set_xlabel("nGenPerTick")
-# ax[1, 0].set_ylabel("Utilization")
+# sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
+# ax[1, 0].set_title("Ideal: Distribution of Compute Utilization")
+# ax[1, 0].set_xlabel("Load")
+# ax[1, 0].set_ylabel("Compute util")
 # ax[1, 0].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
 
-# # 6. Third subplot: Violin plot for Memory Utilization for Ideal data
-# sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 0])
 
-# ax[2, 0].set_title("Ideal: Distribution of Memory Utilization by nGenPerTick")
-# ax[2, 0].set_xlabel("nGenPerTick")
-# ax[2, 0].set_ylabel("Memory Utilization")
-# ax[2, 0].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
-
-# # 7. Fourth subplot: Strip plot for Time Passed as % of Completion for Actual data
-# sns.stripplot(data=actual_procs_done, x="nGenPerTick", y="timeAsPercentage", hue="willingToSpend", 
+# sns.stripplot(data=actual_procs_done, x="nGenPerTick", y="timeAsPercentage", hue="price", 
 #               jitter=True, palette=high_contrast_palette, ax=ax[0, 1])
-
-# ax[0, 1].set_title("Actual: Time Passed as % of Completion by Willing to Spend")
+# ax[0, 1].set_title("Actual: Job latency as pct of runtime")
 # ax[0, 1].set_ylabel("Time Passed as % of compDone")
 
-# # 8. Fifth subplot: Violin plot for Utilization for Actual data
-# sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 1])
 
-# ax[1, 1].set_title("Actual: Distribution of Utilization by nGenPerTick")
-# ax[1, 1].set_xlabel("nGenPerTick")
-# ax[1, 1].set_ylabel("Utilization")
+# sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 1])
+# ax[1, 1].set_title("Actual: Distribution of Compute Utilization")
+# ax[1, 1].set_xlabel("Load")
+# ax[1, 1].set_ylabel("Compute util")
 # ax[1, 1].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
 
-# # 9. Sixth subplot: Violin plot for Memory Utilization for Actual data
-# sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 1])
 
-# ax[2, 1].set_title("Actual: Distribution of Memory Utilization by nGenPerTick")
-# ax[2, 1].set_xlabel("nGenPerTick")
-# ax[2, 1].set_ylabel("Memory Utilization")
+# sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 0])
+# ax[2, 0].set_title("Ideal: Distribution of Memory Utilization")
+# ax[2, 0].set_xlabel("Load")
+# ax[2, 0].set_ylabel("Memory util")
+# ax[2, 0].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
+
+
+# sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 1])
+# ax[2, 1].set_title("Actual: Distribution of Memory Utilization")
+# ax[2, 1].set_xlabel("Load")
+# ax[2, 1].set_ylabel("Memory util")
 # ax[2, 1].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
 
-# # 10. Seventh subplot: Strip plot for Time Passed as % of Completion for Hermod data
-# sns.stripplot(data=hermod_procs_done, x="nGenPerTick", y="timeAsPercentage", hue="willingToSpend", 
-#               jitter=True, palette=high_contrast_palette, ax=ax[0, 2])
 
-# ax[0, 2].set_title("Hermod: Time Passed as % of Completion by Willing to Spend")
-# ax[0, 2].set_ylabel("Time Passed as % of compDone")
 
-# # 11. Eighth subplot: Violin plot for Utilization for Hermod data
-# sns.boxplot(data=hermod_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 2])
-
-# ax[1, 2].set_title("Hermod: Distribution of Utilization by nGenPerTick")
-# ax[1, 2].set_xlabel("nGenPerTick")
-# ax[1, 2].set_ylabel("Utilization")
-# ax[1, 2].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
-
-# # 12. Ninth subplot: Violin plot for Memory Utilization for Hermod data
-# sns.boxplot(data=hermod_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 2])
-
-# ax[2, 2].set_title("Hermod: Distribution of Memory Utilization by nGenPerTick")
-# ax[2, 2].set_xlabel("nGenPerTick")
-# ax[2, 2].set_ylabel("Memory Utilization")
-# ax[2, 2].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
-
-# # Set the same y-axis limits for each row (ideal, actual, hermod)
-# # For Time Passed as % of Completion (Ideal, Actual, and Hermod)
-# y_max_0 = max(ideal_procs_done["timeAsPercentage"].max(), actual_procs_done["timeAsPercentage"].max(), hermod_procs_done["timeAsPercentage"].max()) * 1.1
+# y_max_0 = max(ideal_procs_done["timeAsPercentage"].max(), actual_procs_done["timeAsPercentage"].max()) * 1.1
 # y_min_0 = -0.08 * y_max_0
 
-# # Set the limits for the first row (ax[0, 0], ax[0, 1], ax[0, 2])
+
 # ax[0, 0].set_ylim(y_min_0, y_max_0)
 # ax[0, 1].set_ylim(y_min_0, y_max_0)
-# ax[0, 2].set_ylim(y_min_0, y_max_0)
 
-# # Set the limits for the second row (ax[1, 0], ax[1, 1], ax[1, 2])
 # ax[1, 0].set_ylim(-0.1, 1.1)
 # ax[1, 1].set_ylim(-0.1, 1.1)
-# ax[1, 2].set_ylim(-0.1, 1.1)
 
-# # Set the limits for the third row (memory utilization)
 # ax[2, 0].set_ylim(-0.1, 1.1)
 # ax[2, 1].set_ylim(-0.1, 1.1)
-# ax[2, 2].set_ylim(-0.1, 1.1)
 
-# # Adjust the layout to avoid overlap
 # plt.tight_layout()
-
-# # Save the figure and show it
-# plt.savefig('combined_res.png')
+# plt.savefig('ideal_vs_mine.png')
 # plt.show()

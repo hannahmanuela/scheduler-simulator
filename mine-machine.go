@@ -92,9 +92,9 @@ func (sd *Machine) okToPlace(newProc *Proc) float32 {
 	}
 
 	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
-	_, minMoneyWaste := sd.activeQ.checkKill(newProc)
+	_, minTimeToProfit := sd.activeQ.checkKill(newProc)
 
-	return minMoneyWaste
+	return minTimeToProfit
 }
 
 func (sd *Machine) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {

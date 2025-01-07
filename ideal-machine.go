@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	MONEY_WASTE_THRESHOLD = 0.5
+	TIME_TO_PROFIT_THRESHOLD = 10
 )
 
 type BigIdealMachine struct {
@@ -49,8 +49,8 @@ func (idc *BigIdealMachine) potPlaceProc(newProc *Proc) bool {
 	}
 
 	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
-	procToKill, minMoneyWaste := idc.procQ.checkKill(newProc)
-	if minMoneyWaste < MONEY_WASTE_THRESHOLD {
+	procToKill, timeToProfit := idc.procQ.checkKill(newProc)
+	if timeToProfit < TIME_TO_PROFIT_THRESHOLD {
 
 		newProc.timePlaced = *idc.currTickPtr
 		idc.procQ.kill(procToKill)

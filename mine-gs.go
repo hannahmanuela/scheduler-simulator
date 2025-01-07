@@ -175,17 +175,17 @@ func (gs *MineGSS) pickMachine(procToPlace *Proc) *Machine {
 	var machineToUse *Machine
 	machineToTry := pickRandomElements(Values(gs.machines), K_CHOICES_DOWN)
 
-	minMoneyWaste := float32(math.MaxFloat32)
+	minTimeToProfit := float32(math.MaxFloat32)
 
 	for _, m := range machineToTry {
-		moneyWaste := m.okToPlace(procToPlace)
-		if moneyWaste < minMoneyWaste {
-			minMoneyWaste = moneyWaste
+		timeToProfit := m.okToPlace(procToPlace)
+		if timeToProfit < minTimeToProfit {
+			minTimeToProfit = timeToProfit
 			machineToUse = m
 		}
 	}
 
-	if minMoneyWaste > MONEY_WASTE_THRESHOLD {
+	if minTimeToProfit > TIME_TO_PROFIT_THRESHOLD {
 		return nil
 	}
 
