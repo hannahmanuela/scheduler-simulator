@@ -6,87 +6,102 @@ import (
 )
 
 const (
-	MAX_MEM_PER_MACHINE = 32000 // the amount of memory every core will have, in MB
+	MEM_PER_MACHINE = 512000
 
-	IDLE_HEAP_THRESHOLD = 1
+	IDLE_HEAP_MEM_THRESHOLD  = 1
+	IDLE_HEAP_QLEN_THRESHOLD = 2
 
-	VERBOSE_PROC_PRINTS      = false
-	VERBOSE_SCHED_INFO       = false
-	VERBOSE_USAGE_STATS      = true
-	VERBOSE_IDEAL_SCHED_INFO = false
+	K_CHOICES_DOWN = 3
+	K_CHOICES_UP   = 3
+
+	VERBOSE_USAGE_STATS       = true
+	VERBOSE_SCHED_INFO        = false
+	VERBOSE_IDEAL_SCHED_INFO  = false
+	VERBOSE_HERMOD_SCHED_INFO = false
+	VERBOSE_EDF_SCHED_INFO    = false
 )
 
 const SEED = 12345
 
 var r = rand.New(rand.NewSource(SEED))
 
+type LB interface {
+	placeProcs()
+	tick()
+	enqProc(*Proc)
+}
+
+type LBType int
+
+const (
+	MINE LBType = iota
+	IDEAL
+	HERMOD
+	EDF
+)
+
+func (lbt LBType) newLB(numMachines int, numCores int, nGenPerTick int, nGSSs int, currTickPtr *Tftick) LB {
+	return []LB{newMineLB(numMachines, numCores, nGenPerTick, nGSSs, currTickPtr), newIdealLB(numMachines, numCores, nGenPerTick, currTickPtr), newHermodLB(numMachines, numCores, nGenPerTick, nGSSs, currTickPtr), newEDFLB(numMachines, numCores, nGenPerTick, currTickPtr)}[lbt]
+}
+
+func (lbt LBType) string() string {
+	return []string{"mine", "ideal", "hermod", "edf"}[lbt]
+}
+
 type World struct {
 	currTick      Tftick
 	numProcsToGen int
 	currProcNum   int
-	machines      map[Tid]*Machine
-	idealDC       *IdealDC
-	gs            *GlobalSched
-	app           Website
+
+	LBs []LB
+
+	loadGen LoadGen
 }
 
-func newWorld(numMachines int, numCores int, nGenPerTick int) *World {
+func newWorld(numMachines int, numCores int, nGenPerTick int, nGSSs int, lbsDoing []LBType) *World {
+
 	w := &World{
 		currTick:      Tftick(0),
-		machines:      map[Tid]*Machine{},
 		numProcsToGen: nGenPerTick,
 	}
-	w.idealDC = newIdealDC(numMachines*numCores, &w.currTick, nGenPerTick)
-	idleHeap := &IdleHeap{
-		heap: &MinHeap{},
+
+	for _, lbTypeToInclude := range lbsDoing {
+		w.LBs = append(w.LBs, lbTypeToInclude.newLB(numMachines, numCores, nGenPerTick, nGSSs, &w.currTick))
+		fmt.Printf("making lb of type %v\n", lbTypeToInclude.string())
 	}
-	for i := 0; i < numMachines; i++ {
-		mid := Tid(i)
-		w.machines[Tid(i)] = newMachine(mid, idleHeap, numCores, &w.currTick, nGenPerTick)
-	}
-	w.gs = newGolbalSched(w.machines, &w.currTick, nGenPerTick, idleHeap, w.idealDC)
+
+	w.loadGen = newLoadGen()
+
 	return w
 }
 
-func (w *World) String() string {
-	str := "machines: \n"
-	for _, m := range w.machines {
-		str += "   " + m.String()
-	}
-	return str
-}
+func (w *World) genLoad(nProcs int) []*ProcInternals {
 
-func (w *World) genLoad(nProcs int) int {
-	userProcs := w.app.genLoad(nProcs)
+	userProcs := w.loadGen.genLoad(nProcs)
+
 	for _, up := range userProcs {
-		provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
+
+		for _, lb := range w.LBs {
+			provProc := newProvProc(Tid(w.currProcNum), w.currTick, up)
+			lb.enqProc(provProc)
+		}
+
 		w.currProcNum += 1
-		w.gs.putProc(provProc)
 	}
-	return len(userProcs)
-}
-
-func (w *World) compute() {
-	for _, m := range w.machines {
-		m.sched.tick()
-	}
-	w.idealDC.tick()
-}
-
-func (w *World) printAllProcs() {
-	for _, m := range w.machines {
-		m.sched.printAllProcs()
-	}
+	return userProcs
 }
 
 func (w *World) Tick(numProcs int) {
-	w.printAllProcs()
-	// enqueues things into the procq
 	w.genLoad(numProcs)
-	// dequeues things from procq to machines
-	w.gs.placeProcs()
-	// runs each machine for a tick
-	w.compute()
+
+	for _, lb := range w.LBs {
+		lb.placeProcs()
+	}
+
+	for _, lb := range w.LBs {
+		lb.tick()
+	}
+
 	w.currTick += 1
 }
 
@@ -94,5 +109,4 @@ func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
 		w.Tick(w.numProcsToGen)
 	}
-	fmt.Printf(" %v: idle \n %v: k-choices \n", w.gs.numFoundIdle, w.gs.numUsedKChoices)
 }

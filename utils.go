@@ -3,6 +3,7 @@ package slasched
 import (
 	"container/heap"
 	"fmt"
+	"math"
 	"os"
 )
 
@@ -10,30 +11,55 @@ type Tmem int
 type Tftick float64
 
 func (f Tftick) String() string {
-	return fmt.Sprintf("%.6fT", f)
+	return fmt.Sprintf("%.2f", f)
+}
+
+func mapPriorityToPctToGen(priority int) int {
+	return []int{35, 25, 2, 15, 5}[priority]
+}
+
+func mapPriorityToDollars(priority int) float32 {
+	return []float32{0.3, 0.7, 1.0, 1.5, 2}[priority]
+}
+
+func genRandPriority() int {
+
+	sample := r.Intn(100)
+	currSum := 0
+
+	for prio := 0; prio < N_PRIORITIES; prio++ {
+		currSum += mapPriorityToPctToGen(prio)
+		if sample < currSum {
+			return prio
+		}
+	}
+
+	return N_PRIORITIES - 1
 }
 
 type PrintType int
 
 const (
-	CURR_PROCS PrintType = iota
-	ADDED_PROCS
-	DONE_PROCS
+	PROCS_DONE PrintType = iota
+	IDEAL_PROCS_DONE
+	HERMOD_PROCS_DONE
+	EDF_PROCS_DONE
 	SCHED
-	USAGE
-	SAID_NO
-	CREATED_PROCS
-	IDEAL_SAID_NO
-	IDEAL_USAGE
 	IDEAL_SCHED
+	HERMOD_SCHED
+	EDF_SCHED
+	USAGE
+	IDEAL_USAGE
+	HERMOD_USAGE
+	EDF_USAGE
 )
 
 func (pt PrintType) fileName() string {
-	return []string{"results/procs_current.txt", "results/procs_added.txt", "results/procs_done.txt", "results/sched.txt", "results/usage.txt", "results/said_no.txt", "results/procs_created.txt", "results/ideal_said_no.txt", "results/ideal_usage.txt", "results/ideal_sched.txt"}[pt]
+	return []string{"results/procs_done.txt", "results/ideal_procs_done.txt", "results/hermod_procs_done.txt", "results/edf_procs_done.txt", "results/sched.txt", "results/ideal_sched.txt", "results/hermod_sched.txt", "results/edf_sched.txt", "results/usage.txt", "results/ideal_usage.txt", "results/hermod_usage.txt", "results/edf_usage.txt"}[pt]
 }
 
 func (pt PrintType) should_print() bool {
-	return []bool{VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_PROC_PRINTS, VERBOSE_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_IDEAL_SCHED_INFO}[pt]
+	return []bool{VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_SCHED_INFO, VERBOSE_IDEAL_SCHED_INFO, VERBOSE_HERMOD_SCHED_INFO, VERBOSE_EDF_SCHED_INFO, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS, VERBOSE_USAGE_STATS}[pt]
 }
 
 func logWrite(printType PrintType, toWrite string) {
@@ -55,7 +81,7 @@ func logWrite(printType PrintType, toWrite string) {
 }
 
 func emptyFiles() {
-	types := []PrintType{CURR_PROCS, ADDED_PROCS, DONE_PROCS, SCHED, USAGE, SAID_NO, CREATED_PROCS, IDEAL_SAID_NO, IDEAL_USAGE, IDEAL_SCHED}
+	types := []PrintType{PROCS_DONE, IDEAL_PROCS_DONE, EDF_PROCS_DONE, HERMOD_PROCS_DONE, SCHED, IDEAL_SCHED, HERMOD_SCHED, EDF_SCHED, USAGE, IDEAL_USAGE, HERMOD_USAGE, EDF_USAGE}
 
 	for _, t := range types {
 		os.Truncate(t.fileName(), 0)
@@ -63,22 +89,27 @@ func emptyFiles() {
 
 }
 
-func contains(h *MinHeap, value TmachineCoreId) bool {
+func contains(h *MinHeap, value Tid) bool {
 	for _, v := range *h {
-		if v.machineCoreId == value {
+		if v.machine == value {
 			return true
 		}
 	}
 	return false
 }
 
-func remove(h *MinHeap, toRemove TmachineCoreId) {
+func remove(h *MinHeap, toRemove Tid) {
 	for i := 0; i < h.Len(); i++ {
-		if (*h)[i].machineCoreId == toRemove {
+		if (*h)[i].machine == toRemove {
 			heap.Remove(h, i)
 			break
 		}
 	}
+}
+
+func ParetoSample(alpha, xm float64) float64 {
+	rnd := r.ExpFloat64()
+	return xm * math.Exp(rnd/alpha)
 }
 
 func sampleNormal(mu, sigma float64) float64 {
@@ -91,13 +122,42 @@ func pickRandomElements[T any](list []T, k int) []T {
 		k = len(list)
 	}
 
-	// Use the Fisher-Yates shuffle algorithm to shuffle the list
 	for i := len(list) - 1; i > 0; i-- {
 		j := r.Intn(i + 1)
 		list[i], list[j] = list[j], list[i]
 	}
 
 	return list[:k]
+}
+
+func pickRandomElementsMap[K comparable, V any](inpMap map[K]V, k int) map[K]V {
+
+	if k > len(inpMap) {
+		k = len(inpMap)
+	}
+
+	if k < len(inpMap) {
+		return inpMap
+	}
+
+	keys := make([]K, 0, len(inpMap))
+	for key := range inpMap {
+		keys = append(keys, key)
+	}
+
+	randKeys := make([]K, k)
+	for i := 0; i < k; i++ {
+		j := r.Intn(len(inpMap))
+		randKeys[i] = keys[j]
+	}
+
+	result := make(map[K]V)
+	for i := 0; i < k && i < len(keys); i++ {
+		key := randKeys[i]
+		result[key] = inpMap[key]
+	}
+
+	return result
 }
 
 func Values[M ~map[K]V, K comparable, V any](m M) []V {

@@ -3,32 +3,27 @@ package slasched
 import (
 	"fmt"
 	"testing"
-	"time"
 )
 
 const (
-	N_TICK                     = 1000
-	N_MACHINES                 = 10
-	N_CORES_PER_MACHINE        = 8
-	N_PROCS_GEN_PER_TICK_START = 10
-	N_PROCS_GEN_PER_TICK_END   = 80
-)
+	N_TICK = 100
 
-// func TestRunWorld(t *testing.T) {
-// 	emptyFiles()
-// 	w := newWorld(N_MACHINES, N_CORES_PER_MACHINE)
-// 	w.app = newSimpleWebsite()
-// 	time.Sleep(100 * time.Millisecond)
-// 	w.Run(N_TICK, N_PROCS_GEN_PER_TICK)
-// }
+	N_GSSs              = 4
+	N_MACHINES          = 100
+	N_CORES_PER_MACHINE = 8
+
+	// this is overall
+	N_PROCS_GEN_PER_TICK_START = 170
+	N_PROCS_GEN_PER_TICK_END   = 300
+)
 
 func TestRunWorld(t *testing.T) {
 	emptyFiles()
-	for nProcsToGen := N_PROCS_GEN_PER_TICK_START; nProcsToGen <= N_PROCS_GEN_PER_TICK_END; nProcsToGen += 2 {
+	for nProcsToGen := N_PROCS_GEN_PER_TICK_START; nProcsToGen <= N_PROCS_GEN_PER_TICK_END; nProcsToGen += 10 {
+
 		fmt.Printf("---- Running with %v procs per ticks ----\n", nProcsToGen)
-		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen)
-		w.app = newSimpleWebsite()
-		time.Sleep(100 * time.Millisecond)
+
+		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_GSSs, []LBType{IDEAL, MINE, HERMOD, EDF})
 		w.Run(N_TICK)
 	}
 
