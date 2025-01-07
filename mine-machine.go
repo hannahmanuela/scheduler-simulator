@@ -97,9 +97,11 @@ func (sd *Machine) okToPlace(newProc *Proc) float32 {
 	return minTimeToProfit
 }
 
-func (sd *Machine) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
+func (sd *Machine) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine, *Proc) {
 
 	newProc.timePlaced = *sd.currTickPtr
+
+	var killed *Proc
 
 	ogMemFree := sd.memFree()
 
@@ -110,7 +112,8 @@ func (sd *Machine) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
 		// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
 		procToKill, _ := sd.activeQ.checkKill(newProc)
 
-		sd.activeQ.kill(procToKill)
+		killed = sd.activeQ.kill(procToKill)
+
 		sd.activeQ.enq(newProc)
 	}
 
@@ -144,12 +147,12 @@ func (sd *Machine) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
 	if dontWantToSendIdleInfo {
 		toWrite := fmt.Sprintf("    don't want to send; curr heap is actually %v \n", sd.currHeapGSS)
 		logWrite(SCHED, toWrite)
-		return false, TIdleMachine{}
+		return false, TIdleMachine{}, killed
 	}
 
 	stillNotIdle := (sd.currHeapGSS < 0) && !(sd.memFree() > IDLE_HEAP_MEM_THRESHOLD)
 	if stillNotIdle {
-		return false, TIdleMachine{}
+		return false, TIdleMachine{}, killed
 	}
 
 	wasButNowNoLongerIdle := (sd.currHeapGSS == fromGs) && (sd.memFree() < IDLE_HEAP_MEM_THRESHOLD)
@@ -167,7 +170,7 @@ func (sd *Machine) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine) {
 		highestCostRunning: maxCostRunning,
 		qlen:               sd.activeQ.qlen(),
 		memAvail:           sd.memFree(),
-	}
+	}, killed
 }
 
 // do numCores ticks of computation (only on procs in the activeQ)

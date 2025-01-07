@@ -131,9 +131,13 @@ func (gs *MineGSS) placeProcs() {
 			continue
 		}
 
-		shouldStoreIdleInfo, idleVal := machineToUse.placeProc(p, gs.gsId)
+		shouldStoreIdleInfo, idleVal, procKilled := machineToUse.placeProc(p, gs.gsId)
 		toWrite = fmt.Sprintf("    -> chose %v; after placing should store: %v, new idle val: %v \n", machineToUse.machineId, shouldStoreIdleInfo, idleVal)
 		logWrite(SCHED, toWrite)
+
+		if procKilled != nil {
+			toReq = append(toReq, procKilled)
+		}
 
 		if shouldStoreIdleInfo {
 			if contains(gs.idleMachines.heap, machineToUse.machineId) {

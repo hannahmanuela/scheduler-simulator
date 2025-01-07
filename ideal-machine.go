@@ -38,14 +38,14 @@ func (idc *BigIdealMachine) memFree() Tmem {
 	return idc.totalMem - currMemUsed
 }
 
-func (idc *BigIdealMachine) potPlaceProc(newProc *Proc) bool {
+func (idc *BigIdealMachine) potPlaceProc(newProc *Proc) (bool, *Proc) {
 
 	// if it just fits in terms of memory do it
 	if newProc.maxMem() < idc.memFree() {
 
 		newProc.timePlaced = *idc.currTickPtr
 		idc.procQ.enq(newProc)
-		return true
+		return true, nil
 	}
 
 	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
@@ -53,12 +53,12 @@ func (idc *BigIdealMachine) potPlaceProc(newProc *Proc) bool {
 	if timeToProfit < TIME_TO_PROFIT_THRESHOLD {
 
 		newProc.timePlaced = *idc.currTickPtr
-		idc.procQ.kill(procToKill)
+		killed := idc.procQ.kill(procToKill)
 		idc.procQ.enq(newProc)
-		return true
+		return true, killed
 	}
 
-	return false
+	return false, nil
 
 }
 
@@ -177,6 +177,6 @@ func (idc *BigIdealMachine) tick() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf(", %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
+	toWrite = fmt.Sprintf(", %.3f, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
 	logWrite(IDEAL_USAGE, toWrite)
 }

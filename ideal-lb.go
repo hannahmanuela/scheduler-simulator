@@ -30,7 +30,11 @@ func (ilb *IdealLB) placeProcs() {
 	p := ilb.multiQ.deq(*ilb.currTickPtr)
 
 	for p != nil {
-		placed := ilb.bigMachine.potPlaceProc(p)
+		placed, killed := ilb.bigMachine.potPlaceProc(p)
+
+		if killed != nil {
+			toReq = append(toReq, killed)
+		}
 
 		if !placed {
 			toReq = append(toReq, p)

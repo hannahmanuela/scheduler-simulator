@@ -122,17 +122,22 @@ func (q *Queue) checkKill(newProc *Proc) (Tid, float32) {
 
 }
 
-func (q *Queue) kill(pid Tid) {
+func (q *Queue) kill(pid Tid) *Proc {
 
 	tmp := make([]*Proc, 0)
+	var killed *Proc
 
 	for _, currProc := range q.q {
 		if currProc.procId != pid {
 			tmp = append(tmp, currProc)
+		} else {
+			killed = currProc
 		}
 	}
 
 	q.q = tmp
+
+	return killed
 
 }
 
