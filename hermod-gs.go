@@ -65,8 +65,8 @@ func (hgs *HermodGS) pickMachine(procToPlace *Proc) *HermodMachine {
 	leastNumProcs := math.MaxInt
 
 	for _, m := range machinesToTry {
-		if len(m.procQ) < leastNumProcs && m.memFree() > procToPlace.maxMem() {
-			leastNumProcs = len(m.procQ)
+		if len(m.procs) < leastNumProcs {
+			leastNumProcs = len(m.procs)
 			machineToUse = m
 		}
 	}

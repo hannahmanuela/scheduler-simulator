@@ -89,7 +89,7 @@ func emptyFiles() {
 
 }
 
-func contains(h *MinHeap, value Tid) bool {
+func contains(h *IdleHeap, value Tid) bool {
 	for _, v := range *h {
 		if v.machine == value {
 			return true
@@ -98,7 +98,7 @@ func contains(h *MinHeap, value Tid) bool {
 	return false
 }
 
-func remove(h *MinHeap, toRemove Tid) {
+func remove(h *IdleHeap, toRemove Tid) {
 	for i := 0; i < h.Len(); i++ {
 		if (*h)[i].machine == toRemove {
 			heap.Remove(h, i)
@@ -114,6 +114,16 @@ func ParetoSample(alpha, xm float64) float64 {
 
 func sampleNormal(mu, sigma float64) float64 {
 	return r.NormFloat64()*float64(sigma) + float64(mu)
+}
+
+func removeFromList[T comparable](list []T, toRemove T) []T {
+	newList := make([]T, 0)
+	for _, v := range list {
+		if v != toRemove {
+			newList = append(newList, v)
+		}
+	}
+	return newList
 }
 
 func pickRandomElements[T any](list []T, k int) []T {

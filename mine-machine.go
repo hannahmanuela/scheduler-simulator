@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	TICK_SCHED_THRESHOLD = 0.001 // amount of ticks after which I stop scheduling; given that 1 tick = 5ms (see website.go)
+	MEM_FUDGE_FACTOR_POLLING = 1.1
 )
 
 type Tid int
@@ -17,7 +17,7 @@ type Tprocmap map[Tid]int
 type Machine struct {
 	machineId               Tid
 	numCores                int
-	activeQ                 *Queue
+	procQ                   *Queue
 	idleHeaps               map[Tid]*IdleHeap
 	currHeapGSS             Tid
 	currTickPtr             *Tftick
@@ -29,7 +29,7 @@ func newMachine(mid Tid, idleHeaps map[Tid]*IdleHeap, numCores int, currTickPtr 
 	sd := &Machine{
 		machineId:               mid,
 		numCores:                numCores,
-		activeQ:                 newQueue(),
+		procQ:                   newQueue(),
 		idleHeaps:               idleHeaps,
 		currHeapGSS:             -1,
 		currTickPtr:             currTickPtr,
@@ -43,25 +43,21 @@ func newMachine(mid Tid, idleHeaps map[Tid]*IdleHeap, numCores int, currTickPtr 
 	minLength := math.MaxInt
 
 	for gsId, possHeap := range heapsToLookAt {
-		possHeap.lock.Lock()
-		if possHeap.heap.Len() < minLength {
-			minLength = possHeap.heap.Len()
+		if possHeap.Len() < minLength {
+			minLength = possHeap.Len()
 			gsHeapToUse = gsId
 		}
-		possHeap.lock.Unlock()
 	}
 
 	sd.currHeapGSS = gsHeapToUse
 	heapToUse := sd.idleHeaps[gsHeapToUse]
-	heapToUse.lock.Lock()
 	toPush := TIdleMachine{
 		memAvail:           MEM_PER_MACHINE,
 		highestCostRunning: -1,
 		qlen:               0,
 		machine:            Tid(sd.machineId),
 	}
-	heapToUse.heap.Push(toPush)
-	heapToUse.lock.Unlock()
+	heapToUse.Push(toPush)
 
 	return sd
 }
@@ -78,103 +74,59 @@ func (sd *Machine) memFree() Tmem {
 
 	memUsed := Tmem(0)
 
-	for _, p := range sd.activeQ.getQ() {
-		memUsed += p.maxMem()
+	for _, p := range sd.procQ.getQ() {
+		if !p.currentlyPaged {
+			memUsed += p.memUsing
+		}
 	}
 	return MEM_PER_MACHINE - memUsed
 }
 
-func (sd *Machine) okToPlace(newProc *Proc) float32 {
+func (sd *Machine) memPaged() Tmem {
 
-	// if it just fits in terms of memory do it
-	if newProc.maxMem() < sd.memFree() {
-		return 0
+	memPaged := Tmem(0)
+
+	for _, p := range sd.procQ.getQ() {
+		if p.currentlyPaged {
+			memPaged += p.memUsing
+		}
 	}
-
-	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
-	_, minTimeToProfit := sd.activeQ.checkKill(newProc)
-
-	return minTimeToProfit
+	return memPaged
 }
 
-func (sd *Machine) placeProc(newProc *Proc, fromGs Tid) (bool, TIdleMachine, *Proc) {
+func (sd *Machine) placeProc(newProc *Proc) {
+
+	if sd.memFree() < 0 {
+		fmt.Println("here1")
+	}
 
 	newProc.timePlaced = *sd.currTickPtr
+	sd.procQ.enq(newProc)
 
-	var killed *Proc
-
-	ogMemFree := sd.memFree()
-
-	if newProc.maxMem() < sd.memFree() {
-		sd.activeQ.enq(newProc)
-
-	} else {
-		// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
-		procToKill, _ := sd.activeQ.checkKill(newProc)
-
-		killed = sd.activeQ.kill(procToKill)
-
-		sd.activeQ.enq(newProc)
+	if sd.memFree() < 0 {
+		sd.procQ.pageOut(-sd.memFree(), sd.procQ.getQ())
 	}
-
-	maxCostRunning := float32(0)
-	for _, p := range sd.activeQ.getQ() {
-		if p.willingToSpend() > maxCostRunning {
-			maxCostRunning = p.willingToSpend()
-		}
-	}
-
-	// if not from GS whose list we're in and change in mem is large, update the list
-	if (float32(sd.memFree()) < 0.9*float32(ogMemFree)) && (sd.currHeapGSS >= 0) && (sd.currHeapGSS != fromGs) {
-		heapToUse := sd.idleHeaps[sd.currHeapGSS]
-		heapToUse.lock.Lock()
-		// also if it is already in the heap, then replace it with the new value
-		if contains(heapToUse.heap, sd.machineId) {
-			remove(heapToUse.heap, sd.machineId)
-		}
-		toPush := TIdleMachine{
-			machine:            sd.machineId,
-			highestCostRunning: maxCostRunning,
-			qlen:               sd.activeQ.qlen(),
-			memAvail:           sd.memFree(),
-		}
-		heapToUse.heap.Push(toPush)
-		heapToUse.lock.Unlock()
-	}
-
-	// don't want the GSS to take out idleness into account if we are already somewhere else
-	dontWantToSendIdleInfo := (sd.currHeapGSS >= 0) && (sd.currHeapGSS != fromGs)
-	if dontWantToSendIdleInfo {
-		toWrite := fmt.Sprintf("    don't want to send; curr heap is actually %v \n", sd.currHeapGSS)
-		logWrite(SCHED, toWrite)
-		return false, TIdleMachine{}, killed
-	}
-
-	stillNotIdle := (sd.currHeapGSS < 0) && !(sd.memFree() > IDLE_HEAP_MEM_THRESHOLD)
-	if stillNotIdle {
-		return false, TIdleMachine{}, killed
-	}
-
-	wasButNowNoLongerIdle := (sd.currHeapGSS == fromGs) && (sd.memFree() < IDLE_HEAP_MEM_THRESHOLD)
-	if wasButNowNoLongerIdle {
-		sd.currHeapGSS = -1
-	}
-
-	newlyIdle := (sd.currHeapGSS < 0) && (sd.memFree() > IDLE_HEAP_MEM_THRESHOLD)
-	if newlyIdle {
-		sd.currHeapGSS = fromGs
-	}
-
-	return true, TIdleMachine{
-		machine:            sd.machineId,
-		highestCostRunning: maxCostRunning,
-		qlen:               sd.activeQ.qlen(),
-		memAvail:           sd.memFree(),
-	}, killed
 }
 
-// do numCores ticks of computation (only on procs in the activeQ)
+func (sd *Machine) currMemFree(allProcsRunning []*Proc) Tmem {
+
+	memUsed := Tmem(0)
+
+	for _, p := range allProcsRunning {
+		if !p.currentlyPaged {
+			memUsed += p.memUsing
+		}
+	}
+
+	return MEM_PER_MACHINE - memUsed
+}
+
 func (sd *Machine) simulateRunProcs() {
+
+	allProcsRunning := make([]*Proc, sd.procQ.qlen())
+	for i, p := range sd.procQ.getQ() {
+		allProcsRunning[i] = p
+	}
 
 	totalTicksLeftToGive := Tftick(sd.numCores)
 	ticksLeftPerCore := make(map[int]Tftick, 0)
@@ -186,8 +138,7 @@ func (sd *Machine) simulateRunProcs() {
 		coresWithTicksLeft[i] = true
 	}
 
-	ogMemFree := sd.memFree()
-	toWrite := fmt.Sprintf("%v, %v, %v", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), sd.machineId)
+	toWrite := fmt.Sprintf("%v, %v, %v, %v, %v, ", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), sd.machineId, sd.memFree(), sd.memPaged())
 	logWrite(USAGE, toWrite)
 
 	putProcOnCoreWithMaxTimeLeft := func() int {
@@ -209,10 +160,10 @@ func (sd *Machine) simulateRunProcs() {
 
 	toReq := make([]*Proc, 0)
 
-	toWrite = fmt.Sprintf("\n==> %v @ %v, machine %v (on heap: %v, mem free: %v); has q: \n%v", sd.worldNumProcsGenPerTick, sd.currTickPtr.String(), sd.machineId, sd.currHeapGSS, sd.memFree(), sd.activeQ.SummaryString())
+	toWrite = fmt.Sprintf("\n==> %v @ %v, machine %v (on heap: %v, mem free: %v); has q: \n%v", sd.worldNumProcsGenPerTick, sd.currTickPtr.String(), sd.machineId, sd.currHeapGSS, sd.memFree(), sd.procQ.SummaryString())
 	logWrite(SCHED, toWrite)
 
-	for sd.activeQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && len(coresWithTicksLeft) > 0 {
+	for sd.procQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && len(coresWithTicksLeft) > 0 {
 
 		for i := 0; i < sd.numCores; i++ {
 			coresLeftThisRound[i] = true
@@ -221,13 +172,13 @@ func (sd *Machine) simulateRunProcs() {
 		// run by amount of money willing to spend
 		coreToProc := make(map[int]*Proc, 0)
 		for i := 0; i < sd.numCores; i++ {
-			p := sd.activeQ.deq()
+			p := sd.procQ.deq()
 			if p == nil {
 				continue
 			}
 			coreToUse := putProcOnCoreWithMaxTimeLeft()
 			if coreToUse == -1 {
-				sd.activeQ.enq(p)
+				sd.procQ.enq(p)
 				coreToProc[coreToUse] = nil
 			} else {
 				coreToProc[coreToUse] = p
@@ -243,13 +194,20 @@ func (sd *Machine) simulateRunProcs() {
 				continue
 			}
 
-			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
+			if procToRun.currentlyPaged {
+				fmt.Printf("running paged proc\n")
+			}
+
+			toWrite := fmt.Sprintf("   core %v giving %v to proc %v, ", currCore, ticksLeftPerCore[currCore], procToRun.String())
 			logWrite(SCHED, toWrite)
 
-			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
+			memUseDelta, ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 
 			ticksLeftPerCore[currCore] -= ticksUsed
 			totalTicksLeftToGive -= ticksUsed
+
+			toWrite = fmt.Sprintf("mem use delta: %v, new mem free: %v \n", memUseDelta, sd.currMemFree(allProcsRunning))
+			logWrite(SCHED, toWrite)
 
 			if ticksLeftPerCore[currCore] < TICK_SCHED_THRESHOLD {
 				delete(coresWithTicksLeft, currCore)
@@ -257,12 +215,29 @@ func (sd *Machine) simulateRunProcs() {
 
 			if !done {
 				toReq = append(toReq, procToRun)
+
+				if sd.currMemFree(allProcsRunning) < 0 {
+					toWrite = fmt.Sprintf("      mem usg over: %v, pagingOUT\n", sd.currMemFree(allProcsRunning))
+					logWrite(SCHED, toWrite)
+					sd.procQ.pageOut(-sd.currMemFree(allProcsRunning), allProcsRunning)
+					toWrite = fmt.Sprintf("      - new curr mem free: %v\n", sd.currMemFree(allProcsRunning))
+					logWrite(SCHED, toWrite)
+				}
+
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *sd.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
 				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
 				logWrite(SCHED, toWrite)
+
+				allProcsRunning = removeFromList(allProcsRunning, procToRun)
+
+				if sd.memPaged() > 0 {
+					sd.procQ.pageIn(sd.currMemFree(allProcsRunning))
+					toWrite := fmt.Sprintf("    pagedIN: new mem free: %v\n", sd.currMemFree(allProcsRunning))
+					logWrite(SCHED, toWrite)
+				}
 
 				if (procToRun.timeDone - procToRun.timeStarted) > procToRun.compDone {
 					toWrite := fmt.Sprintf("   ---> OVER %v \n", procToRun.String())
@@ -277,32 +252,27 @@ func (sd *Machine) simulateRunProcs() {
 	}
 
 	for _, p := range toReq {
-		sd.activeQ.enq(p)
+		sd.procQ.enq(p)
 	}
+
+	toWrite = fmt.Sprintf("q at end: %v \n\n", sd.procQ.String())
+	logWrite(SCHED, toWrite)
 
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf(", %.3f, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), ogMemFree)
+	toWrite = fmt.Sprintf("%.3f, %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), sd.memFree(), sd.memPaged())
 	logWrite(USAGE, toWrite)
 
 	highestCost := float32(0)
-	for _, p := range sd.activeQ.getQ() {
+	for _, p := range sd.procQ.getQ() {
 		if p.willingToSpend() > highestCost {
 			highestCost = p.willingToSpend()
 		}
 	}
 
-	if (sd.activeQ.qlen() > IDLE_HEAP_QLEN_THRESHOLD) && (sd.memFree() < IDLE_HEAP_MEM_THRESHOLD) {
-		// are not idle
-		if sd.currHeapGSS >= 0 {
-			sd.idleHeaps[sd.currHeapGSS].lock.Lock()
-			if contains(sd.idleHeaps[sd.currHeapGSS].heap, sd.machineId) {
-				remove(sd.idleHeaps[sd.currHeapGSS].heap, sd.machineId)
-			}
-			sd.idleHeaps[sd.currHeapGSS].lock.Unlock()
-			sd.currHeapGSS = -1
-		}
+	if (sd.memPaged() > 0) || (sd.memFree() < INIT_MEM) {
+		// not idle
 		return
 	}
 
@@ -317,28 +287,24 @@ func (sd *Machine) simulateRunProcs() {
 
 		minLength := math.MaxInt
 		for gssId, possHeap := range heapsToLookAt {
-			possHeap.lock.Lock()
-			if possHeap.heap.Len() < minLength {
-				minLength = possHeap.heap.Len()
+			if possHeap.Len() < minLength {
+				minLength = possHeap.Len()
 				heapToUse = possHeap
 				sd.currHeapGSS = gssId
 			}
-			possHeap.lock.Unlock()
 		}
 	}
 
-	heapToUse.lock.Lock()
 	// also if it is already in the heap, then replace it with the new value
-	if contains(heapToUse.heap, sd.machineId) {
-		remove(heapToUse.heap, sd.machineId)
+	if contains(heapToUse, sd.machineId) {
+		remove(heapToUse, sd.machineId)
 	}
 	toPush := TIdleMachine{
 		machine:            sd.machineId,
 		highestCostRunning: highestCost,
-		qlen:               sd.activeQ.qlen(),
+		qlen:               sd.procQ.qlen(),
 		memAvail:           sd.memFree(),
 	}
-	heapToUse.heap.Push(toPush)
-	heapToUse.lock.Unlock()
+	heapToUse.Push(toPush)
 
 }

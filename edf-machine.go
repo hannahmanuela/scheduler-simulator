@@ -7,7 +7,7 @@ import (
 
 type BigEDFMachine struct {
 	currTickPtr             *Tftick
-	procQ                   []*EDFProc
+	procs                   []*EDFProc
 	amtWorkPerTick          int
 	totalMem                Tmem
 	worldNumProcsGenPerTick int
@@ -16,7 +16,7 @@ type BigEDFMachine struct {
 func newBigEDFMachine(amtWorkPerTick int, totMem Tmem, currTickPtr *Tftick, worldNumProcsGenPerTick int) *BigEDFMachine {
 	return &BigEDFMachine{
 		currTickPtr:             currTickPtr,
-		procQ:                   make([]*EDFProc, 0),
+		procs:                   make([]*EDFProc, 0),
 		amtWorkPerTick:          amtWorkPerTick,
 		totalMem:                totMem,
 		worldNumProcsGenPerTick: worldNumProcsGenPerTick,
@@ -24,45 +24,27 @@ func newBigEDFMachine(amtWorkPerTick int, totMem Tmem, currTickPtr *Tftick, worl
 
 }
 
-func (edfm *BigEDFMachine) potPlaceProc(newProc *EDFProc) bool {
+func (edfm *BigEDFMachine) placeProc(newProc *EDFProc) {
 
-	// if it just fits in terms of memory do it
-	if newProc.p.maxMem() < edfm.memFree() {
-
-		newProc.p.timePlaced = *edfm.currTickPtr
-		edfm.enq(newProc)
-		return true
-	}
-
-	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
-	procToKill, timeToProfit := edfm.checkKill(newProc)
-	if timeToProfit < TIME_TO_PROFIT_THRESHOLD {
-
-		newProc.p.timePlaced = *edfm.currTickPtr
-		edfm.kill(procToKill)
-		edfm.enq(newProc)
-		return true
-	}
-
-	return false
+	edfm.enq(newProc)
 
 }
 
 func (edfm *BigEDFMachine) memFree() Tmem {
-	currMemUsed := Tmem(0)
 
-	for _, p := range edfm.procQ {
-		currMemUsed += p.p.maxMem()
+	memUsed := Tmem(0)
+
+	for _, p := range edfm.procs {
+		memUsed += p.p.memUsing
 	}
-
-	return edfm.totalMem - currMemUsed
+	return edfm.totalMem - memUsed
 }
 
 func (edfm *BigEDFMachine) tick() {
 
 	toWrite := fmt.Sprintf("%v @ %v; mem free: %v: WHOLE QUEUE ", edfm.worldNumProcsGenPerTick, edfm.currTickPtr, MEM_PER_MACHINE)
 	logWrite(EDF_SCHED, toWrite)
-	for _, p := range edfm.procQ {
+	for _, p := range edfm.procs {
 		toWrite := fmt.Sprintf("%v, dl: %.2f; \n", p.String(), p.dl)
 		logWrite(EDF_SCHED, toWrite)
 	}
@@ -102,7 +84,7 @@ func (edfm *BigEDFMachine) tick() {
 
 	toReq := make([]*EDFProc, 0)
 
-	for len(edfm.procQ) > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && len(coresWithTicksLeft) > 0 {
+	for len(edfm.procs) > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && len(coresWithTicksLeft) > 0 {
 
 		for i := 0; i < edfm.amtWorkPerTick; i++ {
 			coresLeftThisRound[i] = true
@@ -135,7 +117,7 @@ func (edfm *BigEDFMachine) tick() {
 			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
 			logWrite(EDF_SCHED, toWrite)
 
-			ticksUsed, done := procToRun.p.runTillOutOrDone(ticksLeftPerCore[currCore])
+			_, ticksUsed, done := procToRun.p.runTillOutOrDone(ticksLeftPerCore[currCore])
 
 			ticksLeftPerCore[currCore] -= ticksUsed
 			totalTicksLeftToGive -= ticksUsed
@@ -185,7 +167,7 @@ func (edfm *BigEDFMachine) deq() *EDFProc {
 	var procToRet *EDFProc
 	idxToDel := -1
 
-	for i, p := range edfm.procQ {
+	for i, p := range edfm.procs {
 		if p.dl < minDl {
 			minDl = p.dl
 			procToRet = p
@@ -194,7 +176,7 @@ func (edfm *BigEDFMachine) deq() *EDFProc {
 	}
 
 	if idxToDel >= 0 {
-		edfm.procQ = append(edfm.procQ[:idxToDel], edfm.procQ[idxToDel+1:]...)
+		edfm.procs = append(edfm.procs[:idxToDel], edfm.procs[idxToDel+1:]...)
 	}
 
 	return procToRet
@@ -202,38 +184,5 @@ func (edfm *BigEDFMachine) deq() *EDFProc {
 
 func (edfm *BigEDFMachine) enq(newProc *EDFProc) {
 
-	edfm.procQ = append(edfm.procQ, newProc)
-}
-
-func (edfm *BigEDFMachine) checkKill(newProc *EDFProc) (Tid, float32) {
-
-	minMoneyThrownAway := float32(math.MaxFloat32)
-	procId := Tid(-1)
-
-	for _, p := range edfm.procQ {
-		if (p.p.maxMem() > newProc.p.maxMem()) && (p.p.willingToSpend() < newProc.p.willingToSpend()) {
-			wldThrow := float32(float32(p.p.compDone) * p.p.willingToSpend())
-			if wldThrow < minMoneyThrownAway {
-				procId = p.p.procId
-				minMoneyThrownAway = wldThrow
-			}
-		}
-	}
-
-	return procId, minMoneyThrownAway
-
-}
-
-func (edfm *BigEDFMachine) kill(pid Tid) {
-
-	tmp := make([]*EDFProc, 0)
-
-	for _, currProc := range edfm.procQ {
-		if currProc.p.procId != pid {
-			tmp = append(tmp, currProc)
-		}
-	}
-
-	edfm.procQ = tmp
-
+	edfm.procs = append(edfm.procs, newProc)
 }

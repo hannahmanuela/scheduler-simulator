@@ -32,7 +32,7 @@ func (elb *EDFLB) enqProc(proc *Proc) {
 
 	topPrice := mapPriorityToDollars(N_PRIORITIES - 1)
 
-	newDl := float32(proc.timeStarted) + float32(proc.procInternals.compGuess)*(topPrice/proc.procInternals.willingToSpend)
+	newDl := float32(proc.timeStarted) + float32(proc.procInternals.actualComp)*(topPrice/proc.procInternals.willingToSpend)
 	edfP := &EDFProc{p: proc, dl: newDl}
 
 	elb.enq(edfP)
@@ -41,21 +41,12 @@ func (elb *EDFLB) enqProc(proc *Proc) {
 
 func (elb *EDFLB) placeProcs() {
 
-	toReq := make([]*EDFProc, 0)
-
 	p := elb.deq()
 
 	for p != nil {
-		placed := elb.bigMachine.potPlaceProc(p)
+		elb.bigMachine.placeProc(p)
 
-		if !placed {
-			toReq = append(toReq, p)
-		}
 		p = elb.deq()
-	}
-
-	for _, p := range toReq {
-		elb.enq(p)
 	}
 
 }

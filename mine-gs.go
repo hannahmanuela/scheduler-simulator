@@ -3,7 +3,6 @@ package slasched
 import (
 	"fmt"
 	"math"
-	"sync"
 )
 
 type TIdleMachine struct {
@@ -13,15 +12,14 @@ type TIdleMachine struct {
 	memAvail           Tmem
 }
 
-// TODO: basically we can think of this as a free list, should treat it accordingly (this is a well-known problem)
-type MinHeap []TIdleMachine
+type IdleHeap []TIdleMachine
 
-func (h MinHeap) Len() int           { return len(h) }
-func (h MinHeap) Less(i, j int) bool { return h[i].memAvail < h[j].memAvail }
-func (h MinHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *MinHeap) Push(x any)        { *h = append(*h, x.(TIdleMachine)) }
+func (h IdleHeap) Len() int           { return len(h) }
+func (h IdleHeap) Less(i, j int) bool { return h[i].memAvail < h[j].memAvail }
+func (h IdleHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *IdleHeap) Push(x any)        { *h = append(*h, x.(TIdleMachine)) }
 
-func (h *MinHeap) Pop() any {
+func (h *IdleHeap) Pop() any {
 	old := *h
 	n := len(old)
 	x := old[n-1]
@@ -29,45 +27,27 @@ func (h *MinHeap) Pop() any {
 	return x
 }
 
-func useBestIdle(h *MinHeap, memNeeded Tmem) (TIdleMachine, bool) {
+func findMostIdle(h *IdleHeap) (TIdleMachine, bool) {
 
-	// under mem pressures: choose based off memory fitting
-
-	// if there are many where it would fit, pick based off qlen and highestCostRunning
-
-	possMachines := make([]TIdleMachine, 0)
+	maxMemAvail := Tmem(0)
+	indToUse := -1
 
 	for ind := 0; ind < len(*h); ind++ {
 		idleMachine := (*h)[ind]
-		if idleMachine.memAvail > memNeeded {
-			possMachines = append(possMachines, idleMachine)
-		}
-	}
-
-	// minHighestCost := float32(math.MaxFloat32)
-	minQlen := math.MaxInt
-	indToUse := -1
-
-	for ind, idleMachine := range possMachines {
-		// trade qlen and priority off?
-		if idleMachine.qlen < minQlen {
+		// trade memory and qlen off?
+		if idleMachine.memAvail > maxMemAvail {
 			indToUse = ind
-			minQlen = idleMachine.qlen
+			maxMemAvail = idleMachine.memAvail
 		}
 	}
 
 	if indToUse < 0 {
 		return TIdleMachine{}, false
 	} else {
-		toRet := possMachines[indToUse]
+		toRet := (*h)[indToUse]
 		return toRet, true
 	}
 
-}
-
-type IdleHeap struct {
-	heap *MinHeap
-	lock sync.RWMutex
 }
 
 type MineGSS struct {
@@ -106,10 +86,10 @@ func (gs *MineGSS) MachinesString() string {
 
 func (gs *MineGSS) placeProcs() {
 
-	// toWrite := fmt.Sprintf("%v, %v: q before placing procs: %v \n", *gs.currTickPtr, gs.gsId, gs.multiq.qMap)
-	// logWrite(SCHED, toWrite)
-
 	logWrite(SCHED, "\n")
+
+	toWrite := fmt.Sprintf("idle list before placing procs: %v \n", gs.idleMachines)
+	logWrite(SCHED, toWrite)
 
 	// setup
 	p := gs.multiq.deq(*gs.currTickPtr)
@@ -119,9 +99,9 @@ func (gs *MineGSS) placeProcs() {
 	for p != nil {
 		// place given proc
 
-		machineToUse := gs.pickMachine(p)
+		machineToUse := gs.pickMachine()
 
-		toWrite := fmt.Sprintf("%v, GS %v placing proc %v; curr idle heap: %v \n", int(*gs.currTickPtr), gs.gsId, p.procId, gs.idleMachines.heap)
+		toWrite := fmt.Sprintf("%v, GS %v placing proc %v; new idle heap: %v\n", int(*gs.currTickPtr), gs.gsId, p.procId, gs.idleMachines)
 		logWrite(SCHED, toWrite)
 
 		if machineToUse == nil {
@@ -131,22 +111,9 @@ func (gs *MineGSS) placeProcs() {
 			continue
 		}
 
-		shouldStoreIdleInfo, idleVal, procKilled := machineToUse.placeProc(p, gs.gsId)
-		toWrite = fmt.Sprintf("    -> chose %v; after placing should store: %v, new idle val: %v \n", machineToUse.machineId, shouldStoreIdleInfo, idleVal)
+		machineToUse.placeProc(p)
+		toWrite = fmt.Sprintf("    -> chose %v\n", machineToUse.machineId)
 		logWrite(SCHED, toWrite)
-
-		if procKilled != nil {
-			toReq = append(toReq, procKilled)
-		}
-
-		if shouldStoreIdleInfo {
-			if contains(gs.idleMachines.heap, machineToUse.machineId) {
-				remove(gs.idleMachines.heap, machineToUse.machineId)
-			}
-			if idleVal.memAvail > IDLE_HEAP_MEM_THRESHOLD {
-				gs.idleMachines.heap.Push(idleVal)
-			}
-		}
 
 		p = gs.multiq.deq(*gs.currTickPtr)
 	}
@@ -157,21 +124,14 @@ func (gs *MineGSS) placeProcs() {
 
 }
 
-func (gs *MineGSS) pickMachine(procToPlace *Proc) *Machine {
+func (gs *MineGSS) pickMachine() *Machine {
 
-	gs.idleMachines.lock.Lock()
-	machine, found := useBestIdle(gs.idleMachines.heap, procToPlace.maxMem())
-	gs.idleMachines.lock.Unlock()
+	machine, found := findMostIdle(gs.idleMachines)
 	if found {
 		gs.nFoundIdle += 1
+		remove(gs.idleMachines, machine.machine)
 		return gs.machines[machine.machine]
 	}
-
-	// actualMemFree := make([]Tmem, len(gs.machines))
-	// for i, m := range gs.machines {
-	// 	actualMemFree[i] = m.sched.memFree()
-	// }
-	// fmt.Printf("%v found no good machine: memNeeded %v idle heap: %v, actual mems free: %v \n", *gs.currTickPtr, procToPlace.maxMem(), gs.idleMachines.heap, actualMemFree)
 
 	gs.nUsedKChoices += 1
 
@@ -179,22 +139,17 @@ func (gs *MineGSS) pickMachine(procToPlace *Proc) *Machine {
 	var machineToUse *Machine
 	machineToTry := pickRandomElements(Values(gs.machines), K_CHOICES_DOWN)
 
-	minTimeToProfit := float32(math.MaxFloat32)
+	minMemPaged := Tmem(math.MaxInt)
+	minQlen := math.MaxInt
 
 	for _, m := range machineToTry {
-		timeToProfit := m.okToPlace(procToPlace)
-		if timeToProfit < minTimeToProfit {
-			minTimeToProfit = timeToProfit
+		if (m.memPaged() < minMemPaged) ||
+			(float32(m.memPaged()) < (float32(minMemPaged)*MEM_FUDGE_FACTOR_POLLING)) && (m.procQ.qlen() < minQlen) {
+			minMemPaged = m.memPaged()
+			minQlen = m.procQ.qlen()
 			machineToUse = m
 		}
 	}
-
-	if minTimeToProfit > TIME_TO_PROFIT_THRESHOLD {
-		return nil
-	}
-
-	// toWrite = fmt.Sprintf("   used k choices: the machine to use is %v \n", machineToUse)
-	// logWrite(SCHED, toWrite)
 
 	return machineToUse
 }

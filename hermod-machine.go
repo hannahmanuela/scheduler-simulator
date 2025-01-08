@@ -9,7 +9,7 @@ type HermodMachine struct {
 	machineId               Tid
 	currTickPtr             *Tftick
 	numCores                int
-	procQ                   []*Proc
+	procs                   []*Proc
 	totalMem                Tmem
 	worldNumProcsGenPerTick int
 }
@@ -19,7 +19,7 @@ func newHermodMachine(mid Tid, numCores int, totMem Tmem, currTickPtr *Tftick, w
 		machineId:               mid,
 		currTickPtr:             currTickPtr,
 		numCores:                numCores,
-		procQ:                   make([]*Proc, 0),
+		procs:                   make([]*Proc, 0),
 		totalMem:                totMem,
 		worldNumProcsGenPerTick: worldNumProcsGenPerTick,
 	}
@@ -29,8 +29,8 @@ func newHermodMachine(mid Tid, numCores int, totMem Tmem, currTickPtr *Tftick, w
 func (hm *HermodMachine) memFree() Tmem {
 	currMemUsed := Tmem(0)
 
-	for _, p := range hm.procQ {
-		currMemUsed += p.maxMem()
+	for _, p := range hm.procs {
+		currMemUsed += p.memUsing
 	}
 
 	return hm.totalMem - currMemUsed
@@ -39,7 +39,7 @@ func (hm *HermodMachine) memFree() Tmem {
 func (hm *HermodMachine) placeProc(newProc *Proc) {
 
 	newProc.timePlaced = *hm.currTickPtr
-	hm.procQ = append(hm.procQ, newProc)
+	hm.procs = append(hm.procs, newProc)
 
 }
 
@@ -56,7 +56,7 @@ func (hm *HermodMachine) tick() {
 	// water-filling: assign procs to cores
 	procsPerCore := make(map[int][]*Proc)
 	currCore := 0
-	for _, p := range hm.procQ {
+	for _, p := range hm.procs {
 		procsPerCore[currCore] = append(procsPerCore[currCore], p)
 		currCore += 1
 		if currCore == hm.numCores {
@@ -68,7 +68,7 @@ func (hm *HermodMachine) tick() {
 	toWrite := fmt.Sprintf("%v, %v, %v", hm.worldNumProcsGenPerTick, int(*hm.currTickPtr), hm.machineId)
 	logWrite(HERMOD_USAGE, toWrite)
 
-	toWrite = fmt.Sprintf("\n==> %v @ %v, machine %v, mem free: %v, has q: \n%v", hm.worldNumProcsGenPerTick, hm.currTickPtr.String(), hm.machineId, hm.memFree(), hm.procQ)
+	toWrite = fmt.Sprintf("\n==> %v @ %v, machine %v, mem free: %v, has q: \n%v", hm.worldNumProcsGenPerTick, hm.currTickPtr.String(), hm.machineId, hm.memFree(), hm.procs)
 	logWrite(HERMOD_SCHED, toWrite)
 
 	// water-filling, assign ticks to procs
@@ -80,7 +80,7 @@ func (hm *HermodMachine) tick() {
 			currProc := procsPerCore[currCore][0]
 			procsPerCore[currCore] = procsPerCore[currCore][1:]
 
-			ticksUsed, done := currProc.runTillOutOrDone(ticksToGive)
+			_, ticksUsed, done := currProc.runTillOutOrDone(ticksToGive)
 
 			ticksLeftPerCore[currCore] -= ticksUsed
 			totalTicksLeftToGive -= ticksUsed
@@ -92,7 +92,7 @@ func (hm *HermodMachine) tick() {
 				toWrite = fmt.Sprintf("%v, %v, %v, %v \n", hm.worldNumProcsGenPerTick, currProc.willingToSpend(), (currProc.timeDone - currProc.timeStarted).String(), currProc.compDone.String())
 				logWrite(HERMOD_PROCS_DONE, toWrite)
 
-				hm.removeProcFromQ(currProc)
+				hm.removeProc(currProc)
 			}
 		}
 	}
@@ -106,16 +106,16 @@ func (hm *HermodMachine) tick() {
 
 }
 
-func (hm *HermodMachine) removeProcFromQ(procToRemove *Proc) {
+func (hm *HermodMachine) removeProc(procToRemove *Proc) {
 
-	newQ := make([]*Proc, len(hm.procQ)-1)
+	newQ := make([]*Proc, len(hm.procs)-1)
 
-	for i, p := range hm.procQ {
+	for i, p := range hm.procs {
 		if p == procToRemove {
-			newQ = append(hm.procQ[:i], hm.procQ[i+1:]...)
+			newQ = append(hm.procs[:i], hm.procs[i+1:]...)
 		}
 	}
 
-	hm.procQ = newQ
+	hm.procs = newQ
 
 }

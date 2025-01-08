@@ -1,6 +1,7 @@
 package slasched
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 )
@@ -82,6 +83,7 @@ func (q *Queue) deq() *Proc {
 	}
 	procSelected := q.q[0]
 	q.q = q.q[1:]
+
 	return procSelected
 }
 
@@ -89,57 +91,71 @@ func (q *Queue) qlen() int {
 	return len(q.q)
 }
 
-// func (q *Queue) remove(procToRemove *Proc) {
+func (q *Queue) pageOut(memOver Tmem, allProcsRunning []*Proc) Tmem {
 
-// 	newQ := make([]*Proc, len(q.q)-1)
+	memFreed := Tmem(0)
 
-// 	for i, p := range q.q {
-// 		if p == procToRemove {
-// 			newQ = append(q.q[:i], q.q[i+1:]...)
-// 		}
-// 	}
+	for memFreed < memOver {
 
-// 	q.q = newQ
+		minPrice := float32(math.MaxFloat32)
+		var procToPage *Proc
 
-// }
-
-func (q *Queue) checkKill(newProc *Proc) (Tid, float32) {
-
-	minTimeToProfit := float32(math.MaxFloat32)
-	procId := Tid(-1)
-
-	for _, p := range q.q {
-		if (p.maxMem() > newProc.maxMem()) && (p.willingToSpend() < newProc.willingToSpend()) {
-			timeToProfit := float32(float32(p.compDone)*p.willingToSpend()) / (newProc.willingToSpend() - p.willingToSpend())
-			if timeToProfit < minTimeToProfit {
-				procId = p.procId
-				minTimeToProfit = timeToProfit
+		for _, p := range allProcsRunning {
+			if !p.currentlyPaged && (p.memUsing > memOver) {
+				if p.willingToSpend() < minPrice {
+					procToPage = p
+					minPrice = p.willingToSpend()
+				}
 			}
 		}
+
+		procToPage.currentlyPaged = true
+		memFreed += procToPage.memUsing
 	}
 
-	return procId, minTimeToProfit
+	return memFreed
 
 }
 
-func (q *Queue) kill(pid Tid) *Proc {
+func (q *Queue) pageIn(memAvail Tmem) Tmem {
 
-	tmp := make([]*Proc, 0)
-	var killed *Proc
+	memUsed := Tmem(0)
+	ogMemAvail := memAvail
 
-	for _, currProc := range q.q {
-		if currProc.procId != pid {
-			tmp = append(tmp, currProc)
-		} else {
-			killed = currProc
+	for memAvail > 0 {
+		maxPrice := float32(0.0)
+		var procToPageIn *Proc
+
+		for _, p := range q.q {
+			if (p.currentlyPaged) && (p.memUsing < memAvail) {
+				if p.willingToSpend() > maxPrice {
+					procToPageIn = p
+					maxPrice = p.willingToSpend()
+				}
+			}
 		}
+
+		if procToPageIn == nil {
+			break
+		}
+
+		procToPageIn.currentlyPaged = false
+		memUsed += procToPageIn.memUsing
+		memAvail -= procToPageIn.memUsing
+
+		procToPageIn = nil
 	}
 
-	q.q = tmp
+	toWrite := fmt.Sprintf("mem avail: %v, mem used: %v \n", ogMemAvail, memUsed)
+	logWrite(SCHED, toWrite)
 
-	return killed
+	return memUsed
 
 }
+
+// ===================================================================================================
+// ===================================================================================================
+// ===================================================================================================
 
 type MultiQueue struct {
 	qMap map[float32]*Queue

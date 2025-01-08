@@ -19,9 +19,7 @@ func newMineLB(numMachines int, numCores int, nGenPerTick int, nGSSs int, currTi
 
 	idleHeaps := make(map[Tid]*IdleHeap, nGSSs)
 	for i := 0; i < nGSSs; i++ {
-		idleHeap := &IdleHeap{
-			heap: &MinHeap{},
-		}
+		idleHeap := &IdleHeap{}
 		idleHeaps[Tid(i)] = idleHeap
 		mlb.GSSs[i] = newMineGSS(i, mlb.machines, mlb.currTickPtr, nGenPerTick, idleHeap)
 	}

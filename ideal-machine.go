@@ -32,33 +32,16 @@ func (idc *BigIdealMachine) memFree() Tmem {
 	currMemUsed := Tmem(0)
 
 	for _, p := range idc.procQ.getQ() {
-		currMemUsed += p.maxMem()
+		currMemUsed += p.memUsing
 	}
 
 	return idc.totalMem - currMemUsed
 }
 
-func (idc *BigIdealMachine) potPlaceProc(newProc *Proc) (bool, *Proc) {
+func (idc *BigIdealMachine) placeProc(newProc *Proc) {
 
-	// if it just fits in terms of memory do it
-	if newProc.maxMem() < idc.memFree() {
-
-		newProc.timePlaced = *idc.currTickPtr
-		idc.procQ.enq(newProc)
-		return true, nil
-	}
-
-	// if it doesn't fit, look if there a good proc to kill? (/a combination of procs? can add that later)
-	procToKill, timeToProfit := idc.procQ.checkKill(newProc)
-	if timeToProfit < TIME_TO_PROFIT_THRESHOLD {
-
-		newProc.timePlaced = *idc.currTickPtr
-		killed := idc.procQ.kill(procToKill)
-		idc.procQ.enq(newProc)
-		return true, killed
-	}
-
-	return false, nil
+	newProc.timePlaced = *idc.currTickPtr
+	idc.procQ.enq(newProc)
 
 }
 
@@ -82,7 +65,6 @@ func (idc *BigIdealMachine) tick() {
 	toWrite = fmt.Sprintf("%v, %v", idc.worldNumProcsGenPerTick, int(*idc.currTickPtr))
 	logWrite(IDEAL_USAGE, toWrite)
 
-	// TODO: what if it doesn't fit?
 	putProcOnCoreWithMaxTimeLeft := func() int {
 		maxVal := Tftick(0.0)
 		coreToUse := -1
@@ -136,7 +118,7 @@ func (idc *BigIdealMachine) tick() {
 			toWrite := fmt.Sprintf("   core %v giving %v to proc %v \n", currCore, ticksLeftPerCore[currCore], procToRun.String())
 			logWrite(IDEAL_SCHED, toWrite)
 
-			ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
+			_, ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 
 			ticksLeftPerCore[currCore] -= ticksUsed
 			totalTicksLeftToGive -= ticksUsed
