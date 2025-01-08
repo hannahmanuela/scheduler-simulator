@@ -101,12 +101,16 @@ func (q *Queue) pageOut(memOver Tmem, allProcsRunning []*Proc) Tmem {
 		var procToPage *Proc
 
 		for _, p := range allProcsRunning {
-			if !p.currentlyPaged && (p.memUsing > memOver) {
+			if !p.currentlyPaged {
 				if p.willingToSpend() < minPrice {
 					procToPage = p
 					minPrice = p.willingToSpend()
 				}
 			}
+		}
+
+		if procToPage == nil {
+			fmt.Printf("mem over: %v, mem freed: %v, allprocrunning: %v\n", memOver, memFreed, allProcsRunning)
 		}
 
 		procToPage.currentlyPaged = true

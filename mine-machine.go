@@ -195,7 +195,9 @@ func (sd *Machine) simulateRunProcs() {
 			}
 
 			if procToRun.currentlyPaged {
-				fmt.Printf("running paged proc\n")
+				// TODO: does this need to incur a runtime cost?
+				sd.procQ.pageOut(procToRun.memUsing-sd.currMemFree(allProcsRunning), allProcsRunning)
+				procToRun.currentlyPaged = false
 			}
 
 			toWrite := fmt.Sprintf("   core %v giving %v to proc %v, ", currCore, ticksLeftPerCore[currCore], procToRun.String())
