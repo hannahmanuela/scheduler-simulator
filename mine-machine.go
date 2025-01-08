@@ -128,6 +128,8 @@ func (sd *Machine) simulateRunProcs() {
 		allProcsRunning[i] = p
 	}
 
+	ogQLen := sd.procQ.qlen()
+
 	totalTicksLeftToGive := Tftick(sd.numCores)
 	ticksLeftPerCore := make(map[int]Tftick, 0)
 	coresWithTicksLeft := make(map[int]bool, 0)
@@ -159,6 +161,8 @@ func (sd *Machine) simulateRunProcs() {
 	}
 
 	toReq := make([]*Proc, 0)
+
+	procsRan := make([]*Proc, 0)
 
 	toWrite = fmt.Sprintf("\n==> %v @ %v, machine %v (on heap: %v, mem free: %v); has q: \n%v", sd.worldNumProcsGenPerTick, sd.currTickPtr.String(), sd.machineId, sd.currHeapGSS, sd.memFree(), sd.procQ.SummaryString())
 	logWrite(SCHED, toWrite)
@@ -193,6 +197,8 @@ func (sd *Machine) simulateRunProcs() {
 			if procToRun == nil {
 				continue
 			}
+
+			procsRan = append(procsRan, procToRun)
 
 			if procToRun.currentlyPaged {
 				// TODO: does this need to incur a runtime cost?
@@ -246,7 +252,7 @@ func (sd *Machine) simulateRunProcs() {
 					logWrite(SCHED, toWrite)
 				}
 
-				toWrite = fmt.Sprintf("%v, %v, %v, %v \n", sd.worldNumProcsGenPerTick, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String())
+				toWrite = fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v \n", sd.worldNumProcsGenPerTick, sd.machineId, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String(), procToRun.memUsing, procToRun.totMemPaged, procToRun.numTimesPaged)
 				logWrite(PROCS_DONE, toWrite)
 			}
 		}
@@ -263,7 +269,16 @@ func (sd *Machine) simulateRunProcs() {
 	if totalTicksLeftToGive < 0.00002 {
 		totalTicksLeftToGive = 0
 	}
-	toWrite = fmt.Sprintf("%.3f, %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), sd.memFree(), sd.memPaged())
+
+	sumMemSeen := Tmem(0)
+	maxMemSeen := Tmem(0)
+	for _, p := range procsRan {
+		sumMemSeen += p.memUsing
+		if p.memUsing > maxMemSeen {
+			maxMemSeen = p.memUsing
+		}
+	}
+	toWrite = fmt.Sprintf("%.3f, %v, %v, %v, %v, %v, %v\n", float64(math.Copysign(float64(totalTicksLeftToGive), 1)), sd.memFree(), sd.memPaged(), sumMemSeen, len(procsRan), maxMemSeen, ogQLen)
 	logWrite(USAGE, toWrite)
 
 	highestCost := float32(0)
@@ -273,8 +288,18 @@ func (sd *Machine) simulateRunProcs() {
 		}
 	}
 
-	if (sd.memPaged() > 0) || (sd.memFree() < INIT_MEM) {
-		// not idle
+	// if (sd.memPaged() > 0) || (sd.memFree() < INIT_MEM) {
+	// 	// not idle
+	// 	// TODO: remove myself from idle list if I'm on one
+	// 	if sd.currHeapGSS >= 0 {
+	// 		// already in a heap, need to just update that info
+	// 		remove(sd.idleHeaps[sd.currHeapGSS], sd.machineId)
+	// 	}
+	// 	sd.currHeapGSS = -1
+	// 	return
+	// }
+
+	if sd.procQ.qlen() > 2 {
 		return
 	}
 

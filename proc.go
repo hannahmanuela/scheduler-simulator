@@ -18,6 +18,8 @@ type Proc struct {
 	compDone       Tftick
 	memUsing       Tmem
 	currentlyPaged bool
+	totMemPaged    Tmem
+	numTimesPaged  int
 	procInternals  *ProcInternals
 }
 
@@ -42,12 +44,22 @@ func newProvProc(procId Tid, currTick Tftick, privProc *ProcInternals) *Proc {
 		compDone:       0,
 		memUsing:       Tmem(privProc.initMem),
 		currentlyPaged: false,
+		totMemPaged:    0,
+		numTimesPaged:  0,
 		procInternals:  privProc,
 	}
 }
 
 func (p *Proc) willingToSpend() float32 {
 	return p.procInternals.willingToSpend
+}
+
+func (p *Proc) setCurrentlyPaged(newVal bool) {
+	if newVal {
+		p.totMemPaged += p.memUsing
+		p.numTimesPaged += 1
+	}
+	p.currentlyPaged = newVal
 }
 
 func (p *Proc) runTillOutOrDone(toRun Tftick) (Tmem, Tftick, bool) {

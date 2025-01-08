@@ -29,15 +29,16 @@ func (h *IdleHeap) Pop() any {
 
 func findMostIdle(h *IdleHeap) (TIdleMachine, bool) {
 
-	maxMemAvail := Tmem(0)
+	// maxMemAvail := Tmem(0)
+	minQlen := math.MaxInt
 	indToUse := -1
 
 	for ind := 0; ind < len(*h); ind++ {
 		idleMachine := (*h)[ind]
 		// trade memory and qlen off?
-		if idleMachine.memAvail > maxMemAvail {
+		if idleMachine.qlen < minQlen {
 			indToUse = ind
-			maxMemAvail = idleMachine.memAvail
+			minQlen = idleMachine.qlen
 		}
 	}
 
@@ -122,6 +123,10 @@ func (gs *MineGSS) placeProcs() {
 		gs.multiq.enq(p)
 	}
 
+	if *gs.currTickPtr == 199 {
+		fmt.Printf("num used idle: %v, num k choices: %v\n", gs.nFoundIdle, gs.nUsedKChoices)
+	}
+
 }
 
 func (gs *MineGSS) pickMachine() *Machine {
@@ -129,7 +134,14 @@ func (gs *MineGSS) pickMachine() *Machine {
 	machine, found := findMostIdle(gs.idleMachines)
 	if found {
 		gs.nFoundIdle += 1
+		// begNumInList := gs.idleMachines.Len()
 		remove(gs.idleMachines, machine.machine)
+		// machine.memAvail -= (MAX_MEM - INIT_MEM) / 2
+		machine.qlen += 1
+		if machine.qlen < 3 {
+			// fmt.Printf("%v idle q size b4 %v after%v, machine %v new mem avail %v qlen %v \n", *gs.currTickPtr, begNumInList, gs.idleMachines.Len(), machine.machine, machine.memAvail, machine.qlen)
+			gs.idleMachines.Push(machine)
+		}
 		return gs.machines[machine.machine]
 	}
 
@@ -139,13 +151,14 @@ func (gs *MineGSS) pickMachine() *Machine {
 	var machineToUse *Machine
 	machineToTry := pickRandomElements(Values(gs.machines), K_CHOICES_DOWN)
 
-	minMemPaged := Tmem(math.MaxInt)
+	// minMemPaged := Tmem(math.MaxInt)
 	minQlen := math.MaxInt
 
 	for _, m := range machineToTry {
-		if (m.memPaged() < minMemPaged) ||
-			(float32(m.memPaged()) < (float32(minMemPaged)*MEM_FUDGE_FACTOR_POLLING)) && (m.procQ.qlen() < minQlen) {
-			minMemPaged = m.memPaged()
+		// if (m.memPaged() < minMemPaged) ||
+		// 	(float32(m.memPaged()) < (float32(minMemPaged)*MEM_FUDGE_FACTOR_POLLING)) && (m.procQ.qlen() < minQlen) {
+		if m.procQ.qlen() < minQlen {
+			// minMemPaged = m.memPaged()
 			minQlen = m.procQ.qlen()
 			machineToUse = m
 		}

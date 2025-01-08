@@ -12,7 +12,6 @@ const (
 	MAX_COMP     = 100
 
 	INIT_MEM = 100
-	MIN_MEM  = 100
 	MAX_MEM  = 10000
 
 	PARETO_ALPHA = 25
@@ -41,10 +40,10 @@ func (lg *LoadGenT) genLoad(nProcs int) []*ProcInternals {
 		priority := genRandPriority()
 		willingToSpend := mapPriorityToDollars(priority)
 
-		maxMem := Tmem(MIN_MEM + r.Intn(MAX_MEM-MIN_MEM))
-		initMem := Tmem(INIT_MEM)
+		// maxMem := Tmem(ParetoSample(PARETO_ALPHA, (MAX_COMP - INIT_MEM)))
+		maxMem := Tmem(INIT_MEM + r.Intn(MAX_MEM-INIT_MEM))
 
-		procs[i] = newPrivProc(float32(actualComp), willingToSpend, initMem, maxMem)
+		procs[i] = newPrivProc(float32(actualComp), willingToSpend, Tmem(INIT_MEM), maxMem)
 	}
 
 	return procs

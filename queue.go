@@ -113,7 +113,7 @@ func (q *Queue) pageOut(memOver Tmem, allProcsRunning []*Proc) Tmem {
 			fmt.Printf("mem over: %v, mem freed: %v, allprocrunning: %v\n", memOver, memFreed, allProcsRunning)
 		}
 
-		procToPage.currentlyPaged = true
+		procToPage.setCurrentlyPaged(true)
 		memFreed += procToPage.memUsing
 	}
 
@@ -143,7 +143,7 @@ func (q *Queue) pageIn(memAvail Tmem) Tmem {
 			break
 		}
 
-		procToPageIn.currentlyPaged = false
+		procToPageIn.setCurrentlyPaged(false)
 		memUsed += procToPageIn.memUsing
 		memAvail -= procToPageIn.memUsing
 
