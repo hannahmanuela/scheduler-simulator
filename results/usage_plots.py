@@ -20,7 +20,7 @@ actual_procs_done = pd.read_csv("procs_done.txt", index_col=None, names=["nGenPe
 hermod_usage_metrics = pd.read_csv("hermod_usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineId", "ticksLeftOver", "memFree"])
 hermod_procs_done = pd.read_csv("hermod_procs_done.txt", index_col=None, names=["nGenPerTick", "price", "timePassed", "compDone"])
 
-edf_usage_metrics = pd.read_csv("edf_usage.txt", index_col=None, names=["nGenPerTick", "tick", "machineId", "ticksLeftOver", "memFree"])
+edf_usage_metrics = pd.read_csv("edf_usage.txt", index_col=None, names=["nGenPerTick", "tick", "ticksLeftOver", "memFree"])
 edf_procs_done = pd.read_csv("edf_procs_done.txt", index_col=None, names=["nGenPerTick", "price", "timePassed", "compDone"])
 
 # 1. Compute timeAsPercentage for both ideal and actual data
@@ -32,8 +32,8 @@ edf_procs_done["timeAsPercentage"] = (edf_procs_done["timePassed"] / edf_procs_d
 # # 2. Compute utilization for both ideal and actual data
 # ideal_usage_metrics["utilization"] = (numMachines * coresPerMachine - ideal_usage_metrics["ticksLeftOver"]) / (numMachines * coresPerMachine)
 actual_usage_metrics["utilization"] = (coresPerMachine - actual_usage_metrics["ticksLeftOver"]) / (coresPerMachine)
-# hermod_usage_metrics["utilization"] = (coresPerMachine - hermod_usage_metrics["ticksLeftOver"]) / (coresPerMachine)
-# edf_usage_metrics["utilization"] = (numMachines * coresPerMachine - edf_usage_metrics["ticksLeftOver"]) / (numMachines * coresPerMachine)
+hermod_usage_metrics["utilization"] = (coresPerMachine - hermod_usage_metrics["ticksLeftOver"]) / (coresPerMachine)
+edf_usage_metrics["utilization"] = (numMachines * coresPerMachine - edf_usage_metrics["ticksLeftOver"]) / (numMachines * coresPerMachine)
 
 # # 3. Compute memory utilization (1 - memFree / totalMemory)
 # ideal_usage_metrics["mem_utilization"] = 1 - (ideal_usage_metrics["memFree"] / (numMachines * totalMemoryPerMachine))
@@ -184,7 +184,7 @@ edf_usage_metrics['nGenPerTick'] = edf_usage_metrics['nGenPerTick'].astype(int)
 # hermod vs xx vs edf, latency
 # =================================================================================
 
-fig, ax = plt.subplots(3, 1, figsize=(9, 6), sharex=True)
+fig, ax = plt.subplots(2, 3, figsize=(9, 6))
 
 high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
 
@@ -201,19 +201,53 @@ edf_percentiles = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
 ).reset_index()
 
 
-sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0])
-ax[0].set_title("Hermod: 99 pctile job latency as pct of runtime")
-ax[0].set_ylabel("latency as pct of runtime")
+sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 0])
+ax[0, 0].set_title("Hermod: 99 pctile job latency as pct of runtime")
+ax[0, 0].set_xlabel("Load")
+ax[0, 0].set_ylabel("latency as pct of runtime")
+ax[0, 0].grid(True)
+
+sns.boxplot(data=hermod_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
+ax[1, 0].set_title("Hermod: Distribution of Compute Utilization")
+ax[1, 0].set_xlabel("Load")
+ax[1, 0].set_ylabel("Compute util")
+ax[1, 0].grid(True)
+
+sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
+ax[0, 1].set_title("XX: 99 pctile job latency as pct of runtime")
+ax[0, 1].set_ylabel("latency as pct of runtime")
+ax[0, 1].set_xlabel("Load")
+ax[0, 1].grid(True)
+
+sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 1])
+ax[1, 1].set_title("XX: Distribution of Compute Utilization")
+ax[1, 1].set_xlabel("Load")
+ax[1, 1].set_ylabel("Compute util")
+ax[1, 1].grid(True)
+
+sns.lineplot(data=edf_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 2])
+ax[0, 2].set_title("EDF: 99 pctile job latency as pct of runtime")
+ax[0, 2].set_ylabel("latency as pct of runtime")
+ax[0, 2].set_xlabel("Load")
+ax[0, 2].grid(True)
+
+sns.boxplot(data=edf_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 2])
+ax[1, 2].set_title("EDF: Distribution of Compute Utilization")
+ax[1, 2].set_xlabel("Load")
+ax[1, 2].set_ylabel("Compute util")
+ax[1, 2].grid(True)
+
+y_max_0 = mine_percentiles["percentile_99"].max() * 1.05
+y_min_0 = -0.08 * y_max_0
 
 
-sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[1])
-ax[1].set_title("XX: 99 pctile job latency as pct of runtime")
-ax[1].set_ylabel("latency as pct of runtime")
+ax[0, 0].set_ylim(y_min_0, y_max_0)
+ax[0, 1].set_ylim(y_min_0, y_max_0)
+ax[0, 2].set_ylim(y_min_0, y_max_0)
 
-sns.lineplot(data=edf_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[2])
-ax[2].set_title("EDF: 99 pctile job latency as pct of runtime")
-ax[2].set_ylabel("latency as pct of runtime")
-
+ax[1, 0].set_ylim(-0.1, 1.1)
+ax[1, 1].set_ylim(-0.1, 1.1)
+ax[1, 2].set_ylim(-0.1, 1.1)
 
 
 plt.tight_layout()
