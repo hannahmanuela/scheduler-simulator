@@ -58,91 +58,125 @@ edf_usage_metrics = edf_usage_metrics.where(edf_usage_metrics['tick'] > 5).dropn
 edf_usage_metrics['nGenPerTick'] = edf_usage_metrics['nGenPerTick'].astype(int)
 
 
-fig, ax = plt.subplots(3, 3, figsize=(9, 6))
 
+fig, ax = plt.subplots(3, 1, figsize=(6, 9))
 
 high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
 
-
-mine_percentiles = actual_procs_done.groupby(['nGenPerTick', 'price']).agg(
-    percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
-).reset_index()
-
-sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0,0])
-ax[0, 0].set_title("XX: Job latency as pct of runtime")
-ax[0, 0].set_ylabel("latency as pct of runtime")
-ax[0, 0].set_xlabel("load")
-ax[0, 0].grid(True)
-
-
-sns.boxplot(data=actual_usage_metrics, x='nGenPerTick', y='sumMemSeen', ax=ax[2, 0])
-ax[2, 0].set_title("XX: Distribution of sum mem seen")
-ax[2, 0].set_ylabel("total memory of all procs run that tick")
-ax[2, 0].set_xlabel("load")
-ax[2, 0].axhline(y=totalMemoryPerMachine, color='grey', linewidth=2, alpha=0.5)
-ax[2, 0].grid(True)
-
-
-
-
-mine_mem_paged = actual_procs_done.groupby(['nGenPerTick', 'price'])['numTimesPaged'].sum().reset_index()
-sns.lineplot(data=mine_mem_paged, x='nGenPerTick', y='numTimesPaged', hue='price', palette=high_contrast_palette, ax=ax[0, 2])
-ax[0, 2].set_title("XX: Num times paged")
-ax[0, 2].set_ylabel("times paged")
-ax[0, 2].set_xlabel("load")
-ax[0, 2].grid(True)
-
-
-
 mine_num_procs_pages = actual_procs_done.groupby(['nGenPerTick', 'price'])['numTimesPaged'].apply(lambda x: (x > 0).sum()).reset_index(name='countProcsPaged')
-sns.lineplot(data=mine_num_procs_pages, x='nGenPerTick', y='countProcsPaged', hue='price', palette=high_contrast_palette, ax=ax[1, 2])
-ax[1, 2].set_title("XX: Num procs paged")
-ax[1, 2].set_ylabel("procs paged")
-ax[1, 2].set_xlabel("load")
-ax[1, 2].grid(True)
+sns.lineplot(data=mine_num_procs_pages, x='nGenPerTick', y='countProcsPaged', hue='price', palette=high_contrast_palette, ax=ax[0])
+ax[0].set_title("Num procs paged")
+ax[0].set_ylabel("procs paged")
+ax[0].set_xlabel("load")
+ax[0].grid(True)
 
 
 # ax[2, 2] -> distribution of mem paged per machine
 mine_mem_paged_per_machine = actual_procs_done.groupby(['nGenPerTick', 'machineId'])['totMemPaged'].sum().reset_index()
-sns.boxplot(data=mine_mem_paged_per_machine, x="nGenPerTick", y="totMemPaged", ax=ax[2, 2])
-ax[2, 2].set_title("mem paged per machine")
-ax[2, 2].set_xlabel("Load")
-ax[2, 2].set_ylabel("mem paged")
-ax[2, 2].grid(True)
-
-
-# num procs ran? run procs in q?
-actual_usage_metrics['numProcsDidntRun'] = actual_usage_metrics['fullQlen'] - actual_usage_metrics['numProcsRan']
-sns.boxplot(data=actual_usage_metrics, x='nGenPerTick', y='numProcsRan', ax=ax[2, 1])
-ax[2, 1].set_title("XX: Distribution of num procs ran")
-ax[2, 1].set_ylabel("num procs ran")
-ax[2, 1].set_xlabel("load")
-ax[2, 1].grid(True)
-
-
-sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
-ax[1, 0].set_title("distribution of comp utilization")
-ax[1, 0].set_xlabel("Load")
-ax[1, 0].set_ylabel("comp utilization")
-ax[1, 0].grid(True)
-
-
-mine_mem_paged = actual_procs_done.groupby(['nGenPerTick', 'price'])['totMemPaged'].sum().reset_index()
-sns.lineplot(data=mine_mem_paged, x='nGenPerTick', y='totMemPaged', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
-ax[0, 1].set_title("XX: Total memory paged")
-ax[0, 1].set_ylabel("memory paged")
-ax[0, 1].set_xlabel("load")
-ax[0, 1].grid(True)
-
+sns.boxplot(data=mine_mem_paged_per_machine, x="nGenPerTick", y="totMemPaged", ax=ax[1])
+ax[1].set_title("Total Mem paged per machine")
+ax[1].set_xlabel("Load")
+ax[1].set_ylabel("Mem paged")
+ax[1].grid(True)
 
 actual_usage_metrics['avgMemUsed'] = 1 - (((actual_usage_metrics['begMemFree'] + actual_usage_metrics['endMemFree']) / 2) / totalMemoryPerMachine)
-sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="avgMemUsed", ax=ax[1, 1])
-ax[1, 1].set_title("distribution of mem utilization")
-ax[1, 1].set_xlabel("Load")
-ax[1, 1].set_ylabel("avg mem used")
-ax[1, 1].grid(True)
-plt.plot()
+sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="avgMemUsed", ax=ax[2])
+ax[2].set_title("Distribution of mem utilization")
+ax[2].set_xlabel("Load")
+ax[2].set_ylabel("mem utilization")
+ax[2].grid(True)
+
+plt.tight_layout()
+plt.savefig('memory_graphs.png')
 plt.show()
+
+
+
+# fig, ax = plt.subplots(3, 3, figsize=(9, 6))
+
+
+# high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
+
+
+# mine_percentiles = actual_procs_done.groupby(['nGenPerTick', 'price']).agg(
+#     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
+# ).reset_index()
+
+# sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0,0])
+# ax[0, 0].set_title("XX: Job latency as pct of runtime")
+# ax[0, 0].set_ylabel("latency as pct of runtime")
+# ax[0, 0].set_xlabel("load")
+# ax[0, 0].grid(True)
+
+
+# sns.boxplot(data=actual_usage_metrics, x='nGenPerTick', y='sumMemSeen', ax=ax[2, 0])
+# ax[2, 0].set_title("XX: Distribution of sum mem seen")
+# ax[2, 0].set_ylabel("total memory of all procs run that tick")
+# ax[2, 0].set_xlabel("load")
+# ax[2, 0].axhline(y=totalMemoryPerMachine, color='grey', linewidth=2, alpha=0.5)
+# ax[2, 0].grid(True)
+
+
+
+
+# mine_mem_paged = actual_procs_done.groupby(['nGenPerTick', 'price'])['numTimesPaged'].sum().reset_index()
+# sns.lineplot(data=mine_mem_paged, x='nGenPerTick', y='numTimesPaged', hue='price', palette=high_contrast_palette, ax=ax[0, 2])
+# ax[0, 2].set_title("XX: Num times paged")
+# ax[0, 2].set_ylabel("times paged")
+# ax[0, 2].set_xlabel("load")
+# ax[0, 2].grid(True)
+
+
+
+# mine_num_procs_pages = actual_procs_done.groupby(['nGenPerTick', 'price'])['numTimesPaged'].apply(lambda x: (x > 0).sum()).reset_index(name='countProcsPaged')
+# sns.lineplot(data=mine_num_procs_pages, x='nGenPerTick', y='countProcsPaged', hue='price', palette=high_contrast_palette, ax=ax[1, 2])
+# ax[1, 2].set_title("XX: Num procs paged")
+# ax[1, 2].set_ylabel("procs paged")
+# ax[1, 2].set_xlabel("load")
+# ax[1, 2].grid(True)
+
+
+# # ax[2, 2] -> distribution of mem paged per machine
+# mine_mem_paged_per_machine = actual_procs_done.groupby(['nGenPerTick', 'machineId'])['totMemPaged'].sum().reset_index()
+# sns.boxplot(data=mine_mem_paged_per_machine, x="nGenPerTick", y="totMemPaged", ax=ax[2, 2])
+# ax[2, 2].set_title("mem paged per machine")
+# ax[2, 2].set_xlabel("Load")
+# ax[2, 2].set_ylabel("mem paged")
+# ax[2, 2].grid(True)
+
+
+# # num procs ran? run procs in q?
+# actual_usage_metrics['numProcsDidntRun'] = actual_usage_metrics['fullQlen'] - actual_usage_metrics['numProcsRan']
+# sns.boxplot(data=actual_usage_metrics, x='nGenPerTick', y='numProcsRan', ax=ax[2, 1])
+# ax[2, 1].set_title("XX: Distribution of num procs ran")
+# ax[2, 1].set_ylabel("num procs ran")
+# ax[2, 1].set_xlabel("load")
+# ax[2, 1].grid(True)
+
+
+# sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
+# ax[1, 0].set_title("distribution of comp utilization")
+# ax[1, 0].set_xlabel("Load")
+# ax[1, 0].set_ylabel("comp utilization")
+# ax[1, 0].grid(True)
+
+
+# mine_mem_paged = actual_procs_done.groupby(['nGenPerTick', 'price'])['totMemPaged'].sum().reset_index()
+# sns.lineplot(data=mine_mem_paged, x='nGenPerTick', y='totMemPaged', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
+# ax[0, 1].set_title("XX: Total memory paged")
+# ax[0, 1].set_ylabel("memory paged")
+# ax[0, 1].set_xlabel("load")
+# ax[0, 1].grid(True)
+
+
+# actual_usage_metrics['avgMemUsed'] = 1 - (((actual_usage_metrics['begMemFree'] + actual_usage_metrics['endMemFree']) / 2) / totalMemoryPerMachine)
+# sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="avgMemUsed", ax=ax[1, 1])
+# ax[1, 1].set_title("distribution of mem utilization")
+# ax[1, 1].set_xlabel("Load")
+# ax[1, 1].set_ylabel("avg mem used")
+# ax[1, 1].grid(True)
+# plt.plot()
+# plt.show()
 
 # plots I will need to draw:
 

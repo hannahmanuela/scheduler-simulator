@@ -116,6 +116,18 @@ func sampleNormal(mu, sigma float64) float64 {
 	return r.NormFloat64()*float64(sigma) + float64(mu)
 }
 
+func sampleBimodal(mean1 int, stdDev1 int, mean2 int, stdDev2 int) float64 {
+	mixingProb := 0.5
+
+	var sample float64
+	if r.Float64() < mixingProb {
+		sample = r.NormFloat64()*float64(stdDev1) + float64(mean1)
+	} else {
+		sample = r.NormFloat64()*float64(stdDev2) + float64(mean2)
+	}
+	return sample
+}
+
 func removeFromList[T comparable](list []T, toRemove T) []T {
 	newList := make([]T, 0)
 	for _, v := range list {
