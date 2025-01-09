@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	MEM_PER_MACHINE = 32000
+	MEM_PER_MACHINE = 1000000
 
 	K_CHOICES_DOWN = 5
 	K_CHOICES_UP   = 3

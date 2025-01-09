@@ -131,19 +131,19 @@ func (gs *MineGSS) placeProcs() {
 
 func (gs *MineGSS) pickMachine() *Machine {
 
-	machine, found := findMostIdle(gs.idleMachines)
-	if found {
-		gs.nFoundIdle += 1
-		// begNumInList := gs.idleMachines.Len()
-		remove(gs.idleMachines, machine.machine)
-		// machine.memAvail -= (MAX_MEM - INIT_MEM) / 2
-		machine.qlen += 1
-		if machine.qlen < 3 {
-			// fmt.Printf("%v idle q size b4 %v after%v, machine %v new mem avail %v qlen %v \n", *gs.currTickPtr, begNumInList, gs.idleMachines.Len(), machine.machine, machine.memAvail, machine.qlen)
-			gs.idleMachines.Push(machine)
-		}
-		return gs.machines[machine.machine]
-	}
+	// machine, found := findMostIdle(gs.idleMachines)
+	// if found {
+	// 	gs.nFoundIdle += 1
+	// 	// begNumInList := gs.idleMachines.Len()
+	// 	remove(gs.idleMachines, machine.machine)
+	// 	// machine.memAvail -= (MAX_MEM - INIT_MEM) / 2
+	// 	machine.qlen += 1
+	// 	if machine.qlen < 3 {
+	// 		// fmt.Printf("%v idle q size b4 %v after%v, machine %v new mem avail %v qlen %v \n", *gs.currTickPtr, begNumInList, gs.idleMachines.Len(), machine.machine, machine.memAvail, machine.qlen)
+	// 		gs.idleMachines.Push(machine)
+	// 	}
+	// 	return gs.machines[machine.machine]
+	// }
 
 	gs.nUsedKChoices += 1
 
