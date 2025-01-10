@@ -23,7 +23,7 @@ func TestRunWorld(t *testing.T) {
 
 		fmt.Printf("---- Running with %v procs per ticks ----\n", nProcsToGen)
 
-		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_GSSs, []LBType{MINE, HERMOD, EDF})
+		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_GSSs, []LBType{MINE, HERMOD, EDF, IDEAL})
 		w.Run(N_TICK)
 	}
 
