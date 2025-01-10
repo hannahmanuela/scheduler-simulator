@@ -81,17 +81,33 @@ func (q *Queue) deq() *Proc {
 	if len(q.q) == 0 {
 		return nil
 	}
-	procSelected := q.q[0]
-	q.q = q.q[1:]
 
-	return procSelected
+	for i, p := range q.q {
+		if !p.currentlyPaged {
+			q.q = append(q.q[:i], q.q[i+1:]...)
+			return p
+		}
+	}
+
+	return nil
 }
 
 func (q *Queue) qlen() int {
 	return len(q.q)
 }
 
-func (q *Queue) pageOut(memOver Tmem, allProcsRunning []*Proc) Tmem {
+func (q *Queue) runnableQlen() int {
+	sum := 0
+	for _, p := range q.q {
+		if !p.currentlyPaged {
+			sum += 1
+		}
+	}
+
+	return sum
+}
+
+func (q *Queue) pageOut(memOver Tmem) Tmem {
 
 	memFreed := Tmem(0)
 
@@ -100,7 +116,7 @@ func (q *Queue) pageOut(memOver Tmem, allProcsRunning []*Proc) Tmem {
 		minPrice := float32(math.MaxFloat32)
 		var procToPage *Proc
 
-		for _, p := range allProcsRunning {
+		for _, p := range q.q {
 			if !p.currentlyPaged {
 				if p.willingToSpend() < minPrice {
 					procToPage = p
@@ -110,7 +126,7 @@ func (q *Queue) pageOut(memOver Tmem, allProcsRunning []*Proc) Tmem {
 		}
 
 		if procToPage == nil {
-			fmt.Printf("mem over: %v, mem freed: %v, allprocrunning: %v\n", memOver, memFreed, allProcsRunning)
+			fmt.Printf("mem over: %v, mem freed: %v, allprocrunning: %v\n", memOver, memFreed, q.q)
 		}
 
 		procToPage.setCurrentlyPaged(true)

@@ -94,6 +94,18 @@ func (sd *Machine) memPaged() Tmem {
 	return memPaged
 }
 
+func (sd *Machine) numProcsJustStarted() int {
+
+	numNew := 0
+
+	for _, p := range sd.procQ.getQ() {
+		if p.compDone < 0.1 {
+			numNew += 1
+		}
+	}
+	return numNew
+}
+
 func (sd *Machine) placeProc(newProc *Proc) {
 
 	if sd.memFree() < 0 {
@@ -104,28 +116,14 @@ func (sd *Machine) placeProc(newProc *Proc) {
 	sd.procQ.enq(newProc)
 
 	if sd.memFree() < 0 {
-		sd.procQ.pageOut(-sd.memFree(), sd.procQ.getQ())
+		sd.procQ.pageOut(-sd.memFree())
 	}
-}
-
-func (sd *Machine) currMemFree(allProcsRunning []*Proc) Tmem {
-
-	memUsed := Tmem(0)
-
-	for _, p := range allProcsRunning {
-		if !p.currentlyPaged {
-			memUsed += p.memUsing
-		}
-	}
-
-	return MEM_PER_MACHINE - memUsed
 }
 
 func (sd *Machine) simulateRunProcs() {
 
-	allProcsRunning := make([]*Proc, sd.procQ.qlen())
-	for i, p := range sd.procQ.getQ() {
-		allProcsRunning[i] = p
+	if sd.memPaged() > 0 {
+		sd.procQ.pageIn(sd.memFree())
 	}
 
 	ogQLen := sd.procQ.qlen()
@@ -167,7 +165,7 @@ func (sd *Machine) simulateRunProcs() {
 	toWrite = fmt.Sprintf("\n==> %v @ %v, machine %v (on heap: %v, mem free: %v); has q: \n%v", sd.worldNumProcsGenPerTick, sd.currTickPtr.String(), sd.machineId, sd.currHeapGSS, sd.memFree(), sd.procQ.SummaryString())
 	logWrite(SCHED, toWrite)
 
-	for sd.procQ.qlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && len(coresWithTicksLeft) > 0 {
+	for sd.procQ.runnableQlen() > 0 && totalTicksLeftToGive-Tftick(TICK_SCHED_THRESHOLD) > 0.0 && len(coresWithTicksLeft) > 0 {
 
 		for i := 0; i < sd.numCores; i++ {
 			coresLeftThisRound[i] = true
@@ -202,20 +200,18 @@ func (sd *Machine) simulateRunProcs() {
 
 			if procToRun.currentlyPaged {
 				// TODO: does this need to incur a runtime cost?
-				sd.procQ.pageOut(procToRun.memUsing-sd.currMemFree(allProcsRunning), allProcsRunning)
-				procToRun.currentlyPaged = false
+				// sd.procQ.pageOut(procToRun.memUsing-sd.currMemFree(allProcsRunning), allProcsRunning)
+				// procToRun.currentlyPaged = false
+				fmt.Println("oops proc chosen but is paged out!")
 			}
 
 			toWrite := fmt.Sprintf("   core %v giving %v to proc %v, ", currCore, ticksLeftPerCore[currCore], procToRun.String())
 			logWrite(SCHED, toWrite)
 
-			memUseDelta, ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
+			_, ticksUsed, done := procToRun.runTillOutOrDone(ticksLeftPerCore[currCore])
 
 			ticksLeftPerCore[currCore] -= ticksUsed
 			totalTicksLeftToGive -= ticksUsed
-
-			toWrite = fmt.Sprintf("mem use delta: %v, new mem free: %v \n", memUseDelta, sd.currMemFree(allProcsRunning))
-			logWrite(SCHED, toWrite)
 
 			if ticksLeftPerCore[currCore] < TICK_SCHED_THRESHOLD {
 				delete(coresWithTicksLeft, currCore)
@@ -224,28 +220,12 @@ func (sd *Machine) simulateRunProcs() {
 			if !done {
 				toReq = append(toReq, procToRun)
 
-				if sd.currMemFree(allProcsRunning) < 0 {
-					toWrite = fmt.Sprintf("      mem usg over: %v, pagingOUT\n", sd.currMemFree(allProcsRunning))
-					logWrite(SCHED, toWrite)
-					sd.procQ.pageOut(-sd.currMemFree(allProcsRunning), allProcsRunning)
-					toWrite = fmt.Sprintf("      - new curr mem free: %v\n", sd.currMemFree(allProcsRunning))
-					logWrite(SCHED, toWrite)
-				}
-
 			} else {
 				// if the proc is done, update the ticksPassed to be exact for metrics etc
 				procToRun.timeDone = *sd.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
 				toWrite := fmt.Sprintf("   -> done: %v\n", procToRun.String())
 				logWrite(SCHED, toWrite)
-
-				allProcsRunning = removeFromList(allProcsRunning, procToRun)
-
-				if sd.memPaged() > 0 {
-					sd.procQ.pageIn(sd.currMemFree(allProcsRunning))
-					toWrite := fmt.Sprintf("    pagedIN: new mem free: %v\n", sd.currMemFree(allProcsRunning))
-					logWrite(SCHED, toWrite)
-				}
 
 				if (procToRun.timeDone - procToRun.timeStarted) > procToRun.compDone {
 					toWrite := fmt.Sprintf("   ---> OVER %v \n", procToRun.String())
@@ -261,6 +241,12 @@ func (sd *Machine) simulateRunProcs() {
 
 	for _, p := range toReq {
 		sd.procQ.enq(p)
+	}
+
+	if sd.memFree() < 0 {
+		sd.procQ.pageOut(-sd.memFree())
+	} else if sd.memPaged() > 0 {
+		sd.procQ.pageIn(sd.memFree())
 	}
 
 	toWrite = fmt.Sprintf("q at end: %v \n\n", sd.procQ.String())
@@ -299,7 +285,7 @@ func (sd *Machine) simulateRunProcs() {
 	// 	return
 	// }
 
-	if sd.procQ.qlen() > 2 {
+	if sd.procQ.qlen() > MIN_QLEN_IDLE_LIST {
 		return
 	}
 

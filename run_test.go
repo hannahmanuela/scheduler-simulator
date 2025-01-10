@@ -13,8 +13,8 @@ const (
 	N_CORES_PER_MACHINE = 8
 
 	// this is overall
-	N_PROCS_GEN_PER_TICK_START = 120
-	N_PROCS_GEN_PER_TICK_END   = 230
+	N_PROCS_GEN_PER_TICK_START = 50
+	N_PROCS_GEN_PER_TICK_END   = 200
 )
 
 func TestRunWorld(t *testing.T) {
@@ -23,7 +23,7 @@ func TestRunWorld(t *testing.T) {
 
 		fmt.Printf("---- Running with %v procs per ticks ----\n", nProcsToGen)
 
-		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_GSSs, []LBType{MINE, HERMOD, EDF, IDEAL})
+		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_GSSs, []LBType{MINE})
 		w.Run(N_TICK)
 	}
 

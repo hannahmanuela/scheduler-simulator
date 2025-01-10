@@ -29,16 +29,20 @@ func (h *IdleHeap) Pop() any {
 
 func findMostIdle(h *IdleHeap) (TIdleMachine, bool) {
 
-	// maxMemAvail := Tmem(0)
-	minQlen := math.MaxInt
+	maxMemAvail := Tmem(0)
+	// minQlen := math.MaxInt
 	indToUse := -1
 
 	for ind := 0; ind < len(*h); ind++ {
 		idleMachine := (*h)[ind]
 		// trade memory and qlen off?
-		if idleMachine.qlen < minQlen {
+		// if idleMachine.qlen < minQlen {
+		// indToUse = ind
+		// minQlen = idleMachine.qlen
+		// }
+		if idleMachine.memAvail > maxMemAvail {
+			maxMemAvail = idleMachine.memAvail
 			indToUse = ind
-			minQlen = idleMachine.qlen
 		}
 	}
 
@@ -59,6 +63,8 @@ type MineGSS struct {
 	currTickPtr     *Tftick
 	nProcGenPerTick int
 	nFoundIdle      int
+	nUsedLowLoad    int
+	nUsedHighLoad   int
 	nUsedKChoices   int
 }
 
@@ -71,6 +77,8 @@ func newMineGSS(id int, machines map[Tid]*Machine, currTickPtr *Tftick, numGenPe
 		currTickPtr:     currTickPtr,
 		nProcGenPerTick: numGenPerTick,
 		nFoundIdle:      0,
+		nUsedLowLoad:    0,
+		nUsedHighLoad:   0,
 		nUsedKChoices:   0,
 	}
 
@@ -124,26 +132,26 @@ func (gs *MineGSS) placeProcs() {
 	}
 
 	if *gs.currTickPtr == 199 {
-		fmt.Printf("num used idle: %v, num k choices: %v\n", gs.nFoundIdle, gs.nUsedKChoices)
+		fmt.Printf("num used idle: %v, num k choices: %v (low: %v, high: %v)\n", gs.nFoundIdle, gs.nUsedKChoices, gs.nUsedLowLoad, gs.nUsedHighLoad)
 	}
 
 }
 
 func (gs *MineGSS) pickMachine() *Machine {
 
-	// machine, found := findMostIdle(gs.idleMachines)
-	// if found {
-	// 	gs.nFoundIdle += 1
-	// 	// begNumInList := gs.idleMachines.Len()
-	// 	remove(gs.idleMachines, machine.machine)
-	// 	// machine.memAvail -= (MAX_MEM - INIT_MEM) / 2
-	// 	machine.qlen += 1
-	// 	if machine.qlen < 3 {
-	// 		// fmt.Printf("%v idle q size b4 %v after%v, machine %v new mem avail %v qlen %v \n", *gs.currTickPtr, begNumInList, gs.idleMachines.Len(), machine.machine, machine.memAvail, machine.qlen)
-	// 		gs.idleMachines.Push(machine)
-	// 	}
-	// 	return gs.machines[machine.machine]
-	// }
+	machine, found := findMostIdle(gs.idleMachines)
+	if found {
+		gs.nFoundIdle += 1
+		// begNumInList := gs.idleMachines.Len()
+		remove(gs.idleMachines, machine.machine)
+		machine.memAvail -= MAX_MEM / 2
+		machine.qlen += 1
+		if machine.qlen < MIN_QLEN_IDLE_LIST {
+			// fmt.Printf("%v idle q size b4 %v after%v, machine %v new mem avail %v qlen %v \n", *gs.currTickPtr, begNumInList, gs.idleMachines.Len(), machine.machine, machine.memAvail, machine.qlen)
+			gs.idleMachines.Push(machine)
+		}
+		return gs.machines[machine.machine]
+	}
 
 	gs.nUsedKChoices += 1
 
@@ -151,18 +159,84 @@ func (gs *MineGSS) pickMachine() *Machine {
 	var machineToUse *Machine
 	machineToTry := pickRandomElements(Values(gs.machines), K_CHOICES_DOWN)
 
-	// minMemPaged := Tmem(math.MaxInt)
 	minQlen := math.MaxInt
 
 	for _, m := range machineToTry {
-		// if (m.memPaged() < minMemPaged) ||
-		// 	(float32(m.memPaged()) < (float32(minMemPaged)*MEM_FUDGE_FACTOR_POLLING)) && (m.procQ.qlen() < minQlen) {
+
 		if m.procQ.qlen() < minQlen {
-			// minMemPaged = m.memPaged()
 			minQlen = m.procQ.qlen()
 			machineToUse = m
 		}
 	}
 
 	return machineToUse
+
+	// minMemPaged := Tmem(math.MaxInt)
+	// var machineMinMemPaged *Machine
+	// minProcsJustStartedHigh := math.MaxInt
+	// var machineMinProcsJustStartedHigh *Machine
+
+	// // low load setting - for machines with no mem paged, we want to look at memFree combined with number of just started procs
+	// maxMemFree := Tmem(0)
+	// var machineMaxMemFree *Machine
+	// minProcsJustStartedLow := math.MaxInt
+	// var machineMinProcsJustStartedLow *Machine
+
+	// // things we could get from machine:
+	// // - qlen
+	// // - number of just started procs
+	// // - mem free
+	// // - mem paged
+
+	// // - if all have mem paged, choose the one with the least mem paged (and new procs - within buffer)
+	// for _, m := range machineToTry {
+
+	// 	if m.memPaged() == 0 {
+	// 		if m.memFree() > maxMemFree {
+	// 			maxMemFree = m.memFree()
+	// 			machineMaxMemFree = m
+	// 		}
+	// 		if m.numProcsJustStarted() < minProcsJustStartedLow {
+	// 			minProcsJustStartedLow = m.numProcsJustStarted()
+	// 			machineMinProcsJustStartedLow = m
+	// 		}
+	// 		continue
+	// 	}
+
+	// 	if m.memPaged() < minMemPaged {
+	// 		minMemPaged = m.memPaged()
+	// 		machineMinMemPaged = m
+	// 	}
+
+	// 	if m.numProcsJustStarted() < minProcsJustStartedHigh {
+	// 		minProcsJustStartedHigh = m.numProcsJustStarted()
+	// 		machineMinProcsJustStartedHigh = m
+	// 	}
+	// }
+
+	// if machineMaxMemFree != nil {
+	// 	gs.nUsedLowLoad += 1
+	// 	// low load setting - some machines have nothing paged out -- this could also be (another) idle list?
+	// 	diffInMemFree := machineMaxMemFree.memFree() - machineMinProcsJustStartedLow.memFree()
+	// 	diffInProcsStarted := machineMinProcsJustStartedLow.numProcsJustStarted() - machineMaxMemFree.numProcsJustStarted()
+
+	// 	if int(diffInMemFree) > 5000*diffInProcsStarted {
+	// 		machineToUse = machineMaxMemFree
+	// 	} else {
+	// 		machineToUse = machineMinProcsJustStartedLow
+	// 	}
+	// } else {
+	// 	gs.nUsedHighLoad += 1
+	// 	// high load setting - all the machines have something paged out
+	// 	diffInMemPaged := machineMinProcsJustStartedHigh.memPaged() - machineMinMemPaged.memPaged()
+	// 	diffInProcsStarted := machineMinMemPaged.numProcsJustStarted() - machineMinProcsJustStartedHigh.numProcsJustStarted()
+
+	// 	if int(diffInMemPaged) > 5000*diffInProcsStarted {
+	// 		machineToUse = machineMinMemPaged
+	// 	} else {
+	// 		machineToUse = machineMinProcsJustStartedHigh
+	// 	}
+	// }
+
+	// return machineToUse
 }

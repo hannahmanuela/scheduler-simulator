@@ -5,7 +5,7 @@ import numpy as np
 
 numMachines = 100
 coresPerMachine = 8
-totalMemoryPerMachine = 32000
+totalMemoryPerMachine = 56000
 
 
 
@@ -57,38 +57,6 @@ hermod_usage_metrics['nGenPerTick'] = hermod_usage_metrics['nGenPerTick'].astype
 edf_usage_metrics = edf_usage_metrics.where(edf_usage_metrics['tick'] > 5).dropna()
 edf_usage_metrics['nGenPerTick'] = edf_usage_metrics['nGenPerTick'].astype(int)
 
-
-
-# fig, ax = plt.subplots(3, 1, figsize=(6, 9))
-
-# high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
-
-# mine_num_procs_pages = actual_procs_done.groupby(['nGenPerTick', 'price'])['numTimesPaged'].apply(lambda x: (x > 0).sum()).reset_index(name='countProcsPaged')
-# sns.lineplot(data=mine_num_procs_pages, x='nGenPerTick', y='countProcsPaged', hue='price', palette=high_contrast_palette, ax=ax[0])
-# ax[0].set_title("Num procs paged")
-# ax[0].set_ylabel("procs paged")
-# ax[0].set_xlabel("load")
-# ax[0].grid(True)
-
-
-# # ax[2, 2] -> distribution of mem paged per machine
-# mine_mem_paged_per_machine = actual_procs_done.groupby(['nGenPerTick', 'machineId'])['totMemPaged'].sum().reset_index()
-# sns.boxplot(data=mine_mem_paged_per_machine, x="nGenPerTick", y="totMemPaged", ax=ax[1])
-# ax[1].set_title("Total Mem paged per machine")
-# ax[1].set_xlabel("Load")
-# ax[1].set_ylabel("Mem paged")
-# ax[1].grid(True)
-
-# actual_usage_metrics['avgMemUsed'] = 1 - (((actual_usage_metrics['begMemFree'] + actual_usage_metrics['endMemFree']) / 2) / totalMemoryPerMachine)
-# sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="avgMemUsed", ax=ax[2])
-# ax[2].set_title("Distribution of mem utilization")
-# ax[2].set_xlabel("Load")
-# ax[2].set_ylabel("mem utilization")
-# ax[2].grid(True)
-
-# plt.tight_layout()
-# plt.savefig('memory_graphs.png')
-# plt.show()
 
 
 
@@ -178,116 +146,19 @@ edf_usage_metrics['nGenPerTick'] = edf_usage_metrics['nGenPerTick'].astype(int)
 # plt.plot()
 # plt.show()
 
+
+
+
+
 # plots I will need to draw:
 
 # =================================================================================
 # hermod vs xx vs edf, latency
 # =================================================================================
 
-fig, ax = plt.subplots(2, 4, figsize=(9, 6))
-
-high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
-
-hermod_percentiles = hermod_procs_done.groupby(['nGenPerTick', 'price']).agg(
-    percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
-).reset_index()
-
-mine_percentiles = actual_procs_done.groupby(['nGenPerTick', 'price']).agg(
-    percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
-).reset_index()
-
-ideal_percentiles = ideal_procs_done.groupby(['nGenPerTick', 'price']).agg(
-    percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
-).reset_index()
-
-edf_percentiles = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
-    percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
-).reset_index()
-
-
-sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 0])
-ax[0, 0].set_title("Hermod")
-ax[0, 0].set_xlabel("Load")
-ax[0, 0].set_ylabel("99 pctile latency as pct of runtime")
-ax[0, 0].grid(True)
-
-sns.boxplot(data=hermod_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
-ax[1, 0].set_title("Hermod")
-ax[1, 0].set_xlabel("Load")
-ax[1, 0].set_ylabel("Distribution of compute util")
-ax[1, 0].grid(True)
-
-sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
-ax[0, 1].set_title("XX")
-ax[0, 1].set_ylabel("99 pctile latency as pct of runtime")
-ax[0, 1].set_xlabel("Load")
-ax[0, 1].grid(True)
-
-sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 1])
-ax[1, 1].set_title("XX")
-ax[1, 1].set_xlabel("Load")
-ax[1, 1].set_ylabel("Distribution of compute util")
-ax[1, 1].grid(True)
-
-sns.lineplot(data=ideal_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 2])
-ax[0, 2].set_title("Ideal XX")
-ax[0, 2].set_ylabel("99 pctile latency as pct of runtime")
-ax[0, 2].set_xlabel("Load")
-ax[0, 2].grid(True)
-
-sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 2])
-ax[1, 2].set_title("Ideal XX")
-ax[1, 2].set_xlabel("Load")
-ax[1, 2].set_ylabel("Distribution of compute util")
-ax[1, 2].grid(True)
-
-
-sns.lineplot(data=edf_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 3])
-ax[0, 3].set_title("EDF")
-ax[0, 3].set_ylabel("99 pctile latency as pct of runtime")
-ax[0, 3].set_xlabel("Load")
-ax[0, 3].grid(True)
-
-sns.boxplot(data=edf_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 3])
-ax[1, 3].set_title("EDF")
-ax[1, 3].set_xlabel("Load")
-ax[1, 3].set_ylabel("Distribution of compute util")
-ax[1, 3].grid(True)
-
-y_max_0 = mine_percentiles["percentile_99"].max() * 1.05
-y_min_0 = -0.08 * y_max_0
-
-
-ax[0, 0].set_ylim(y_min_0, y_max_0)
-ax[0, 1].set_ylim(y_min_0, y_max_0)
-ax[0, 2].set_ylim(y_min_0, y_max_0)
-ax[0, 3].set_ylim(y_min_0, y_max_0)
-
-ax[1, 0].set_ylim(-0.1, 1.1)
-ax[1, 1].set_ylim(-0.1, 1.1)
-ax[1, 2].set_ylim(-0.1, 1.1)
-ax[1, 3].set_ylim(-0.1, 1.1)
-
-
-plt.tight_layout()
-plt.savefig('hermod_xx_edf_latency.png')
-plt.show()
-
-
-
-
-
-
-
-# # =================================================================================
-# # hermod vs mine, latency
-# # =================================================================================
-
-
-# fig, ax = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+# fig, ax = plt.subplots(2, 4, figsize=(9, 6))
 
 # high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
-
 
 # hermod_percentiles = hermod_procs_done.groupby(['nGenPerTick', 'price']).agg(
 #     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
@@ -297,125 +168,126 @@ plt.show()
 #     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
 # ).reset_index()
 
-# sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 0])
-# ax[0, 0].set_title("Hermod: Job latency as pct of runtime")
-# ax[0, 0].set_ylabel("latency as pct of runtime")
-# ax[0, 0].set_xlabel("load")
-# # ax[0, 0].grid(True)
-
-
-# sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
-# ax[0, 1].set_title("XX: Job latency as pct of runtime")
-# ax[0, 1].set_ylabel("latency as pct of runtime")
-# ax[0, 1].set_xlabel("load")
-# # ax[0, 1].grid(True)
-
-
-# hermod_ticks_of_work_done = hermod_procs_done.groupby(['nGenPerTick'])['compDone'].sum().reset_index()
-
-# mine_ticks_of_work_done = actual_procs_done.groupby(['nGenPerTick'])['compDone'].sum().reset_index()
-
-# sns.lineplot(data=hermod_ticks_of_work_done, x='nGenPerTick', y='compDone', ax=ax[1, 0])
-# ax[1, 0].set_title("Hermod: Throughput")
-# ax[1, 0].set_ylabel("total runtime of completed jobs")
-# ax[1, 0].set_xlabel("load")
-# # ax[1, 0].grid(True)
-
-
-# sns.lineplot(data=mine_ticks_of_work_done, x='nGenPerTick', y='compDone', ax=ax[1, 1])
-# ax[1, 1].set_title("XX: Throughput")
-# ax[1, 1].set_ylabel("total runtime of completed jobs")
-# ax[1, 1].set_xlabel("load")
-# # ax[1, 1].grid(True)
-
-# plt.tight_layout()
-# plt.savefig('hermod_xx_latency.png')
-# plt.show()
-
-
-
-
-
-
-
-
-# # =================================================================================
-# # ideal vs mine, latency & util
-# # =================================================================================
-
-# fig, ax = plt.subplots(3, 2, figsize=(12, 9)) #, sharex=True)
-
-# high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
-
-
 # ideal_percentiles = ideal_procs_done.groupby(['nGenPerTick', 'price']).agg(
 #     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
 # ).reset_index()
 
-# mine_percentiles = actual_procs_done.groupby(['nGenPerTick', 'price']).agg(
+# edf_percentiles = edf_procs_done.groupby(['nGenPerTick', 'price']).agg(
 #     percentile_99=('timeAsPercentage', lambda x: np.percentile(x, 99))
 # ).reset_index()
 
 
-# sns.lineplot(data=ideal_percentiles, x="nGenPerTick", y="percentile_99", hue="price", palette=high_contrast_palette, ax=ax[0, 0])
-# ax[0, 0].set_title("Ideal: Job latency as pct of runtime")
-# ax[0, 0].set_ylabel("Time Passed as % of compDone")
+# sns.lineplot(data=hermod_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 0])
+# ax[0, 0].set_title("Hermod")
+# ax[0, 0].set_xlabel("Load")
+# ax[0, 0].set_ylabel("99 pctile latency as pct of runtime")
 # ax[0, 0].grid(True)
 
-
-# sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
-# ax[1, 0].set_title("Ideal: Distribution of Compute Utilization")
+# sns.boxplot(data=hermod_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 0])
+# ax[1, 0].set_title("Hermod")
 # ax[1, 0].set_xlabel("Load")
-# ax[1, 0].set_ylabel("Compute util")
-# ax[1, 0].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
+# ax[1, 0].set_ylabel("Distribution of compute util")
 # ax[1, 0].grid(True)
 
-
-
-# sns.lineplot(data=mine_percentiles, x="nGenPerTick", y="percentile_99", hue="price", palette=high_contrast_palette, ax=ax[0, 1])
-# ax[0, 1].set_title("XX: Job latency as pct of runtime")
-# ax[0, 1].set_ylabel("Time Passed as % of compDone")
+# sns.lineplot(data=mine_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 1])
+# ax[0, 1].set_title("XX")
+# ax[0, 1].set_ylabel("99 pctile latency as pct of runtime")
+# ax[0, 1].set_xlabel("Load")
 # ax[0, 1].grid(True)
 
-
 # sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 1])
-# ax[1, 1].set_title("XX: Distribution of Compute Utilization")
+# ax[1, 1].set_title("XX")
 # ax[1, 1].set_xlabel("Load")
-# ax[1, 1].set_ylabel("Compute util")
-# ax[1, 1].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
+# ax[1, 1].set_ylabel("Distribution of compute util")
 # ax[1, 1].grid(True)
 
+# sns.lineplot(data=ideal_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 2])
+# ax[0, 2].set_title("Ideal XX")
+# ax[0, 2].set_ylabel("99 pctile latency as pct of runtime")
+# ax[0, 2].set_xlabel("Load")
+# ax[0, 2].grid(True)
 
-# sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 0])
-# ax[2, 0].set_title("Ideal: Distribution of Memory Utilization")
-# ax[2, 0].set_xlabel("Load")
-# ax[2, 0].set_ylabel("Memory util")
-# ax[2, 0].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
-# ax[2, 0].grid(True)
-
-
-# sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="mem_utilization", ax=ax[2, 1])
-# ax[2, 1].set_title("ActXXual: Distribution of Memory Utilization")
-# ax[2, 1].set_xlabel("Load")
-# ax[2, 1].set_ylabel("Memory util")
-# ax[2, 1].axhline(y=1, color='grey', linewidth=2, alpha=0.5)
-# ax[2, 1].grid(True)
+# sns.boxplot(data=ideal_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 2])
+# ax[1, 2].set_title("Ideal XX")
+# ax[1, 2].set_xlabel("Load")
+# ax[1, 2].set_ylabel("Distribution of compute util")
+# ax[1, 2].grid(True)
 
 
+# sns.lineplot(data=edf_percentiles, x='nGenPerTick', y='percentile_99', hue='price', palette=high_contrast_palette, ax=ax[0, 3])
+# ax[0, 3].set_title("EDF")
+# ax[0, 3].set_ylabel("99 pctile latency as pct of runtime")
+# ax[0, 3].set_xlabel("Load")
+# ax[0, 3].grid(True)
 
-# y_max_0 = max(ideal_procs_done["timeAsPercentage"].max(), actual_procs_done["timeAsPercentage"].max())
+# sns.boxplot(data=edf_usage_metrics, x="nGenPerTick", y="utilization", ax=ax[1, 3])
+# ax[1, 3].set_title("EDF")
+# ax[1, 3].set_xlabel("Load")
+# ax[1, 3].set_ylabel("Distribution of compute util")
+# ax[1, 3].grid(True)
+
+# y_max_0 = mine_percentiles["percentile_99"].max() * 1.05
 # y_min_0 = -0.08 * y_max_0
 
 
 # ax[0, 0].set_ylim(y_min_0, y_max_0)
 # ax[0, 1].set_ylim(y_min_0, y_max_0)
+# ax[0, 2].set_ylim(y_min_0, y_max_0)
+# ax[0, 3].set_ylim(y_min_0, y_max_0)
 
 # ax[1, 0].set_ylim(-0.1, 1.1)
 # ax[1, 1].set_ylim(-0.1, 1.1)
+# ax[1, 2].set_ylim(-0.1, 1.1)
+# ax[1, 3].set_ylim(-0.1, 1.1)
 
-# ax[2, 0].set_ylim(-0.1, 1.1)
-# ax[2, 1].set_ylim(-0.1, 1.1)
 
 # plt.tight_layout()
-# plt.savefig('ideal_vs_mine.png')
+# plt.savefig('hermod_xx_edf_latency.png')
 # plt.show()
+
+
+
+
+
+
+
+
+
+# =================================================================================
+# self comparison, mem paging/util
+# =================================================================================
+
+
+
+fig, ax = plt.subplots(3, 1, figsize=(6, 9))
+
+high_contrast_palette = ["#FF6347", "#1E90FF", "#32CD32", "#FFD700", "#00008B"]
+
+mine_num_procs_pages = actual_procs_done.groupby(['nGenPerTick', 'price'])['numTimesPaged'].apply(lambda x: (x > 0).sum()).reset_index(name='countProcsPaged')
+sns.lineplot(data=mine_num_procs_pages, x='nGenPerTick', y='countProcsPaged', hue='price', palette=high_contrast_palette, ax=ax[0])
+ax[0].set_title("Num procs swapped")
+ax[0].set_ylabel("procs swapped")
+ax[0].set_xlabel("load")
+ax[0].grid(True)
+
+
+# ax[2, 2] -> distribution of mem paged per machine
+mine_mem_paged_per_machine = actual_procs_done.groupby(['nGenPerTick', 'machineId'])['totMemPaged'].sum().reset_index()
+sns.boxplot(data=mine_mem_paged_per_machine, x="nGenPerTick", y="totMemPaged", ax=ax[1])
+ax[1].set_title("Total Mem swapped per machine")
+ax[1].set_xlabel("load")
+ax[1].set_ylabel("mem swapped")
+ax[1].grid(True)
+
+actual_usage_metrics['avgMemUsed'] = 1 - (((actual_usage_metrics['begMemFree'] + actual_usage_metrics['endMemFree']) / 2) / totalMemoryPerMachine)
+sns.boxplot(data=actual_usage_metrics, x="nGenPerTick", y="avgMemUsed", ax=ax[2])
+ax[2].set_title("Distribution of mem utilization")
+ax[2].set_xlabel("Load")
+ax[2].set_ylabel("mem utilization")
+ax[2].grid(True)
+
+plt.tight_layout()
+plt.savefig('memory_graphs.png')
+plt.show()
+
+
