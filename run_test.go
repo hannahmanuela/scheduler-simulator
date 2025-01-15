@@ -11,19 +11,26 @@ const (
 	N_GSSs              = 1
 	N_MACHINES          = 100
 	N_CORES_PER_MACHINE = 8
-
-	// this is overall
-	N_PROCS_GEN_PER_TICK_START = 50
-	N_PROCS_GEN_PER_TICK_END   = 200
 )
+
+func mapTickToLoad(tick Tftick) int {
+	if tick < 50 {
+		return 150
+	}
+	if (tick >= 50) && (tick < 80) {
+		return 200
+	}
+	return 170
+}
 
 func TestRunWorld(t *testing.T) {
 	emptyFiles()
-	for nProcsToGen := N_PROCS_GEN_PER_TICK_START; nProcsToGen <= N_PROCS_GEN_PER_TICK_END; nProcsToGen += 10 {
 
-		fmt.Printf("---- Running with %v procs per ticks ----\n", nProcsToGen)
+	for metaIter := 0; metaIter < 1; metaIter += 1 {
 
-		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, nProcsToGen, N_GSSs, []LBType{MINE})
+		fmt.Printf("-------- Running metaIter %v --------\n", metaIter)
+
+		w := newWorld(N_MACHINES, N_CORES_PER_MACHINE, metaIter, mapTickToLoad, N_GSSs, []LBType{HERMOD, MINE})
 		w.Run(N_TICK)
 	}
 

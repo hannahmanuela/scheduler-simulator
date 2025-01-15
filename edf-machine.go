@@ -27,6 +27,7 @@ func newBigEDFMachine(amtWorkPerTick int, totMem Tmem, currTickPtr *Tftick, worl
 func (edfm *BigEDFMachine) placeProc(newProc *EDFProc) {
 
 	edfm.enq(newProc)
+	newProc.p.timePlaced = (*edfm.currTickPtr)
 
 }
 
@@ -140,7 +141,7 @@ func (edfm *BigEDFMachine) tick() {
 					logWrite(EDF_SCHED, toWrite)
 				}
 
-				toWrite = fmt.Sprintf("%v, %v, %v, %v \n", edfm.worldNumProcsGenPerTick, procToRun.p.willingToSpend(), (procToRun.p.timeDone - procToRun.p.timeStarted).String(), procToRun.p.compDone.String())
+				toWrite = fmt.Sprintf("%v, %v, %v, %.2f, %v, %v, %v \n", edfm.worldNumProcsGenPerTick, int(*edfm.currTickPtr), procToRun.p.timePlaced.String(), procToRun.dl, procToRun.p.willingToSpend(), (procToRun.p.timeDone - procToRun.p.timeStarted).String(), procToRun.p.compDone.String())
 				logWrite(EDF_PROCS_DONE, toWrite)
 			}
 

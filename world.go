@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	MEM_PER_MACHINE = 32000
+	MEM_PER_MACHINE = 1000000
 
-	K_CHOICES_DOWN = 100
+	K_CHOICES_DOWN = 3
 	K_CHOICES_UP   = 3
 
 	MIN_QLEN_IDLE_LIST = 8
@@ -41,8 +41,8 @@ const (
 	EDF
 )
 
-func (lbt LBType) newLB(numMachines int, numCores int, nGenPerTick int, nGSSs int, currTickPtr *Tftick) LB {
-	return []LB{newMineLB(numMachines, numCores, nGenPerTick, nGSSs, currTickPtr), newIdealLB(numMachines, numCores, nGenPerTick, currTickPtr), newHermodLB(numMachines, numCores, nGenPerTick, nGSSs, currTickPtr), newEDFLB(numMachines, numCores, nGenPerTick, currTickPtr)}[lbt]
+func (lbt LBType) newLB(numMachines int, numCores int, metaIter int, nGSSs int, currTickPtr *Tftick) LB {
+	return []LB{newMineLB(numMachines, numCores, metaIter, nGSSs, currTickPtr), newIdealLB(numMachines, numCores, metaIter, currTickPtr), newHermodLB(numMachines, numCores, metaIter, nGSSs, currTickPtr), newEDFLB(numMachines, numCores, metaIter, currTickPtr)}[lbt]
 }
 
 func (lbt LBType) string() string {
@@ -51,7 +51,8 @@ func (lbt LBType) string() string {
 
 type World struct {
 	currTick      Tftick
-	numProcsToGen int
+	metaIter      int
+	mapTickToLoad func(Tftick) int
 	currProcNum   int
 
 	LBs []LB
@@ -59,15 +60,16 @@ type World struct {
 	loadGen LoadGen
 }
 
-func newWorld(numMachines int, numCores int, nGenPerTick int, nGSSs int, lbsDoing []LBType) *World {
+func newWorld(numMachines int, numCores int, metaIter int, mapTickToLoad func(Tftick) int, nGSSs int, lbsDoing []LBType) *World {
 
 	w := &World{
 		currTick:      Tftick(0),
-		numProcsToGen: nGenPerTick,
+		metaIter:      metaIter,
+		mapTickToLoad: mapTickToLoad,
 	}
 
 	for _, lbTypeToInclude := range lbsDoing {
-		w.LBs = append(w.LBs, lbTypeToInclude.newLB(numMachines, numCores, nGenPerTick, nGSSs, &w.currTick))
+		w.LBs = append(w.LBs, lbTypeToInclude.newLB(numMachines, numCores, metaIter, nGSSs, &w.currTick))
 		fmt.Printf("making lb of type %v\n", lbTypeToInclude.string())
 	}
 
@@ -92,7 +94,8 @@ func (w *World) genLoad(nProcs int) []*ProcInternals {
 	return userProcs
 }
 
-func (w *World) Tick(numProcs int) {
+func (w *World) Tick() {
+	numProcs := w.mapTickToLoad(w.currTick)
 	w.genLoad(numProcs)
 
 	for _, lb := range w.LBs {
@@ -108,6 +111,6 @@ func (w *World) Tick(numProcs int) {
 
 func (w *World) Run(nTick int) {
 	for i := 0; i < nTick; i++ {
-		w.Tick(w.numProcsToGen)
+		w.Tick()
 	}
 }

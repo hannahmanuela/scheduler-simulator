@@ -232,7 +232,7 @@ func (sd *Machine) simulateRunProcs() {
 					logWrite(SCHED, toWrite)
 				}
 
-				toWrite = fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v \n", sd.worldNumProcsGenPerTick, sd.machineId, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String(), procToRun.memUsing, procToRun.totMemPaged, procToRun.numTimesPaged)
+				toWrite = fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v, %v \n", sd.worldNumProcsGenPerTick, int(*sd.currTickPtr), sd.machineId, procToRun.willingToSpend(), (procToRun.timeDone - procToRun.timeStarted).String(), procToRun.compDone.String(), procToRun.memUsing, procToRun.totMemPaged, procToRun.numTimesPaged)
 				logWrite(PROCS_DONE, toWrite)
 			}
 		}

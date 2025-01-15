@@ -89,7 +89,7 @@ func (hm *HermodMachine) tick() {
 
 				currProc.timeDone = *hm.currTickPtr + (1 - ticksLeftPerCore[currCore])
 
-				toWrite = fmt.Sprintf("%v, %v, %v, %v \n", hm.worldNumProcsGenPerTick, currProc.willingToSpend(), (currProc.timeDone - currProc.timeStarted).String(), currProc.compDone.String())
+				toWrite = fmt.Sprintf("%v, %v, %v, %v, %v \n", hm.worldNumProcsGenPerTick, int(*hm.currTickPtr), currProc.willingToSpend(), (currProc.timeDone - currProc.timeStarted).String(), currProc.compDone.String())
 				logWrite(HERMOD_PROCS_DONE, toWrite)
 
 				hm.removeProc(currProc)
